@@ -8,7 +8,7 @@ import (
 	"github.com/linskybing/platform-go/models"
 )
 
-func LogAudit(c *gin.Context, userID uint, action, resourceType string, resourceID uint, oldObj interface{}, newObj interface{}) error {
+func LogAudit(c *gin.Context, userID uint, action, resourceType string, resourceID uint, oldObj interface{}, newObj interface{}, description *string) error {
 	var oldDataJSON, newDataJSON []byte
 	var err error
 
@@ -25,6 +25,10 @@ func LogAudit(c *gin.Context, userID uint, action, resourceType string, resource
 		}
 	}
 
+	input_description := ""
+	if description != nil {
+		input_description = *description
+	}
 	auditLog := models.AuditLog{
 		UserID:       userID,
 		Action:       action,
@@ -34,7 +38,7 @@ func LogAudit(c *gin.Context, userID uint, action, resourceType string, resource
 		NewData:      newDataJSON,
 		IPAddress:    c.ClientIP(),
 		UserAgent:    c.Request.UserAgent(),
-		Description:  "",
+		Description:  input_description,
 	}
 
 	return db.DB.Create(&auditLog).Error

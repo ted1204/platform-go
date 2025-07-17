@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"log"
 	"net/http"
 	"strconv"
 
@@ -9,6 +10,7 @@ import (
 	"github.com/linskybing/platform-go/dto"
 	"github.com/linskybing/platform-go/models"
 	"github.com/linskybing/platform-go/response"
+	"github.com/linskybing/platform-go/utils"
 )
 
 // GetGroups godoc
@@ -61,7 +63,7 @@ func GetGroupByID(c *gin.Context) {
 // @Summary Create a new group
 // @Tags groups
 // @Security BearerAuth
-// @Accept x-www-form-urlencoded
+// @Accept multipart/form-data
 // @Produce json
 // @Param group_name formData string true "Group name"
 // @Param description formData string false "Description"
@@ -96,6 +98,12 @@ func CreateGroup(c *gin.Context) {
 		return
 	}
 
+	// audit log
+	userid, _ := utils.GetUserIDFromContext(c)
+	if err := utils.LogAudit(c, userid, "create", "group", group.GID, nil, group, nil); err != nil {
+		log.Printf("Audit log failed: %v", err)
+	}
+
 	c.JSON(http.StatusCreated, response.GroupResponse{
 		Message: "group created",
 		Group:   group,
@@ -106,7 +114,7 @@ func CreateGroup(c *gin.Context) {
 // @Summary Update group by ID
 // @Tags groups
 // @Security BearerAuth
-// @Accept json
+// @Accept multipart/form-data
 // @Produce json
 // @Param id path int true "Group ID"
 // @Param input body dto.GroupUpdateDTO true "Group update input"
@@ -136,6 +144,9 @@ func UpdateGroup(c *gin.Context) {
 		return
 	}
 
+	// deepcopy
+	oldGroup := group
+
 	if input.GroupName != nil {
 		if *input.GroupName == "super" {
 			c.JSON(http.StatusBadRequest, response.ErrorResponse{Error: "Cannot use reserved group name 'super'"})
@@ -150,6 +161,12 @@ func UpdateGroup(c *gin.Context) {
 	if err := db.DB.Save(&group).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, response.ErrorResponse{Error: err.Error()})
 		return
+	}
+
+	// audit log
+	userid, _ := utils.GetUserIDFromContext(c)
+	if err := utils.LogAudit(c, userid, "update", "group", group.GID, oldGroup, group, nil); err != nil {
+		log.Printf("Audit log failed: %v", err)
 	}
 
 	c.JSON(http.StatusOK, group)
@@ -185,6 +202,12 @@ func DeleteGroup(c *gin.Context) {
 	if group.GroupName == "super" {
 		c.JSON(http.StatusForbidden, response.ErrorResponse{Error: "cannot delete super group"})
 		return
+	}
+
+	// audit log
+	userid, _ := utils.GetUserIDFromContext(c)
+	if err := utils.LogAudit(c, userid, "update", "group", group.GID, group, nil, nil); err != nil {
+		log.Printf("Audit log failed: %v", err)
 	}
 
 	if err := db.DB.Delete(&models.Group{}, gidUint).Error; err != nil {

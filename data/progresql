@@ -8,6 +8,8 @@ CREATE TYPE user_type AS ENUM ('origin','oauth2');
 CREATE TYPE user_status AS ENUM ('online','offline','delete');
 CREATE TYPE user_role AS ENUM ('admin','manager','user');
 
+-- CREATE EXTENSION IF NOT EXISTS pg_cron;
+
 -- group_list
 CREATE TABLE group_list (
   g_id SERIAL PRIMARY KEY,
@@ -146,3 +148,10 @@ VALUES ('super', 'Super administrator group');
 -- SELECT u.u_id, g.g_id, 'admin'
 -- FROM users u, group_list g
 -- WHERE u.username = 'admin' AND g.group_name = 'super';
+
+-- Job
+-- SELECT cron.schedule(
+--   'clear_audit_logs',
+--   '0 3 * * *',
+--   $$DELETE FROM audit_logs WHERE created_at < NOW() - INTERVAL '30 days'$$
+-- );

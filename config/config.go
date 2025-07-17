@@ -18,6 +18,8 @@ var (
 	Issuer     string
 )
 
+var GroupAdminRoles = []string{"admin", "manager"}
+
 func LoadConfig() {
 	err := godotenv.Load()
 	if err != nil {

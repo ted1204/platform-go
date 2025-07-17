@@ -1,4 +1,16 @@
 definitions:
+  dto.CreateProjectDTO:
+    properties:
+      description:
+        type: string
+      g_id:
+        type: integer
+      project_name:
+        type: string
+    required:
+    - g_id
+    - project_name
+    type: object
   dto.CreateUserInput:
     properties:
       email:
@@ -80,6 +92,22 @@ definitions:
       updatedAt:
         type: string
     type: object
+  models.Project:
+    properties:
+      createdAt:
+        type: string
+      description:
+        type: string
+      gid:
+        description: 'foreign key: group_list.g_id'
+        type: integer
+      pid:
+        type: integer
+      projectName:
+        type: string
+      updatedAt:
+        type: string
+    type: object
   models.UserWithSuperAdmin:
     properties:
       create_at:
@@ -152,7 +180,7 @@ paths:
       - groups
     post:
       consumes:
-      - application/x-www-form-urlencoded
+      - multipart/form-data
       parameters:
       - description: Group name
         in: formData
@@ -256,7 +284,7 @@ paths:
       - groups
     put:
       consumes:
-      - application/json
+      - multipart/form-data
       parameters:
       - description: Group ID
         in: path
@@ -330,6 +358,156 @@ paths:
       summary: User login
       tags:
       - auth
+  /projects:
+    get:
+      description: Returns a list of all projects
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/models.Project'
+            type: array
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      summary: Get all projects
+      tags:
+      - projects
+    post:
+      consumes:
+      - multipart/form-data
+      description: Creates a project with name, group and optional description
+      parameters:
+      - description: Project to create
+        in: body
+        name: project
+        required: true
+        schema:
+          $ref: '#/definitions/dto.CreateProjectDTO'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/models.Project'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      summary: Create a new project
+      tags:
+      - projects
+  /projects/{id}:
+    delete:
+      description: Deletes a project by its ID
+      parameters:
+      - description: Project ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+          schema:
+            type: string
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      summary: Delete a project by ID
+      tags:
+      - projects
+    get:
+      description: Returns a single project by its ID
+      parameters:
+      - description: Project ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Project'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      summary: Get a project by ID
+      tags:
+      - projects
+    put:
+      consumes:
+      - multipart/form-data
+      description: Update a project by ID. All fields are optional; only provided
+        fields will be updated.
+      parameters:
+      - description: Project ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Project name
+        in: formData
+        name: project_name
+        type: string
+      - description: Group ID
+        in: formData
+        name: gid
+        type: integer
+      - description: Project description
+        in: formData
+        name: description
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Project'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      summary: Update a project
+      tags:
+      - projects
   /register:
     post:
       consumes:
