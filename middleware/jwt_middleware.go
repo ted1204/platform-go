@@ -10,14 +10,11 @@ import (
 	"github.com/linskybing/platform-go/config"
 )
 
-// secret key to sign the JWT token, should come from config in real use
 var jwtKey []byte
 
-// Claims defines the custom JWT claims structure
 type Claims struct {
 	UserID   uint   `json:"user_id"`
 	Username string `json:"username"`
-	IsAdmin  bool   `json:"is_admin"`
 	jwt.RegisteredClaims
 }
 
@@ -25,12 +22,10 @@ func Init() {
 	jwtKey = []byte(config.JwtSecret)
 }
 
-// GenerateToken creates a JWT token for a given username and expiration duration
-func GenerateToken(userID uint, username string, isAdmin bool, expireDuration time.Duration) (string, error) {
+func GenerateToken(userID uint, username string, expireDuration time.Duration) (string, error) {
 	claims := &Claims{
 		UserID:   userID,
 		Username: username,
-		IsAdmin:  isAdmin,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(expireDuration)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
@@ -38,28 +33,22 @@ func GenerateToken(userID uint, username string, isAdmin bool, expireDuration ti
 		},
 	}
 
-	// Create a token with claims and sign it using HS256
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 
-	// Return the signed JWT token string
 	return token.SignedString(jwtKey)
 }
 
-// ParseToken parses and validates a JWT token string and returns the claims
 func ParseToken(tokenStr string) (*Claims, error) {
 	claims := &Claims{}
 
-	// Parse the token with claims and a key function
 	token, err := jwt.ParseWithClaims(tokenStr, claims, func(token *jwt.Token) (interface{}, error) {
 		return jwtKey, nil
 	})
 
-	// Check for parsing error or invalid token
 	if err != nil || !token.Valid {
 		return nil, err
 	}
 
-	// Return the claims if token is valid
 	return claims, nil
 }
 

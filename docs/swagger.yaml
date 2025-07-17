@@ -1,0 +1,104 @@
+definitions:
+  dto.UserDTO:
+    properties:
+      create_at:
+        example: "2025-07-17 15:20:41"
+        type: string
+      email:
+        example: user@example.com
+        type: string
+      full_name:
+        example: John Doe
+        type: string
+      is_admin:
+        example: true
+        type: boolean
+      status:
+        example: online
+        type: string
+      type:
+        example: origin
+        type: string
+      u_id:
+        example: 123
+        type: integer
+      update_at:
+        example: "2025-07-17 15:20:41"
+        type: string
+      username:
+        example: johndoe
+        type: string
+    type: object
+info:
+  contact: {}
+paths:
+  /users/{id}:
+    put:
+      consumes:
+      - multipart/form-data
+      description: Partially update user's email, full name, type, status, or password.
+      parameters:
+      - description: User ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Old password (required if updating password)
+        in: formData
+        name: old_password
+        type: string
+      - description: New password
+        in: formData
+        name: password
+        type: string
+      - description: Email
+        in: formData
+        name: email
+        type: string
+      - description: Full name
+        in: formData
+        name: full_name
+        type: string
+      - description: 'User type: origin or oauth2'
+        in: formData
+        name: type
+        type: string
+      - description: 'User status: online, offline, delete'
+        in: formData
+        name: status
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Updated user info
+          schema:
+            $ref: '#/definitions/dto.UserDTO'
+        "400":
+          description: Bad request error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: User not found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Update user
+      tags:
+      - users
+swagger: "2.0"

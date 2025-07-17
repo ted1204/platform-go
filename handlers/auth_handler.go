@@ -1,36 +1,60 @@
 package handlers
 
 import (
+	"errors"
 	"net/http"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/linskybing/platform-go/db"
+	"github.com/linskybing/platform-go/dto"
 	"github.com/linskybing/platform-go/middleware"
 	"github.com/linskybing/platform-go/models"
 	"golang.org/x/crypto/bcrypt"
+	"gorm.io/gorm"
 )
 
 func Register(c *gin.Context) {
-	var req struct {
-		Username string `form:"username" binding:"required"`
-		Password string `form:"password" binding:"required"`
-	}
+	var input dto.CreateUserInput
 
-	if err := c.ShouldBind(&req); err != nil {
+	if err := c.ShouldBind(&input); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input"})
 		return
 	}
 
-	hashed, _ := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+	var existing models.User
+	err := db.DB.Where("username = ?", input.Username).First(&existing).Error
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
+		return
+	}
+
+	if err == nil {
+		c.JSON(http.StatusConflict, gin.H{"error": "Username already taken"})
+		return
+	}
+
+	hashed, _ := bcrypt.GenerateFromPassword([]byte(input.Password), bcrypt.DefaultCost)
 
 	user := models.User{
-		Username: req.Username,
+		Username: input.Username,
 		Password: string(hashed),
+		Email:    input.Email,
+		FullName: input.FullName,
+		Type:     "origin",
+		Status:   "offline",
+	}
+
+	if input.Type != nil {
+		user.Type = *input.Type
+	}
+
+	if input.Status != nil {
+		user.Status = *input.Status
 	}
 
 	if err := db.DB.Create(&user).Error; err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "User already exists"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user"})
 		return
 	}
 
@@ -59,21 +83,7 @@ func Login(c *gin.Context) {
 		return
 	}
 
-	var groups []models.UserGroupView
-	if err := db.DB.Where("u_id = ?", user.UID).Find(&groups).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get user groups"})
-		return
-	}
-
-	isAdmin := false
-	for _, g := range groups {
-		if g.Role == "admin" || g.GroupName == "super" {
-			isAdmin = true
-			break
-		}
-	}
-
-	token, err := middleware.GenerateToken(user.UID, user.Username, isAdmin, time.Hour*24)
+	token, err := middleware.GenerateToken(user.UID, user.Username, time.Hour*24)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate token"})
 		return
@@ -83,6 +93,5 @@ func Login(c *gin.Context) {
 		"token":    token,
 		"user_id":  user.UID,
 		"username": user.Username,
-		"is_admin": isAdmin,
 	})
 }
