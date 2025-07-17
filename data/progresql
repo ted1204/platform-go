@@ -1,6 +1,6 @@
 -- 建立資料庫
-CREATE DATABASE platform;
-\c platform;
+-- CREATE DATABASE platform;
+-- \c platform;
 
 -- 建立 enum 類型
 CREATE TYPE resource_type AS ENUM ('pod','service','deployment','configmap','ingress');
@@ -142,7 +142,7 @@ VALUES ('super', 'Super administrator group');
 -- INSERT INTO users (username, password, type, status, full_name, email)
 -- VALUES ('admin', 'admin123', 'origin', 'offline', 'Administrator', '');
 
-INSERT INTO user_group (u_id, g_id, role)
-SELECT u.u_id, g.g_id, 'admin'
-FROM users u, group_list g
-WHERE u.username = 'admin' AND g.group_name = 'super';
+-- INSERT INTO user_group (u_id, g_id, role)
+-- SELECT u.u_id, g.g_id, 'admin'
+-- FROM users u, group_list g
+-- WHERE u.username = 'admin' AND g.group_name = 'super';
