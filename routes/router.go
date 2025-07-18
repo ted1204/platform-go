@@ -25,7 +25,7 @@ func RegisterRoutes(r *gin.Engine) {
 			projects.GET("", handlers.GetProjects)
 			projects.GET("/:id", handlers.GetProjectByID)
 			projects.POST("", middleware.CheckPermissionPayload("create_project", dto.CreateProjectDTO{}), handlers.CreateProject)
-			projects.PUT("/:id", handlers.UpdateProject)
+			projects.PUT("/:id", middleware.CheckPermissionByParam(repositories.GetGroupIDByProjectID), handlers.UpdateProject)
 			projects.DELETE("/:id", middleware.CheckPermissionByParam(repositories.GetGroupIDByProjectID), handlers.DeleteProject)
 		}
 		users := auth.Group("/users")

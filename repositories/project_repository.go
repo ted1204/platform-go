@@ -13,7 +13,7 @@ func GetProjectByID(id uint) (models.Project, error) {
 
 func GetGroupIDByProjectID(pID uint) (uint, error) {
 	var gID uint
-	err := db.DB.Model(&models.Project{}).Select("g_id").Where("id = ?", pID).Scan(&gID).Error
+	err := db.DB.Model(&models.Project{}).Select("g_id").Where("p_id = ?", pID).Scan(&gID).Error
 	if err != nil {
 		return 0, err
 	}

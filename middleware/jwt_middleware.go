@@ -40,7 +40,7 @@ func GenerateToken(userID uint, username string, expireDuration time.Duration) (
 		return "", false, err
 	}
 
-	return signedToken, true, nil
+	return signedToken, isAdmin, nil
 }
 
 func ParseToken(tokenStr string) (*types.Claims, error) {
