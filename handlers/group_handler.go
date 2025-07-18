@@ -20,7 +20,7 @@ import (
 // @Produce json
 // @Success 200 {array} models.Group
 // @Failure 500 {object} response.ErrorResponse "Internal server error"
-// @Router /group [get]
+// @Router /groups [get]
 func GetGroups(c *gin.Context) {
 	var groups []models.Group
 	if err := db.DB.Find(&groups).Error; err != nil {
@@ -40,7 +40,7 @@ func GetGroups(c *gin.Context) {
 // @Failure 400 {object} response.ErrorResponse "Invalid group id"
 // @Failure 404 {object} response.ErrorResponse "Group not found"
 // @Failure 500 {object} response.ErrorResponse "Internal server error"
-// @Router /group/{id} [get]
+// @Router /groups/{id} [get]
 func GetGroupByID(c *gin.Context) {
 	id := c.Param("id")
 	gid, err := strconv.ParseUint(id, 10, 64)
@@ -71,7 +71,7 @@ func GetGroupByID(c *gin.Context) {
 // @Failure 400 {object} response.ErrorResponse "Bad request"
 // @Failure 403 {object} response.ErrorResponse "Forbidden (reserved name)"
 // @Failure 500 {object} response.ErrorResponse "Internal server error"
-// @Router /group [post]
+// @Router /groups [post]
 func CreateGroup(c *gin.Context) {
 
 	var input dto.GroupCreateDTO
@@ -122,7 +122,7 @@ func CreateGroup(c *gin.Context) {
 // @Failure 400 {object} response.ErrorResponse "Bad request"
 // @Failure 404 {object} response.ErrorResponse "Group not found"
 // @Failure 500 {object} response.ErrorResponse "Internal server error"
-// @Router /group/{id} [put]
+// @Router /groups/{id} [put]
 func UpdateGroup(c *gin.Context) {
 	id := c.Param("id")
 	gid, err := strconv.ParseUint(id, 10, 64)
@@ -183,7 +183,7 @@ func UpdateGroup(c *gin.Context) {
 // @Failure 403 {object} response.ErrorResponse "Forbidden to delete 'super' group"
 // @Failure 404 {object} response.ErrorResponse "Group not found"
 // @Failure 500 {object} response.ErrorResponse "Internal server error"
-// @Router /group/{id} [delete]
+// @Router /groups/{id} [delete]
 func DeleteGroup(c *gin.Context) {
 	id := c.Param("id")
 	gid, err := strconv.ParseUint(id, 10, 64)

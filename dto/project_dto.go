@@ -11,3 +11,11 @@ type UpdateProjectDTO struct {
 	Description *string `form:"description,omitempty"`
 	GID         *uint   `form:"g_id,omitempty"`
 }
+
+type GIDGetter interface {
+	GetGID() uint
+}
+
+func (d CreateProjectDTO) GetGID() uint {
+	return d.GID
+}

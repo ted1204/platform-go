@@ -54,20 +54,17 @@ func HasGroupRole(userID uint, gid uint, roles []string) (bool, error) {
 	return true, nil
 }
 
-func CheckProjectCreatePermission(UID uint, GIDs []uint) (bool, error) {
-	allManager := true
-	for _, gid := range GIDs {
-		isManager, _ := HasGroupRole(UID, gid, config.GroupAdminRoles)
-		if !isManager {
-			allManager = false
-			break
-		}
+func CheckGroupPermission(UID uint, GID uint) (bool, error) {
+	// Check if the user is a group manager (admin role in the group)
+	isManager, err := HasGroupRole(UID, GID, config.GroupAdminRoles)
+	if err != nil {
+		return false, err
 	}
-
-	if allManager {
+	if isManager {
 		return true, nil
 	}
 
+	// If not group admin, check if the user is a super admin
 	isSuper, err := IsSuperAdmin(UID)
 	if err != nil {
 		return false, err
@@ -75,5 +72,6 @@ func CheckProjectCreatePermission(UID uint, GIDs []uint) (bool, error) {
 	if isSuper {
 		return true, nil
 	}
+
 	return false, errors.New("permission denied")
 }

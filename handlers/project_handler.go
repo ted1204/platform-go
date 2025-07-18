@@ -106,6 +106,7 @@ func CreateProject(c *gin.Context) {
 // @Failure      500           {object}  response.ErrorResponse
 // @Router       /projects/{id} [put]
 func UpdateProject(c *gin.Context) {
+	userID, _ := utils.GetUserIDFromContext(c)
 	id := c.Param("id")
 	var project models.Project
 	if err := db.DB.First(&project, id).Error; err != nil {
@@ -119,30 +120,24 @@ func UpdateProject(c *gin.Context) {
 		return
 	}
 
-	userID, _ := utils.GetUserIDFromContext(c)
-	gids := []uint{project.GID}
-	if input.GID != nil && project.GID != *input.GID {
-		gids = append(gids, *input.GID)
-	}
-
-	ok, err := utils.CheckProjectCreatePermission(userID, gids)
-	if err != nil {
-		c.JSON(http.StatusForbidden, response.ErrorResponse{Error: err.Error()})
-		return
-	}
-	if !ok {
-		c.JSON(http.StatusForbidden, response.ErrorResponse{Error: "permission denied"})
-		return
-	}
-
 	// deep copy for audit
 	oldValue := project
 
 	if input.ProjectName != nil {
 		project.ProjectName = *input.ProjectName
 	}
-	if input.GID != nil {
+	if input.GID != nil && *input.GID != oldValue.GID {
+		ok, err := utils.CheckGroupPermission(userID, *input.GID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, response.ErrorResponse{Error: "Internal server error"})
+			return
+		}
+		if !ok {
+			c.JSON(http.StatusForbidden, response.ErrorResponse{Error: "Permission denied for the new group"})
+			return
+		}
 		project.GID = *input.GID
+
 	}
 	if input.Description != nil {
 		project.Description = *input.Description
@@ -174,24 +169,13 @@ func UpdateProject(c *gin.Context) {
 // @Router       /projects/{id} [delete]
 func DeleteProject(c *gin.Context) {
 	userID, _ := utils.GetUserIDFromContext(c)
+
 	id := c.Param("id")
 
 	// get old record for audit
 	var oldProject models.Project
 	if err := db.DB.First(&oldProject, id).Error; err != nil {
 		c.JSON(http.StatusNotFound, response.ErrorResponse{Error: "Project not found"})
-		return
-	}
-
-	// permission check
-	gids := []uint{oldProject.GID}
-	ok, err := utils.CheckProjectCreatePermission(userID, gids)
-	if err != nil {
-		c.JSON(http.StatusForbidden, response.ErrorResponse{Error: err.Error()})
-		return
-	}
-	if !ok {
-		c.JSON(http.StatusForbidden, response.ErrorResponse{Error: "permission denied"})
 		return
 	}
 
