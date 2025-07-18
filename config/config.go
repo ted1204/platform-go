@@ -3,22 +3,27 @@ package config
 import (
 	"log"
 	"os"
+	"strconv"
 
 	"github.com/joho/godotenv"
 )
 
 var (
-	JwtSecret  string
-	DbHost     string
-	DbPort     string
-	DbUser     string
-	DbPassword string
-	DbName     string
-	ServerPort string
-	Issuer     string
+	JwtSecret       string
+	DbHost          string
+	DbPort          string
+	DbUser          string
+	DbPassword      string
+	DbName          string
+	ServerPort      string
+	Issuer          string
+	GroupAdminRoles = []string{"admin", "manager"}
+	MinioEndpoint   string
+	MinioAccessKey  string
+	MinioSecretKey  string
+	MinioUseSSL     bool
+	MinioBucket     string
 )
-
-var GroupAdminRoles = []string{"admin", "manager"}
 
 func LoadConfig() {
 	err := godotenv.Load()
@@ -34,6 +39,12 @@ func LoadConfig() {
 	DbName = getEnv("DB_NAME", "platform")
 	ServerPort = getEnv("SERVER_PORT", "8080")
 	Issuer = getEnv("Issuer", "platform")
+
+	MinioEndpoint = getEnv("MINIO_ENDPOINT", "localhost:9000")
+	MinioAccessKey = getEnv("MINIO_ACCESS_KEY", "minioadmin")
+	MinioSecretKey = getEnv("MINIO_SECRET_KEY", "minioadmin")
+	MinioBucket = getEnv("MINIO_BUCKET", "mybucket")
+	MinioUseSSL, _ = strconv.ParseBool(getEnv("MINIO_USE_SSL", "false"))
 }
 
 func getEnv(key, fallback string) string {
