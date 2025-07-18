@@ -65,7 +65,7 @@ func Login(c *gin.Context) {
 		return
 	}
 
-	user, token, err := services.LoginUser(req.Username, req.Password)
+	user, token, isAdmin, err := services.LoginUser(req.Username, req.Password)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, response.ErrorResponse{Error: "Invalid username or password"})
 		return
@@ -75,5 +75,6 @@ func Login(c *gin.Context) {
 		Token:    token,
 		UID:      user.UID,
 		Username: user.Username,
+		IsAdmin:  isAdmin,
 	})
 }

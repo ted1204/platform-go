@@ -9,6 +9,7 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/linskybing/platform-go/config"
 	"github.com/linskybing/platform-go/types"
+	"github.com/linskybing/platform-go/utils"
 )
 
 var jwtKey []byte
@@ -17,10 +18,15 @@ func Init() {
 	jwtKey = []byte(config.JwtSecret)
 }
 
-func GenerateToken(userID uint, username string, expireDuration time.Duration) (string, error) {
+func GenerateToken(userID uint, username string, expireDuration time.Duration) (string, bool, error) {
+	isAdmin, err := utils.IsSuperAdmin(userID)
+	if err != nil {
+		return "", false, err
+	}
 	claims := &types.Claims{
 		UserID:   userID,
 		Username: username,
+		IsAdmin:  isAdmin,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(expireDuration)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
@@ -29,8 +35,12 @@ func GenerateToken(userID uint, username string, expireDuration time.Duration) (
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	signedToken, err := token.SignedString(jwtKey)
+	if err != nil {
+		return "", false, err
+	}
 
-	return token.SignedString(jwtKey)
+	return signedToken, true, nil
 }
 
 func ParseToken(tokenStr string) (*types.Claims, error) {

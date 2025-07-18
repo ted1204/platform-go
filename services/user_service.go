@@ -55,21 +55,21 @@ func RegisterUser(input dto.CreateUserInput) error {
 	return db.DB.Create(&user).Error
 }
 
-func LoginUser(username, password string) (models.User, string, error) {
+func LoginUser(username, password string) (models.User, string, bool, error) {
 	var user models.User
 	if err := db.DB.Where("username = ?", username).First(&user).Error; err != nil {
-		return user, "", errors.New("invalid credentials")
+		return user, "", false, errors.New("invalid credentials")
 	}
 	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password)); err != nil {
-		return user, "", errors.New("invalid credentials")
+		return user, "", false, errors.New("invalid credentials")
 	}
 
-	token, err := middleware.GenerateToken(user.UID, user.Username, 24*time.Hour)
+	token, isAdmin, err := middleware.GenerateToken(user.UID, user.Username, 24*time.Hour)
 	if err != nil {
-		return user, "", err
+		return user, "", false, err
 	}
 
-	return user, token, nil
+	return user, token, isAdmin, nil
 }
 
 func ListUsers() ([]models.UserWithSuperAdmin, error) {

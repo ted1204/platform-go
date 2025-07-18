@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 	"time"
@@ -32,11 +33,13 @@ import (
 func GetAuditLogs(c *gin.Context) {
 	var params repositories.AuditQueryParams
 
-	if uid, err := utils.ParseQueryUintParam(c, "user_id"); err == nil {
+	if uid, err := utils.ParseQueryUintParam(c, "user_id"); err != nil {
+		if !errors.Is(err, utils.ErrEmptyParameter) {
+			c.JSON(http.StatusBadRequest, response.ErrorResponse{Error: "Invalid user_id"})
+			return
+		}
+	} else {
 		params.UserID = &uid
-	} else if err != nil && err.Error() != "empty parameter" {
-		c.JSON(http.StatusBadRequest, response.ErrorResponse{Error: "Invalid user_id"})
-		return
 	}
 
 	if rt := c.Query("resource_type"); rt != "" {
