@@ -18,10 +18,10 @@ const (
 
 type Resource struct {
 	RID         uint           `gorm:"primaryKey;column:r_id"`
-	CFID        uint           `gorm:"not null"`                    // foreign key to config_file
-	Type        string         `gorm:"type:resource_type;not null"` // ENUM
+	CFID        uint           `gorm:"not null;column:cf_id"`
+	Type        string         `gorm:"type:resource_type;not null"`
 	Name        string         `gorm:"size:50;not null"`
-	ParsedYAML  datatypes.JSON `gorm:"type:jsonb;not null"` // 結構化 YAML（轉 JSON）
-	Description string         `gorm:"type:text"`
-	CreatedAt   time.Time      `gorm:"column:create_at"`
+	ParsedYAML  datatypes.JSON `gorm:"type:jsonb;not null"`
+	Description *string        `gorm:"type:text"`
+	CreatedAt   time.Time      `gorm:"column:create_at;autoCreateTime"`
 }

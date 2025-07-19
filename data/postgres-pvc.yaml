@@ -25,7 +25,8 @@ spec:
     spec:
       containers:
         - name: postgres
-          image: postgres:latest
+          image: postgres-with-pg_cron:latest
+          imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 5432
           env:

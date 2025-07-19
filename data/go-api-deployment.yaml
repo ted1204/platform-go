@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
         - name: go-api
-          image: golang:latest # 注意這不是 alpine，是基於 Debian 的
+          image: golang:latest
           command: ["sleep", "infinity"]
           volumeMounts:
               - mountPath: /go/web-go
@@ -39,7 +39,7 @@ spec:
       volumes:
         - name: local-data
           hostPath:
-            path: /tmp/docker-desktop-root/run/desktop/mnt/host/c/Users/linsk/Desktop/web-go
+            path: /home/sky/platform-go
             type: Directory
 ---
 apiVersion: v1
@@ -53,4 +53,5 @@ spec:
     - protocol: TCP
       port: 8080
       targetPort: 8080
-  type: ClusterIP
+      nodePort: 30080
+  type: NodePort

@@ -1,14 +1,12 @@
 -- 建立資料庫
--- CREATE DATABASE platform;
--- \c platform;
+CREATE DATABASE platform;
+\c platform;
 
 -- 建立 enum 類型
 CREATE TYPE resource_type AS ENUM ('pod','service','deployment','configmap','ingress');
 CREATE TYPE user_type AS ENUM ('origin','oauth2');
 CREATE TYPE user_status AS ENUM ('online','offline','delete');
 CREATE TYPE user_role AS ENUM ('admin','manager','user');
-
--- CREATE EXTENSION IF NOT EXISTS pg_cron;
 
 -- group_list
 CREATE TABLE group_list (
@@ -19,7 +17,7 @@ CREATE TABLE group_list (
   update_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
--- project
+-- projects
 CREATE TABLE projects (
   p_id SERIAL PRIMARY KEY,
   project_name VARCHAR(100) NOT NULL,
@@ -31,27 +29,28 @@ CREATE TABLE projects (
 
 -- config_file
 CREATE TABLE config_file (
-    cf_id       SERIAL PRIMARY KEY,
-    filename    VARCHAR(200) NOT NULL,
-    minio_path  VARCHAR(300) NOT NULL,
-    project_id  INTEGER NOT NULL REFERENCES project(p_id),
-    create_at   TIMESTAMP DEFAULT now()
+  cf_id SERIAL PRIMARY KEY,
+  filename VARCHAR(200) NOT NULL,
+  minio_path VARCHAR(300) NOT NULL,
+  project_id INTEGER NOT NULL REFERENCES projects(p_id),
+  create_at TIMESTAMP DEFAULT NOW()
 );
+
 -- resource
 CREATE TABLE resource (
-    r_id         SERIAL PRIMARY KEY,
-    cf_id        INTEGER NOT NULL REFERENCES config_file(cf_id),
-    type         resource_type NOT NULL,
-    name         VARCHAR(50) NOT NULL,
-    parsed_yaml  JSONB NOT NULL,
-    description  TEXT,
-    create_at    TIMESTAMP DEFAULT now()
+  r_id SERIAL PRIMARY KEY,
+  cf_id INTEGER NOT NULL REFERENCES config_file(cf_id),
+  type resource_type NOT NULL,
+  name VARCHAR(50) NOT NULL,
+  parsed_yaml JSONB NOT NULL,
+  description TEXT,
+  create_at TIMESTAMP DEFAULT NOW()
 );
 
 -- users
 CREATE TABLE users (
   u_id SERIAL PRIMARY KEY,
-  username VARCHAR(50) NOT NULL,
+  username VARCHAR(50) NOT NULL UNIQUE,
   password VARCHAR(255) NOT NULL,
   email VARCHAR(100),
   full_name VARCHAR(50),
@@ -75,20 +74,20 @@ CREATE TABLE user_group (
 
 -- audit_logs
 CREATE TABLE audit_logs (
-    id SERIAL PRIMARY KEY,                         -- Primary key
-    user_id INT NOT NULL,                          -- ID of the user performing the action
-    action VARCHAR(20) NOT NULL,                   -- Action type, e.g. 'create', 'update', 'delete'
-    resource_type VARCHAR(50) NOT NULL,            -- Type of resource, e.g. 'group', 'user', 'projects'
-    resource_id INT NOT NULL,                       -- ID of the target resource
-    old_data JSONB,                                -- Data before the action (nullable)
-    new_data JSONB,                                -- Data after the action (nullable)
-    ip_address VARCHAR(45),                        -- IP address of the actor (supports IPv6)
-    user_agent TEXT,                               -- User agent string of client
-    description TEXT,                              -- Additional notes or description (e.g. reason for action)
-    created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL -- Timestamp of the action with timezone
+  id SERIAL PRIMARY KEY,
+  user_id INT NOT NULL,
+  action VARCHAR(20) NOT NULL,
+  resource_type VARCHAR(50) NOT NULL,
+  resource_id INT NOT NULL,
+  old_data JSONB,
+  new_data JSONB,
+  ip_address VARCHAR(45),
+  user_agent TEXT,
+  description TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- View: project_group_view
+-- View: project_group_views
 CREATE OR REPLACE VIEW project_group_views AS
 SELECT
   g.g_id,
@@ -99,10 +98,11 @@ SELECT
   MAX(g.update_at) AS group_update_at
 FROM group_list g
 LEFT JOIN projects p ON p.g_id = g.g_id
-LEFT JOIN resource r ON r.p_id = p.p_id
+LEFT JOIN config_file cf ON cf.project_id = p.p_id
+LEFT JOIN resource r ON r.cf_id = cf.cf_id
 GROUP BY g.g_id, g.group_name;
 
--- View: project_resource_view
+-- View: project_resource_views
 CREATE OR REPLACE VIEW project_resource_views AS
 SELECT
   p.p_id,
@@ -110,13 +110,13 @@ SELECT
   r.r_id,
   r.type,
   r.name,
-  r.filename,
-  r.create_at AS resource_create_at,
-  r.update_at AS resource_update_at
+  cf.filename,
+  r.create_at AS resource_create_at
 FROM projects p
-JOIN resource r ON r.p_id = p.p_id;
+JOIN config_file cf ON cf.project_id = p.p_id
+JOIN resource r ON r.cf_id = cf.cf_id;
 
--- View: project_resource_view
+-- View: group_resource_views
 CREATE OR REPLACE VIEW group_resource_views AS
 SELECT
   g.g_id,
@@ -126,15 +126,15 @@ SELECT
   r.r_id,
   r.type AS resource_type,
   r.name AS resource_name,
-  r.filename,
-  r.create_at AS resource_create_at,
-  r.update_at AS resource_update_at
+  cf.filename,
+  r.create_at AS resource_create_at
 FROM group_list g
 LEFT JOIN projects p ON p.g_id = g.g_id
-LEFT JOIN resource r ON r.p_id = p.p_id
+LEFT JOIN config_file cf ON cf.project_id = p.p_id
+LEFT JOIN resource r ON r.cf_id = cf.cf_id
 WHERE r.r_id IS NOT NULL;
 
--- View: user_group_view
+-- View: user_group_views
 CREATE OR REPLACE VIEW user_group_views AS
 SELECT
   u.u_id,
@@ -162,21 +162,24 @@ SELECT
 FROM users u
 LEFT JOIN user_group_views ug ON u.u_id = ug.u_id AND ug.group_name = 'super' AND ug.role = 'admin';
 
--- -- Initialize
+-- 初始化資料
 INSERT INTO group_list (group_name, description)
-VALUES ('super', 'Super administrator group');
+VALUES ('super', 'Super administrator group')
+ON CONFLICT DO NOTHING;
 
 INSERT INTO users (username, password, type, status, full_name, email)
-VALUES ('admin', '$2a$10$nsXJXOUAbVyLbvtPizj0RectJWdInu17C2NpWEVKNvwzKQcg8bchu', 'origin', 'offline', 'Administrator', '');
+VALUES ('admin', '$2a$10$nsXJXOUAbVyLbvtPizj0RectJWdInu17C2NpWEVKNvwzKQcg8bchu', 'origin', 'offline', 'Administrator', '')
+ON CONFLICT DO NOTHING;
 
 INSERT INTO user_group (u_id, g_id, role)
 SELECT u.u_id, g.g_id, 'admin'
 FROM users u, group_list g
 WHERE u.username = 'admin' AND g.group_name = 'super';
 
--- Job
--- SELECT cron.schedule(
---   'clear_audit_logs',
---   '0 3 * * *',
---   $$DELETE FROM audit_logs WHERE created_at < NOW() - INTERVAL '30 days'$$
--- );
+-- 若要使用 pg_cron 清理日誌，可解除註解並確保 extension 已安裝
+CREATE EXTENSION pg_cron;
+SELECT cron.schedule(
+  'clear_audit_logs',
+  '0 3 * * *',
+  $$DELETE FROM audit_logs WHERE created_at < NOW() - INTERVAL '30 days'$$
+);
