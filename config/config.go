@@ -6,6 +6,8 @@ import (
 	"strconv"
 
 	"github.com/joho/godotenv"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 )
 
 var (
@@ -23,6 +25,7 @@ var (
 	MinioSecretKey  string
 	MinioUseSSL     bool
 	MinioBucket     string
+	Scheme          = runtime.NewScheme()
 )
 
 func LoadConfig() {
@@ -52,4 +55,8 @@ func getEnv(key, fallback string) string {
 		return value
 	}
 	return fallback
+}
+
+func InitK8sConfig() {
+	_ = corev1.AddToScheme(Scheme)
 }

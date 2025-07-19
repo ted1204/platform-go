@@ -35,7 +35,7 @@ func DeleteResource(rid uint) error {
 func ListResourcesByProjectID(pid uint) ([]models.Resource, error) {
 	var resources []models.Resource
 	err := db.DB.
-		Joins("JOIN config_file cf ON cf.cf_id = resource.cf_id").
+		Joins("JOIN config_files cf ON cf.cf_id = resources.cf_id").
 		Where("cf.project_id = ?", pid).
 		Find(&resources).Error
 	return resources, err

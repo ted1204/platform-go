@@ -3,7 +3,7 @@ CREATE DATABASE platform;
 \c platform;
 
 -- 建立 enum 類型
-CREATE TYPE resource_type AS ENUM ('pod','service','deployment','configmap','ingress');
+CREATE TYPE resource_type AS ENUM ('Pod','Service','Deployment','ConfigMap','Ingress');
 CREATE TYPE user_type AS ENUM ('origin','oauth2');
 CREATE TYPE user_status AS ENUM ('online','offline','delete');
 CREATE TYPE user_role AS ENUM ('admin','manager','user');
@@ -28,7 +28,7 @@ CREATE TABLE projects (
 );
 
 -- config_file
-CREATE TABLE config_file (
+CREATE TABLE config_files (
   cf_id SERIAL PRIMARY KEY,
   filename VARCHAR(200) NOT NULL,
   minio_path VARCHAR(300) NOT NULL,
@@ -37,9 +37,9 @@ CREATE TABLE config_file (
 );
 
 -- resource
-CREATE TABLE resource (
+CREATE TABLE resources (
   r_id SERIAL PRIMARY KEY,
-  cf_id INTEGER NOT NULL REFERENCES config_file(cf_id),
+  cf_id INTEGER NOT NULL REFERENCES config_files(cf_id),
   type resource_type NOT NULL,
   name VARCHAR(50) NOT NULL,
   parsed_yaml JSONB NOT NULL,
@@ -98,8 +98,8 @@ SELECT
   MAX(g.update_at) AS group_update_at
 FROM group_list g
 LEFT JOIN projects p ON p.g_id = g.g_id
-LEFT JOIN config_file cf ON cf.project_id = p.p_id
-LEFT JOIN resource r ON r.cf_id = cf.cf_id
+LEFT JOIN config_files cf ON cf.project_id = p.p_id
+LEFT JOIN resources r ON r.cf_id = cf.cf_id
 GROUP BY g.g_id, g.group_name;
 
 -- View: project_resource_views
@@ -113,8 +113,8 @@ SELECT
   cf.filename,
   r.create_at AS resource_create_at
 FROM projects p
-JOIN config_file cf ON cf.project_id = p.p_id
-JOIN resource r ON r.cf_id = cf.cf_id;
+JOIN config_files cf ON cf.project_id = p.p_id
+JOIN resources r ON r.cf_id = cf.cf_id;
 
 -- View: group_resource_views
 CREATE OR REPLACE VIEW group_resource_views AS
@@ -130,8 +130,8 @@ SELECT
   r.create_at AS resource_create_at
 FROM group_list g
 LEFT JOIN projects p ON p.g_id = g.g_id
-LEFT JOIN config_file cf ON cf.project_id = p.p_id
-LEFT JOIN resource r ON r.cf_id = cf.cf_id
+LEFT JOIN config_files cf ON cf.project_id = p.p_id
+LEFT JOIN resources r ON r.cf_id = cf.cf_id
 WHERE r.r_id IS NOT NULL;
 
 -- View: user_group_views

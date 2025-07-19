@@ -60,6 +60,19 @@ definitions:
         example: johndoe
         type: string
     type: object
+  models.ConfigFile:
+    properties:
+      cfid:
+        type: integer
+      createdAt:
+        type: string
+      filename:
+        type: string
+      minIOPath:
+        type: string
+      projectID:
+        type: integer
+    type: object
   models.Group:
     properties:
       createdAt:
@@ -87,6 +100,23 @@ definitions:
       projectName:
         type: string
       updatedAt:
+        type: string
+    type: object
+  models.ResourceSwagger:
+    properties:
+      cf_id:
+        type: integer
+      create_at:
+        type: string
+      description:
+        type: string
+      name:
+        type: string
+      parsedYAML:
+        type: object
+      r_id:
+        type: integer
+      type:
         type: string
     type: object
   models.UserWithSuperAdmin:
@@ -122,6 +152,8 @@ definitions:
     type: object
   response.TokenResponse:
     properties:
+      is_super_admin:
+        type: boolean
       token:
         type: string
       user_id:
@@ -194,6 +226,189 @@ paths:
       summary: Query audit logs
       tags:
       - audit
+  /config-files:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/models.ConfigFile'
+            type: array
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List all config files
+      tags:
+      - config_files
+    post:
+      consumes:
+      - multipart/form-data
+      parameters:
+      - description: Filename
+        in: formData
+        name: filename
+        required: true
+        type: string
+      - description: Raw YAML content
+        in: formData
+        name: raw_yaml
+        required: true
+        type: string
+      - description: Project ID
+        in: formData
+        name: project_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/models.ConfigFile'
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create a new config file
+      tags:
+      - config_files
+  /config-files/{id}:
+    delete:
+      parameters:
+      - description: Config File ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete a config file by ID
+      tags:
+      - config_files
+    get:
+      parameters:
+      - description: Config File ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.ConfigFile'
+        "400":
+          description: Invalid ID
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get a config file by ID
+      tags:
+      - config_files
+    put:
+      consumes:
+      - multipart/form-data
+      parameters:
+      - description: Config File ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Filename
+        in: formData
+        name: filename
+        type: string
+      - description: Raw YAML content
+        in: formData
+        name: raw_yaml
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.ConfigFile'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update a config file by ID
+      tags:
+      - config_files
+  /config-files/{id}/resources:
+    get:
+      parameters:
+      - description: Config File ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/models.ResourceSwagger'
+            type: array
+        "400":
+          description: Invalid config file ID
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List resources by config file ID
+      tags:
+      - resources
   /groups:
     get:
       produces:
@@ -562,6 +777,62 @@ paths:
       summary: Update project by ID
       tags:
       - projects
+  /projects/{id}/config-files:
+    get:
+      parameters:
+      - description: Project ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/models.ConfigFile'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List config files by project ID
+      tags:
+      - config_files
+  /projects/{id}/resources:
+    get:
+      parameters:
+      - description: Project ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/models.ResourceSwagger'
+            type: array
+        "400":
+          description: Invalid project ID
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List resources by project ID
+      tags:
+      - resources
   /register:
     post:
       consumes:
@@ -595,6 +866,112 @@ paths:
       summary: User registration
       tags:
       - auth
+  /resources/{id}:
+    delete:
+      parameters:
+      - description: Resource ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Invalid ID
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Resource not found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete resource by ID
+      tags:
+      - resources
+    get:
+      parameters:
+      - description: Resource ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.ResourceSwagger'
+        "400":
+          description: Invalid ID
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Resource not found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get resource by ID
+      tags:
+      - resources
+    put:
+      consumes:
+      - multipart/form-data
+      parameters:
+      - description: Resource ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Resource name
+        in: formData
+        name: name
+        type: string
+      - description: Resource type (e.g. pod, service, deployment)
+        in: formData
+        name: type
+        type: string
+      - description: Parsed YAML content
+        in: formData
+        name: parsed_yaml
+        type: string
+      - description: Description
+        in: formData
+        name: description
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.ResourceSwagger'
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Resource not found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update resource by ID
+      tags:
+      - resources
   /users:
     get:
       produces:

@@ -1,4 +1,4 @@
-package tests
+package unit_tests
 
 import (
 	"context"
@@ -36,10 +36,4 @@ func TestUploadDownloadYAML(t *testing.T) {
 
 	elapsed := time.Since(start)
 	t.Logf("TestUploadDownloadYAML took %s", elapsed)
-}
-
-func TestMain(m *testing.M) {
-	config.LoadConfig()
-	minio.InitMinio()
-	m.Run()
 }

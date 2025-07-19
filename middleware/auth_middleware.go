@@ -97,7 +97,11 @@ func CheckPermissionPayload(permission string, dtoType any) gin.HandlerFunc {
 		}
 
 		gid := gidGetter.GetGID()
-
+		if gid == 0 {
+			c.JSON(http.StatusBadRequest, response.ErrorResponse{Error: "Group ID cannot be zero"})
+			c.Abort()
+			return
+		}
 		uid, err := utils.GetUserIDFromContext(c)
 		if err != nil {
 			c.JSON(http.StatusUnauthorized, response.ErrorResponse{Error: "Unauthorized"})

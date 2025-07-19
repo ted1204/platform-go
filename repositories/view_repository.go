@@ -33,12 +33,36 @@ func GetGroupIDByResourceID(rID uint) (uint, error) {
 
 	var res result
 
-	err := db.DB.Select("p.g_id").Joins("JOIN project p ON r.p_id = p.p_id").Where("r.r_id = ?", rID).
+	err := db.DB.Table("resources r").
+		Select("p.g_id").
+		Joins("JOIN config_files cf ON cf.cf_id = r.cf_id").
+		Joins("JOIN projects p ON cf.project_id = p.p_id").
+		Where("r.r_id = ?", rID).
 		Take(&res).Error
 
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return 0, gorm.ErrRecordNotFound
 	}
+	if err != nil {
+		return 0, err
+	}
+
+	return res.GID, nil
+}
+
+func GetGroupIDByConfigFileID(cfID uint) (uint, error) {
+	type result struct {
+		GID uint `gorm:"column:g_id"`
+	}
+
+	var res result
+
+	err := db.DB.Table("config_files cf").
+		Select("p.g_id").
+		Joins("JOIN projects p ON cf.project_id = p.p_id").
+		Where("cf.cf_id = ?", cfID).
+		Take(&res).Error
+
 	if err != nil {
 		return 0, err
 	}

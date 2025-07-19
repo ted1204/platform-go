@@ -20,6 +20,7 @@ import (
 
 func main() {
 	config.LoadConfig()
+	config.InitK8sConfig()
 	db.Init()
 	minio.InitMinio()
 	middleware.Init()

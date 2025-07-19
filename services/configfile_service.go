@@ -13,10 +13,10 @@ import (
 )
 
 var (
-	ErrConfigFileNotFound    = errors.New("config file not found")
-	ErrYAMLParsingFailed     = errors.New("YAML parsing failed")
-	ErrNoInvalidYAMLDocument = errors.New("no valid YAML documents found")
-	ErrUploadYAMLFailed      = errors.New("failed to upload YAML file")
+	ErrConfigFileNotFound  = errors.New("config file not found")
+	ErrYAMLParsingFailed   = errors.New("YAML parsing failed")
+	ErrNoValidYAMLDocument = errors.New("no valid YAML documents found")
+	ErrUploadYAMLFailed    = errors.New("failed to upload YAML file")
 )
 
 func ListConfigFiles() ([]models.ConfigFile, error) {
@@ -49,7 +49,7 @@ func CreateConfigFile(c *gin.Context, cf dto.CreateConfigFileInput) (*models.Con
 
 	yamlArray := utils.SplitYAMLDocuments(cf.RawYaml)
 	if len(yamlArray) == 0 {
-		return nil, ErrNoInvalidYAMLDocument
+		return nil, ErrNoValidYAMLDocument
 	}
 
 	for i, doc := range yamlArray {
@@ -89,7 +89,7 @@ func updateYamlContent(c *gin.Context, cf *models.ConfigFile, rawYaml string) er
 
 	yamlArray := utils.SplitYAMLDocuments(rawYaml)
 	if len(yamlArray) == 0 {
-		return ErrNoInvalidYAMLDocument
+		return ErrNoValidYAMLDocument
 	}
 
 	userID, _ := utils.GetUserIDFromContext(c)
@@ -166,6 +166,18 @@ func DeleteConfigFile(c *gin.Context, id uint) error {
 	cf, err := repositories.GetConfigFileByID(id)
 	if err != nil {
 		return ErrConfigFileNotFound
+	}
+
+	resources, err := ListResourcesByConfigFileID(id)
+	if err != nil {
+		return err
+	}
+
+	for _, res := range resources {
+		err := DeleteResource(c, res.RID)
+		if err != nil {
+			return err
+		}
 	}
 
 	err = repositories.DeleteConfigFile(id)

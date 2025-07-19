@@ -19,14 +19,25 @@ func RegisterRoutes(r *gin.Engine) {
 		{
 			audit.GET("", handlers.GetAuditLogs)
 		}
-
+		configFiles := auth.Group("/config-files")
+		{
+			configFiles.GET("", handlers.ListConfigFilesHandler)
+			configFiles.GET("/:id", handlers.GetConfigFileHandler)
+			configFiles.GET("/:id/resources", middleware.CheckPermissionByParam(repositories.GetGroupIDByConfigFileID), handlers.ListResourcesByConfigFileID)
+			configFiles.POST("", middleware.CheckPermissionPayload("create_config_file", dto.CreateConfigFileInput{}), handlers.CreateConfigFileHandler)
+			configFiles.PUT("/:id", middleware.CheckPermissionByParam(repositories.GetGroupIDByConfigFileID), handlers.UpdateConfigFileHandler)
+			configFiles.DELETE("/:id", middleware.CheckPermissionByParam(repositories.GetGroupIDByConfigFileID), handlers.DeleteConfigFileHandler)
+		}
 		projects := auth.Group("/projects")
 		{
 			projects.GET("", handlers.GetProjects)
 			projects.GET("/:id", handlers.GetProjectByID)
+			projects.GET("/:id/config-files", handlers.ListConfigFilesByProjectIDHandler)
+			projects.GET("/:id/resources", handlers.ListResourcesByProjectID)
 			projects.POST("", middleware.CheckPermissionPayload("create_project", dto.CreateProjectDTO{}), handlers.CreateProject)
 			projects.PUT("/:id", middleware.CheckPermissionByParam(repositories.GetGroupIDByProjectID), handlers.UpdateProject)
 			projects.DELETE("/:id", middleware.CheckPermissionByParam(repositories.GetGroupIDByProjectID), handlers.DeleteProject)
+
 		}
 		users := auth.Group("/users")
 		{

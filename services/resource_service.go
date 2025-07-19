@@ -16,6 +16,10 @@ func ListResourcesByProjectID(projectID uint) ([]models.Resource, error) {
 	return repositories.ListResourcesByProjectID(projectID)
 }
 
+func ListResourcesByConfigFileID(cfID uint) ([]models.Resource, error) {
+	return repositories.ListResourcesByConfigFileID(cfID)
+}
+
 func GetResource(rid uint) (*models.Resource, error) {
 	return repositories.GetResourceByID(rid)
 }
