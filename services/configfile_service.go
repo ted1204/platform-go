@@ -3,14 +3,13 @@ package services
 import (
 	"errors"
 	"fmt"
-	"strings"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/linskybing/platform-go/dto"
 	"github.com/linskybing/platform-go/models"
 	"github.com/linskybing/platform-go/repositories"
 	"github.com/linskybing/platform-go/utils"
+	"gorm.io/datatypes"
 )
 
 var (
@@ -30,14 +29,14 @@ func GetConfigFile(id uint) (*models.ConfigFile, error) {
 
 func CreateConfigFile(c *gin.Context, cf dto.CreateConfigFileInput) (*models.ConfigFile, error) {
 
-	filename := fmt.Sprintf("config_%d_%d.yaml", cf.ProjectID, time.Now().Unix())
-	if err := utils.UploadObject(c, filename, "application/x-yaml", strings.NewReader(cf.RawYaml), int64(len(cf.RawYaml))); err != nil {
+	minioPath, err := utils.CreateYamlFile(c, "config", cf.RawYaml)
+	if err != nil {
 		return nil, ErrUploadYAMLFailed
 	}
 
 	createdCF := &models.ConfigFile{
-		Filename:  filename,
-		MinIOPath: fmt.Sprintf("config/%s", filename),
+		Filename:  cf.Filename,
+		MinIOPath: minioPath,
 		ProjectID: cf.ProjectID,
 	}
 
@@ -45,21 +44,95 @@ func CreateConfigFile(c *gin.Context, cf dto.CreateConfigFileInput) (*models.Con
 		return nil, err
 	}
 
-	// 	userID, _ := utils.GetUserIDFromContext(c)
-	// _ = utils.LogAudit(c, userID, "update", "config_file", existing.CFID, oldCF, *existing, "")
+	userID, _ := utils.GetUserIDFromContext(c)
+	_ = utils.LogAudit(c, userID, "create", "config_file", createdCF.CFID, nil, createdCF, "")
 
-	// yamlArray := utils.SplitYAMLDocuments(cf.RawYaml)
-	// if len(yamlArray) == 0 {
-	// 	return nil, ErrNoInvalidYAMLDocument
-	// }
+	yamlArray := utils.SplitYAMLDocuments(cf.RawYaml)
+	if len(yamlArray) == 0 {
+		return nil, ErrNoInvalidYAMLDocument
+	}
 
-	// for _, doc := range yamlArray {
-	// 	yamlContent, _ := utils.YAMLToJSON(doc)
+	for i, doc := range yamlArray {
+		jsonContent, err := utils.YAMLToJSON(doc)
+		if err != nil {
+			return nil, fmt.Errorf("failed to convert YAML to JSON for document %d: %w", i+1, err)
+		}
 
-	// }
-	return nil, nil
+		gvk, name, err := utils.ValidateK8sJSON(jsonContent)
+		if err != nil {
+			return nil, fmt.Errorf("failed to validate YAML document %d: %w", i+1, err)
+		}
+
+		resource := &models.Resource{
+			CFID:       createdCF.CFID,
+			Type:       gvk.Kind,
+			Name:       name,
+			ParsedYAML: datatypes.JSON([]byte(jsonContent)),
+		}
+
+		if _, err := CreateResource(c, resource); err != nil {
+			return nil, fmt.Errorf("failed to create resource for document %d: %w", i+1, err)
+		}
+
+		_ = utils.LogAudit(c, userID, "create", "resource", resource.RID, nil, resource, "")
+	}
+	return createdCF, nil
 }
 
+func updateYamlContent(c *gin.Context, cf *models.ConfigFile, rawYaml string) error {
+	minioPath, err := utils.CreateYamlFile(c, "config", rawYaml)
+	if err != nil {
+		return ErrUploadYAMLFailed
+	}
+
+	cf.MinIOPath = minioPath
+
+	yamlArray := utils.SplitYAMLDocuments(rawYaml)
+	if len(yamlArray) == 0 {
+		return ErrNoInvalidYAMLDocument
+	}
+
+	userID, _ := utils.GetUserIDFromContext(c)
+	for i, doc := range yamlArray {
+		jsonContent, err := utils.YAMLToJSON(doc)
+		if err != nil {
+			return fmt.Errorf("failed to convert YAML to JSON for document %d: %w", i+1, err)
+		}
+
+		gvk, name, err := utils.ValidateK8sJSON(jsonContent)
+		if err != nil {
+			return fmt.Errorf("failed to validate YAML document %d: %w", i+1, err)
+		}
+		target, err := repositories.GetResourceByConfigFileIDAndName(cf.CFID, name)
+		if err != nil {
+			return fmt.Errorf("failed to get resource for document %d: %w", i, err)
+		}
+
+		var resource *models.Resource
+
+		if target == nil {
+			resource = &models.Resource{
+				CFID:       cf.CFID,
+				Type:       gvk.Kind,
+				Name:       name,
+				ParsedYAML: datatypes.JSON([]byte(jsonContent)),
+			}
+			if err := repositories.CreateResource(resource); err != nil {
+				return fmt.Errorf("failed to create resource for document %d: %w", i+1, err)
+			}
+			_ = utils.LogAudit(c, userID, "create", "resource", resource.RID, nil, resource, "")
+		} else {
+			oldTarget := *target
+			target.Name = name
+			target.ParsedYAML = datatypes.JSON([]byte(jsonContent))
+			if err := repositories.UpdateResource(target); err != nil {
+				return fmt.Errorf("failed to update resource for document %d: %w", i+1, err)
+			}
+			_ = utils.LogAudit(c, userID, "update", "resource", target.RID, oldTarget, target, "")
+		}
+	}
+	return nil
+}
 func UpdateConfigFile(c *gin.Context, id uint, input dto.ConfigFileUpdateDTO) (*models.ConfigFile, error) {
 	existing, err := repositories.GetConfigFileByID(id)
 	if err != nil {
@@ -71,11 +144,11 @@ func UpdateConfigFile(c *gin.Context, id uint, input dto.ConfigFileUpdateDTO) (*
 	if input.Filename != nil {
 		existing.Filename = *input.Filename
 	}
-	if input.MinIOPath != nil {
-		existing.MinIOPath = *input.MinIOPath
-	}
-	if input.ProjectID != nil {
-		existing.ProjectID = *input.ProjectID
+
+	if input.RawYaml != nil {
+		if err := updateYamlContent(c, existing, *input.RawYaml); err != nil {
+			return nil, err
+		}
 	}
 
 	err = repositories.UpdateConfigFile(existing)

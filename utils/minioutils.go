@@ -5,10 +5,21 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"time"
 
 	"github.com/linskybing/platform-go/minio"
 	minioSDK "github.com/minio/minio-go/v7"
 )
+
+func CreateYamlFile(ctx context.Context, typename string, content string) (string, error) {
+	filename := fmt.Sprintf("%s_%d.yaml", typename, time.Now().Unix())
+	minioPath := fmt.Sprintf("configs/%s", filename)
+
+	if err := UploadObject(ctx, minioPath, "application/x-yaml", strings.NewReader(content), int64(len(content))); err != nil {
+		return minioPath, err
+	}
+	return minioPath, nil
+}
 
 // UploadObject uploads content as an object to MinIO with specified content-type.
 // objectName: the target object name (e.g. "config.yaml" or "data.json")

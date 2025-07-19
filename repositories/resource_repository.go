@@ -5,6 +5,7 @@ import (
 
 	"github.com/linskybing/platform-go/db"
 	"github.com/linskybing/platform-go/models"
+	"gorm.io/gorm"
 )
 
 func CreateResource(resource *models.Resource) error {
@@ -38,4 +39,27 @@ func ListResourcesByProjectID(pid uint) ([]models.Resource, error) {
 		Where("cf.project_id = ?", pid).
 		Find(&resources).Error
 	return resources, err
+}
+
+func ListResourcesByConfigFileID(cfID uint) ([]models.Resource, error) {
+	var resources []models.Resource
+	err := db.DB.
+		Where("cf_id = ?", cfID).
+		Find(&resources).Error
+	return resources, err
+}
+
+func GetResourceByConfigFileIDAndName(cfID uint, name string) (*models.Resource, error) {
+	var resource models.Resource
+	err := db.DB.
+		Where("cf_id = ? AND name = ?", cfID, name).
+		First(&resource).Error
+
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &resource, nil
 }

@@ -18,7 +18,7 @@ func TestUploadDownloadYAML(t *testing.T) {
 	ctx := context.Background()
 	start := time.Now()
 
-	testObject := "test-config.yaml"
+	testObject := "test/test-config.yaml"
 	testContent := "key: value\nfoo: bar\n"
 
 	if err := utils.UploadObject(ctx, testObject, "application/x-yaml", strings.NewReader(testContent), int64(len(testContent))); err != nil {
