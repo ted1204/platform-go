@@ -44,11 +44,11 @@ func LoadConfig() {
 	ServerPort = getEnv("SERVER_PORT", "8080")
 	Issuer = getEnv("Issuer", "platform")
 
-	MinioEndpoint = getEnv("MINIO_ENDPOINT", "localhost:9000")
-	MinioAccessKey = getEnv("MINIO_ACCESS_KEY", "minioadmin")
-	MinioSecretKey = getEnv("MINIO_SECRET_KEY", "minioadmin")
+	MinioEndpoint = getEnv("MINIO_ENDPOINT", "minio.tenant.svc.cluster.local:443")
+	MinioAccessKey = getEnv("MINIO_ACCESS_KEY", "minio")
+	MinioSecretKey = getEnv("MINIO_SECRET_KEY", "minio123")
 	MinioBucket = getEnv("MINIO_BUCKET", "platform-bucket")
-	MinioUseSSL, _ = strconv.ParseBool(getEnv("MINIO_USE_SSL", "false"))
+	MinioUseSSL, _ = strconv.ParseBool(getEnv("MINIO_USE_SSL", "true"))
 }
 
 func getEnv(key, fallback string) string {

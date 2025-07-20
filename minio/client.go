@@ -3,7 +3,8 @@ package minio
 import (
 	"context"
 	"log"
-
+	"crypto/tls"
+    "net/http"
 	"github.com/linskybing/platform-go/config"
 	minioSDK "github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
@@ -20,10 +21,18 @@ func InitMinio() {
 	BucketName = config.MinioBucket
 
 	// Initialize MinIO client
-	minioClient, err := minioSDK.New(endpoint, &minioSDK.Options{
-		Creds:  credentials.NewStaticV4(accessKey, secretKey, ""),
-		Secure: useSSL,
-	})
+    transport := &http.Transport{
+        TLSClientConfig: &tls.Config{
+            InsecureSkipVerify: true,
+        },
+    }
+
+    // Initialize MinIO client with custom transport
+    minioClient, err := minioSDK.New(endpoint, &minioSDK.Options{
+        Creds:     credentials.NewStaticV4(accessKey, secretKey, ""),
+        Secure:    useSSL,
+        Transport: transport,
+    })
 	if err != nil {
 		log.Fatalf("❌ Failed to connect to MinIO: %v", err)
 	}
