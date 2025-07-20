@@ -1,9 +1,13 @@
 package k8sclient
 
 import (
+	"encoding/json"
+	"errors"
+	"io"
 	"log"
+	"os"
 	"path/filepath"
-	"time"
+	"sync"
 
 	"github.com/gorilla/websocket"
 	corev1 "k8s.io/api/core/v1"
@@ -15,38 +19,103 @@ import (
 	"k8s.io/client-go/util/homedir"
 )
 
+type WebSocketIO struct {
+	Conn       *websocket.Conn
+	readBuffer chan []byte
+	closeCh    chan struct{}
+
+	sizeMu     sync.Mutex
+	size       remotecommand.TerminalSize
+	notifySize chan struct{}
+}
+
 var (
 	Config    *rest.Config
 	Clientset *kubernetes.Clientset
 )
 
+// Init 載入 kubeconfig，初始化 Clientset
 func Init() {
-	kubeconfig := filepath.Join(homedir.HomeDir(), ".kube", "config")
 	var err error
-	Config, err = clientcmd.BuildConfigFromFlags("", kubeconfig)
-	if err != nil {
-		log.Fatalf("failed to load kubeconfig: %v", err)
+	if configPath := os.Getenv("KUBECONFIG"); configPath != "" {
+		Config, err = clientcmd.BuildConfigFromFlags("", configPath)
+	} else {
+		Config, err = rest.InClusterConfig()
+		if err != nil {
+			kubeconfig := filepath.Join(homedir.HomeDir(), ".kube", "config")
+			Config, err = clientcmd.BuildConfigFromFlags("", kubeconfig)
+		}
 	}
-
+	if err != nil {
+		log.Fatalf("failed to load kube config: %v", err)
+	}
 	Clientset, err = kubernetes.NewForConfig(Config)
 	if err != nil {
-		log.Fatalf("failed to create clientset: %v", err)
+		log.Fatalf("failed to create kubernetes clientset: %v", err)
 	}
 }
 
-// WebSocketIO implements io.Reader and io.Writer for WebSocket
-type WebSocketIO struct {
-	Conn *websocket.Conn
+
+func NewWebSocketIO(conn *websocket.Conn, initialCols, initialRows uint16) *WebSocketIO {
+	wsio := &WebSocketIO{
+		Conn:       conn,
+		readBuffer: make(chan []byte, 10),
+		closeCh:    make(chan struct{}),
+
+		size:       remotecommand.TerminalSize{Width: initialCols, Height: initialRows},
+		notifySize: make(chan struct{}, 1),
+	}
+
+	go func() {
+		defer close(wsio.readBuffer)
+		for {
+			_, msg, err := conn.ReadMessage()
+			if err != nil {
+				return
+			}
+
+			var resize struct {
+				Type string `json:"type"`
+				Cols uint16 `json:"cols"`
+				Rows uint16 `json:"rows"`
+			}
+
+			if err := json.Unmarshal(msg, &resize); err == nil && resize.Type == "resize" {
+				wsio.sizeMu.Lock()
+				wsio.size.Width = resize.Cols
+				wsio.size.Height = resize.Rows
+				wsio.sizeMu.Unlock()
+
+				// 非阻塞通知有 resize
+				select {
+				case wsio.notifySize <- struct{}{}:
+				default:
+				}
+				continue
+			}
+
+			// 不是 resize 就當一般輸入傳給 shell
+			wsio.readBuffer <- msg
+		}
+	}()
+
+	return wsio
 }
 
+// Read 實作 io.Reader，提供給 executor stdin
 func (w *WebSocketIO) Read(p []byte) (int, error) {
-	_, msg, err := w.Conn.ReadMessage()
-	if err != nil {
-		return 0, err
+	select {
+	case b, ok := <-w.readBuffer:
+		if !ok {
+			return 0, io.EOF
+		}
+		return copy(p, b), nil
+	case <-w.closeCh:
+		return 0, errors.New("connection closed")
 	}
-	return copy(p, msg), nil
 }
 
+// Write 實作 io.Writer，提供給 executor stdout/stderr
 func (w *WebSocketIO) Write(p []byte) (int, error) {
 	err := w.Conn.WriteMessage(websocket.TextMessage, p)
 	if err != nil {
@@ -55,7 +124,21 @@ func (w *WebSocketIO) Write(p []byte) (int, error) {
 	return len(p), nil
 }
 
-// Start WebSocket <-> Pod Exec streaming
+// Close 關閉連線
+func (w *WebSocketIO) Close() error {
+	close(w.closeCh)
+	return w.Conn.Close()
+}
+
+// TerminalSizeQueue 介面實作，executor 呼叫這裡取得最新大小
+func (w *WebSocketIO) Next() *remotecommand.TerminalSize {
+	<-w.notifySize
+	w.sizeMu.Lock()
+	defer w.sizeMu.Unlock()
+	return &w.size
+}
+
+// ExecToPodViaWebSocket 改用 WebSocketIO
 func ExecToPodViaWebSocket(
 	conn *websocket.Conn,
 	config *rest.Config,
@@ -64,19 +147,7 @@ func ExecToPodViaWebSocket(
 	command []string,
 	tty bool,
 ) error {
-	wsIO := &WebSocketIO{Conn: conn}
-
-	// Optional: ping every 30s to keep WebSocket alive
-	go func() {
-		ticker := time.NewTicker(30 * time.Second)
-		defer ticker.Stop()
-		for {
-			if err := conn.WriteMessage(websocket.PingMessage, []byte{}); err != nil {
-				return
-			}
-			<-ticker.C
-		}
-	}()
+	wsIO := NewWebSocketIO(conn, 80, 24) // 初始 80x24
 
 	req := clientset.CoreV1().RESTClient().
 		Post().
@@ -98,10 +169,14 @@ func ExecToPodViaWebSocket(
 		return err
 	}
 
-	return executor.Stream(remotecommand.StreamOptions{
-		Stdin:  wsIO,
-		Stdout: wsIO,
-		Stderr: wsIO,
-		Tty:    tty,
+	err = executor.Stream(remotecommand.StreamOptions{
+		Stdin:             wsIO,
+		Stdout:            wsIO,
+		Stderr:            wsIO,
+		Tty:               tty,
+		TerminalSizeQueue: wsIO,
 	})
+
+	wsIO.Close()
+	return err
 }

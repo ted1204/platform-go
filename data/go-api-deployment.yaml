@@ -12,6 +12,7 @@ spec:
       labels:
         app: go-api
     spec:
+      serviceAccountName: admin-sa
       containers:
         - name: go-api
           image: golang:latest

@@ -11,14 +11,11 @@ import (
 func RegisterRoutes(r *gin.Engine) {
 	r.POST("/register", handlers.Register)
 	r.POST("/login", handlers.Login)
-
+	r.GET("/ws/exec", handlers.ExecWebSocketHandler)
+	
 	auth := r.Group("/")
 	auth.Use(middleware.JWTAuthMiddleware())
 	{
-		websocket := auth.Group("/ws")
-		{
-			websocket.GET("/exec", handlers.ExecWebSocketHandler)
-		}
 		userGroup := auth.Group("/user-group")
 		{
 			userGroup.GET("", handlers.GetUserGroup)
