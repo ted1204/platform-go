@@ -596,6 +596,32 @@ paths:
       summary: Update group by ID
       tags:
       - groups
+  /instance/{id}:
+    post:
+      parameters:
+      - description: Config File ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No content
+        "400":
+          description: Invalid ID
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Destruct a config file instance
+      tags:
+      - config_files
   /login:
     post:
       consumes:

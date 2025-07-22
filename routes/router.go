@@ -12,7 +12,7 @@ func RegisterRoutes(r *gin.Engine) {
 	r.POST("/register", handlers.Register)
 	r.POST("/login", handlers.Login)
 	r.GET("/ws/exec", handlers.ExecWebSocketHandler)
-	
+
 	auth := r.Group("/")
 	auth.Use(middleware.JWTAuthMiddleware())
 	{
@@ -29,6 +29,11 @@ func RegisterRoutes(r *gin.Engine) {
 		audit := auth.Group("/audit/logs")
 		{
 			audit.GET("", handlers.GetAuditLogs)
+		}
+		instances := auth.Group("/instance")
+		{
+			instances.POST("/:id", handlers.CreateInstanceHandler)
+			instances.DELETE("/:id", handlers.DestructInstanceHandler)
 		}
 		configFiles := auth.Group("/config-files")
 		{

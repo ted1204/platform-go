@@ -11,9 +11,13 @@ import (
 
 	"github.com/gorilla/websocket"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/meta"
+	"k8s.io/client-go/discovery"
+	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/restmapper"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/tools/remotecommand"
 	"k8s.io/client-go/util/homedir"
@@ -30,8 +34,12 @@ type WebSocketIO struct {
 }
 
 var (
-	Config    *rest.Config
-	Clientset *kubernetes.Clientset
+	Config        *rest.Config
+	Clientset     *kubernetes.Clientset
+	Dc            *discovery.DiscoveryClient
+	Resources     []*restmapper.APIGroupResources
+	Mapper        meta.RESTMapper
+	DynamicClient *dynamic.DynamicClient
 )
 
 // Init 載入 kubeconfig，初始化 Clientset
@@ -53,8 +61,20 @@ func Init() {
 	if err != nil {
 		log.Fatalf("failed to create kubernetes clientset: %v", err)
 	}
+	Dc, err = discovery.NewDiscoveryClientForConfig(Config)
+	if err != nil {
+		log.Fatalf("failed to create Discovery client: %v", err)
+	}
+	Resources, err = restmapper.GetAPIGroupResources(Dc)
+	if err != nil {
+		log.Fatalf("failed to get api group resources: %v", err)
+	}
+	Mapper = restmapper.NewDiscoveryRESTMapper(Resources)
+	DynamicClient, err = dynamic.NewForConfig(Config)
+	if err != nil {
+		log.Fatalf("failed to create dynamic client: %v", err)
+	}
 }
-
 
 func NewWebSocketIO(conn *websocket.Conn, initialCols, initialRows uint16) *WebSocketIO {
 	wsio := &WebSocketIO{

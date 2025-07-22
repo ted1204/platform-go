@@ -8,6 +8,7 @@ import (
 	"github.com/linskybing/platform-go/dto"
 	"github.com/linskybing/platform-go/models"
 	"github.com/linskybing/platform-go/repositories"
+	"github.com/linskybing/platform-go/types"
 	"github.com/linskybing/platform-go/utils"
 	"gorm.io/datatypes"
 )
@@ -202,3 +203,77 @@ func DeleteConfigFile(c *gin.Context, id uint) error {
 func ListConfigFilesByProjectID(projectID uint) ([]models.ConfigFile, error) {
 	return repositories.GetConfigFilesByProjectID(projectID)
 }
+
+func CreateInstance(c *gin.Context, id uint) error {
+	data, err := repositories.ListResourcesByConfigFileID(id)
+	if err != nil {
+		return err
+	}
+	configfile, err := repositories.GetConfigFileByID(id)
+	if err != nil {
+		return err
+	}
+	claims, _ := c.MustGet("claims").(*types.Claims)
+	ns := fmt.Sprintf("project-%d-%v", configfile.ProjectID, claims.Username)
+	utils.CreateNamespace(ns)
+	for _, val := range data {
+		if err := utils.CreateByJson(val.ParsedYAML, ns); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func UpdateConfigfile(c *gin.Context, id uint) error {
+	data, err := repositories.ListResourcesByConfigFileID(id)
+	if err != nil {
+		return err
+	}
+	configfile, err := repositories.GetConfigFileByID(id)
+	if err != nil {
+		return err
+	}
+	claims, _ := c.MustGet("claims").(*types.Claims)
+	ns := fmt.Sprintf("project-%d-%v", configfile.ProjectID, claims.Username)
+	utils.CreateNamespace(ns)
+	for _, val := range data {
+		if err := utils.UpdateByJson(val.ParsedYAML, ns); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func DeleteInstance(c *gin.Context, id uint) error {
+	data, err := repositories.ListResourcesByConfigFileID(id)
+	if err != nil {
+		return err
+	}
+	configfile, err := repositories.GetConfigFileByID(id)
+	if err != nil {
+		return err
+	}
+	claims, _ := c.MustGet("claims").(*types.Claims)
+	ns := fmt.Sprintf("project-%d-%v", configfile.ProjectID, claims.Username)
+	for _, val := range data {
+		if err := utils.DeleteByJson(val.ParsedYAML, ns); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+//    nsName := "my-namespace"
+//     ns := &corev1.Namespace{
+//         ObjectMeta: metav1.ObjectMeta{
+//             Name: nsName,
+//         },
+//     }
+
+//     // 創建 namespace
+//     createdNS, err := clientset.CoreV1().Namespaces().Create(context.TODO(), ns, metav1.CreateOptions{})
+//     if err != nil {
+//         log.Fatalf("創建 namespace 失敗: %v", err)
+//     }
+
+//     fmt.Printf("成功創建 Namespace: %s\n", createdNS.Name)
