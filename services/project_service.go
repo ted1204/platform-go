@@ -21,6 +21,10 @@ func GetProject(id uint) (models.Project, error) {
 	return project, nil
 }
 
+func GetProjectsByGroupId(id uint) ([]models.Project, error) {
+	return repositories.ListProjectsByGroup(id)
+}
+
 func CreateProject(c *gin.Context, input dto.CreateProjectDTO) (models.Project, error) {
 	project := models.Project{
 		ProjectName: input.ProjectName,

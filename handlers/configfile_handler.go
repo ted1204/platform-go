@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"fmt"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -120,15 +121,14 @@ func UpdateConfigFileHandler(c *gin.Context) {
 }
 
 // DeleteConfigFile godoc
-// @Summary Delete a config file by ID
+// @Summary Delete a config file
 // @Tags config_files
 // @Security BearerAuth
-// @Produce json
-// @Param id path int true "Config File ID"
+// @Param id path int true "ConfigFile ID"
 // @Success 204 "No Content"
-// @Failure 400 {object} response.ErrorResponse "Bad Request"
-// @Failure 404 {object} response.ErrorResponse "Not Found"
-// @Failure 500 {object} response.ErrorResponse "Internal Server Error"
+// @Failure 400 {object} response.ErrorResponse
+// @Failure 404 {object} response.ErrorResponse
+// @Failure 500 {object} response.ErrorResponse
 // @Router /config-files/{id} [delete]
 func DeleteConfigFileHandler(c *gin.Context) {
 	id, err := utils.ParseIDParam(c, "id")
@@ -136,6 +136,11 @@ func DeleteConfigFileHandler(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, response.ErrorResponse{Error: "invalid config file ID"})
 		return
 	}
+
+	if err := services.DeleteInstance(c, id); err != nil {
+		c.JSON(http.StatusInternalServerError, response.ErrorResponse{Error: fmt.Sprintf("warning: failed to delete instance for config %d: %v", id, err)})
+	}
+
 	err = services.DeleteConfigFile(c, uint(id))
 	if err != nil {
 		if err == services.ErrConfigFileNotFound {

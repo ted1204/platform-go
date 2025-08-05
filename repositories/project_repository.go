@@ -37,3 +37,11 @@ func ListProjects() ([]models.Project, error) {
 	err := db.DB.Find(&projects).Error
 	return projects, err
 }
+
+func ListProjectsByGroup(id uint) ([]models.Project, error) {
+	var projects []models.Project
+	if err := db.DB.Where("g_id = ?", id).Find(&projects).Error; err != nil {
+		return nil, err
+	}
+	return projects, nil
+}

@@ -21,6 +21,15 @@ func GetUserByID(id uint) (models.UserWithSuperAdmin, error) {
 	return user, nil
 }
 
+func GetUsernameByID(id uint) (string, error) {
+	var user string
+	err := db.DB.Model(&models.User{}).Select("username").Where("u_id = ?", id).First(&user).Error
+	if err != nil {
+		return "", err
+	}
+	return user, nil
+}
+
 func GetUserRawByID(id uint) (models.User, error) {
 	var user models.User
 	if err := db.DB.First(&user, id).Error; err != nil {

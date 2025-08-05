@@ -4,7 +4,6 @@ import (
 	"context"
 	applyJson "encoding/json"
 	"fmt"
-	"log"
 
 	"github.com/linskybing/platform-go/config"
 	"github.com/linskybing/platform-go/k8sclient"
@@ -23,7 +22,7 @@ func ValidateK8sJSON(jsonStr string) (*schema.GroupVersionKind, string, error) {
 	)
 	obj, gvk, err := decoder.Decode([]byte(jsonStr), nil, nil)
 	if err != nil {
-		return nil, "", err
+		return nil, "", fmt.Errorf("failed to decode input: %w", err)
 	}
 	if obj == nil {
 		return nil, "", fmt.Errorf("decoded object is nil")
@@ -58,7 +57,7 @@ func CreateByJson(jsonStr []byte, ns string) error {
 	if err != nil {
 		return err
 	}
-	fmt.Printf("✅ Created %s/%s\n", result.GetKind(), result.GetName())
+	fmt.Printf("Created %s/%s\n", result.GetKind(), result.GetName())
 	return nil
 }
 
@@ -107,15 +106,14 @@ func UpdateByJson(jsonStr []byte, ns string) error {
 	if err != nil {
 		return err
 	}
-	fmt.Printf("✅ Updated %s/%s\n", result.GetKind(), result.GetName())
+	fmt.Printf("Updated %s/%s\n", result.GetKind(), result.GetName())
 	return nil
 }
 
-func CreateNamespace(name string) {
+func CreateNamespace(name string) error {
 	_, err := k8sclient.Clientset.CoreV1().Namespaces().Get(context.TODO(), name, metav1.GetOptions{})
 	if err == nil {
-		fmt.Printf("namespace %s already exist \n", name)
-		return
+		return fmt.Errorf("namespace %s already exist \n", name)
 	}
 
 	ns := &corev1.Namespace{
@@ -125,19 +123,31 @@ func CreateNamespace(name string) {
 	}
 
 	_, err = k8sclient.Clientset.CoreV1().Namespaces().Create(context.TODO(), ns, metav1.CreateOptions{})
+
 	if err != nil {
-		log.Fatalf("failed create namespace: %v", err)
+		return fmt.Errorf("failed create namespace: %v", err)
 	}
 
 	fmt.Printf("create Namespace: %s successfully\n", name)
+	return nil
 }
 
-func resourceMustParse(size string) resource.Quantity {
+func DeleteNamespace(name string) error {
+	err := k8sclient.Clientset.CoreV1().Namespaces().Delete(context.TODO(), name, metav1.DeleteOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to delete namespace %s: %w", name, err)
+	}
+
+	fmt.Printf("Deleted namespace: %s\n", name)
+	return nil
+}
+
+func parseResourceQuantity(size string) (resource.Quantity, error) {
 	q, err := resource.ParseQuantity(size)
 	if err != nil {
-		panic(fmt.Errorf("invalid PVC size: %v", err))
+		return resource.Quantity{}, fmt.Errorf("invalid PVC size format: %w", err)
 	}
-	return q
+	return q, nil
 }
 
 func ExpandPVC(ns, pvcName, newSize string) error {
@@ -147,22 +157,19 @@ func ExpandPVC(ns, pvcName, newSize string) error {
 
 	client := k8sclient.Clientset.CoreV1().PersistentVolumeClaims(ns)
 
-	// 先取得現有 PVC
 	pvc, err := client.Get(context.TODO(), pvcName, metav1.GetOptions{})
 	if err != nil {
 		return fmt.Errorf("failed to get PVC: %w", err)
 	}
 
-	// 更新 storage requests
 	pvc.Spec.Resources.Requests[corev1.ResourceStorage] = resource.MustParse(newSize)
 
-	// 傳回 API server 更新
 	_, err = client.Update(context.TODO(), pvc, metav1.UpdateOptions{})
 	if err != nil {
 		return fmt.Errorf("failed to expand PVC: %w", err)
 	}
 
-	fmt.Printf("✅ PVC %s in namespace %s expanded to %s\n", pvcName, ns, newSize)
+	fmt.Printf("PVC %s in namespace %s expanded to %s\n", pvcName, ns, newSize)
 	return nil
 }
 
@@ -171,6 +178,10 @@ func CreatePVC(ns string, name string, storageClassName string, size string) err
 		ns = "default"
 	}
 
+	quntity, err := parseResourceQuantity(size)
+	if err != nil {
+		return err
+	}
 	pvc := &corev1.PersistentVolumeClaim{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: name,
@@ -181,7 +192,7 @@ func CreatePVC(ns string, name string, storageClassName string, size string) err
 			},
 			Resources: corev1.VolumeResourceRequirements{
 				Requests: corev1.ResourceList{
-					corev1.ResourceStorage: resourceMustParse(size),
+					corev1.ResourceStorage: quntity,
 				},
 			},
 			StorageClassName: &storageClassName,
@@ -190,7 +201,7 @@ func CreatePVC(ns string, name string, storageClassName string, size string) err
 
 	client := k8sclient.Clientset.CoreV1().PersistentVolumeClaims(ns)
 
-	_, err := client.Get(context.TODO(), name, metav1.GetOptions{})
+	_, err = client.Get(context.TODO(), name, metav1.GetOptions{})
 	if err == nil {
 		fmt.Printf("PVC %s already exists in namespace %s\n", name, ns)
 		return nil
@@ -201,7 +212,7 @@ func CreatePVC(ns string, name string, storageClassName string, size string) err
 		return fmt.Errorf("failed to create PVC: %w", err)
 	}
 
-	fmt.Printf("✅ PVC %s created in namespace %s\n", result.Name, ns)
+	fmt.Printf("PVC %s created in namespace %s\n", result.Name, ns)
 	return nil
 }
 
@@ -220,7 +231,7 @@ func DeletePVC(ns string, pvcName string) error {
 		return fmt.Errorf("failed to delete PVC: %w", err)
 	}
 
-	fmt.Printf("🗑️ PVC %s deleted from namespace %s\n", pvcName, ns)
+	fmt.Printf("PVC %s deleted from namespace %s\n", pvcName, ns)
 	return nil
 }
 
@@ -233,7 +244,7 @@ func GetPVC(ns string, pvcName string) (*corev1.PersistentVolumeClaim, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to get PVC: %w", err)
 	}
-	fmt.Printf("🔍 PVC %s in namespace %s: %s, size: %v\n",
+	fmt.Printf("PVC %s in namespace %s: %s, size: %v\n",
 		pvc.Name, ns, pvc.Status.Phase, pvc.Spec.Resources.Requests[corev1.ResourceStorage])
 
 	return pvc, nil
@@ -255,4 +266,8 @@ func ListPVCs(ns string) ([]corev1.PersistentVolumeClaim, error) {
 	}
 
 	return pvcList.Items, nil
+}
+
+func FormatNamespaceName(projectID uint, userName string) string {
+	return fmt.Sprintf("proj-%d-%s", projectID, userName)
 }

@@ -12,21 +12,24 @@ import (
 )
 
 var (
-	JwtSecret       string
-	DbHost          string
-	DbPort          string
-	DbUser          string
-	DbPassword      string
-	DbName          string
-	ServerPort      string
-	Issuer          string
-	GroupAdminRoles = []string{"admin", "manager"}
-	MinioEndpoint   string
-	MinioAccessKey  string
-	MinioSecretKey  string
-	MinioUseSSL     bool
-	MinioBucket     string
-	Scheme          = runtime.NewScheme()
+	JwtSecret               string
+	DbHost                  string
+	DbPort                  string
+	DbUser                  string
+	DbPassword              string
+	DbName                  string
+	ServerPort              string
+	Issuer                  string
+	GroupAdminRoles         = []string{"admin", "manager"}
+	MinioEndpoint           string
+	MinioAccessKey          string
+	MinioSecretKey          string
+	MinioUseSSL             bool
+	MinioBucket             string
+	Scheme                  = runtime.NewScheme()
+	DefaultStorageName      = "project"
+	DefaultStorageClassName = "nfs-sc"
+	DefaultStorageSize      = "3Gi"
 )
 
 func LoadConfig() {

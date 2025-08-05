@@ -4,13 +4,61 @@ import (
 	"fmt"
 
 	"github.com/gin-gonic/gin"
+	"github.com/linskybing/platform-go/config"
 	"github.com/linskybing/platform-go/models"
 	"github.com/linskybing/platform-go/repositories"
 	"github.com/linskybing/platform-go/utils"
 )
 
+func AllocateGroupResource(gid uint, userName string) error {
+	projects, err := GetProjectsByGroupId(gid)
+
+	if err != nil {
+		return err
+	}
+
+	for _, project := range projects {
+		ns := utils.FormatNamespaceName(project.PID, userName)
+		if err := utils.CreateNamespace(ns); err != nil {
+			return err
+		}
+		if err := utils.CreatePVC(ns, config.DefaultStorageName, config.DefaultStorageClassName, config.DefaultStorageSize); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func RemoveGroupResource(gid uint, userName string) error {
+	projects, err := GetProjectsByGroupId(gid)
+
+	if err != nil {
+		return err
+	}
+
+	for _, project := range projects {
+		ns := utils.FormatNamespaceName(project.PID, userName)
+		if err := utils.DeleteNamespace(ns); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 func CreateUserGroup(c *gin.Context, userGroup *models.UserGroup) (*models.UserGroup, error) {
 	if err := repositories.CreateUserGroup(userGroup); err != nil {
+		return nil, err
+	}
+
+	uesrName, err := repositories.GetUsernameByID(userGroup.UID)
+
+	if err != nil {
+		return nil, err
+	}
+
+	if err := AllocateGroupResource(userGroup.GID, uesrName); err != nil {
 		return nil, err
 	}
 
@@ -31,6 +79,22 @@ func UpdateUserGroup(c *gin.Context, userGroup *models.UserGroup) (*models.UserG
 		return nil, err
 	}
 
+	if oldUserGroup.GID != userGroup.GID {
+		uesrName, err := repositories.GetUsernameByID(userGroup.UID)
+
+		if err != nil {
+			return nil, err
+		}
+
+		if err := AllocateGroupResource(userGroup.GID, uesrName); err != nil {
+			return nil, err
+		}
+
+		if err := RemoveGroupResource(oldUserGroup.GID, uesrName); err != nil {
+			return nil, err
+		}
+
+	}
 	utils.LogAuditWithConsole(c, "update", "user_group",
 		fmt.Sprintf("u_id=%d,g_id=%d", userGroup.UID, userGroup.GID),
 		oldUserGroup, *userGroup, "")
@@ -45,6 +109,15 @@ func DeleteUserGroup(c *gin.Context, uid, gid uint) error {
 	}
 
 	if err := repositories.DeleteUserGroup(uid, gid); err != nil {
+		return err
+	}
+
+	uesrName, err := repositories.GetUsernameByID(uid)
+	if err != nil {
+		return err
+	}
+
+	if err := RemoveGroupResource(gid, uesrName); err != nil {
 		return err
 	}
 

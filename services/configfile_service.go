@@ -214,8 +214,7 @@ func CreateInstance(c *gin.Context, id uint) error {
 		return err
 	}
 	claims, _ := c.MustGet("claims").(*types.Claims)
-	ns := fmt.Sprintf("project-%d-%v", configfile.ProjectID, claims.Username)
-	utils.CreateNamespace(ns)
+	ns := utils.FormatNamespaceName(configfile.ProjectID, claims.Username)
 	for _, val := range data {
 		if err := utils.CreateByJson(val.ParsedYAML, ns); err != nil {
 			return err
@@ -234,8 +233,7 @@ func UpdateConfigfile(c *gin.Context, id uint) error {
 		return err
 	}
 	claims, _ := c.MustGet("claims").(*types.Claims)
-	ns := fmt.Sprintf("project-%d-%v", configfile.ProjectID, claims.Username)
-	utils.CreateNamespace(ns)
+	ns := utils.FormatNamespaceName(configfile.ProjectID, claims.Username)
 	for _, val := range data {
 		if err := utils.UpdateByJson(val.ParsedYAML, ns); err != nil {
 			return err
@@ -254,7 +252,7 @@ func DeleteInstance(c *gin.Context, id uint) error {
 		return err
 	}
 	claims, _ := c.MustGet("claims").(*types.Claims)
-	ns := fmt.Sprintf("project-%d-%v", configfile.ProjectID, claims.Username)
+	ns := utils.FormatNamespaceName(configfile.ProjectID, claims.Username)
 	for _, val := range data {
 		if err := utils.DeleteByJson(val.ParsedYAML, ns); err != nil {
 			return err
