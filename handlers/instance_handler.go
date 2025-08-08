@@ -11,7 +11,7 @@ import (
 
 // Instantiate ConfigFile Instance godoc
 // @Summary Instantiate a config file instance
-// @Tags config_files
+// @Tags Instance
 // @Security BearerAuth
 // @Produce json
 // @Param id path int true "Config File ID"
@@ -35,14 +35,14 @@ func CreateInstanceHandler(c *gin.Context) {
 
 // Destruce ConfigFile Instance godoc
 // @Summary Destruct a config file instance
-// @Tags config_files
+// @Tags Instance
 // @Security BearerAuth
 // @Produce json
 // @Param id path int true "Config File ID"
 // @Success 204 "No content"
 // @Failure 400 {object} response.ErrorResponse "Invalid ID"
 // @Failure 500 {object} response.ErrorResponse "Internal Server Error"
-// @Router /instance/{id} [post]
+// @Router /instance/{id} [delete]
 func DestructInstanceHandler(c *gin.Context) {
 	id, err := utils.ParseIDParam(c, "id")
 	if err != nil {

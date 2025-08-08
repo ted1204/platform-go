@@ -341,13 +341,11 @@ paths:
   /config-files/{id}:
     delete:
       parameters:
-      - description: Config File ID
+      - description: ConfigFile ID
         in: path
         name: id
         required: true
         type: integer
-      produces:
-      - application/json
       responses:
         "204":
           description: No Content
@@ -365,7 +363,7 @@ paths:
             $ref: '#/definitions/response.ErrorResponse'
       security:
       - BearerAuth: []
-      summary: Delete a config file by ID
+      summary: Delete a config file
       tags:
       - config_files
     get:
@@ -628,7 +626,7 @@ paths:
       tags:
       - groups
   /instance/{id}:
-    post:
+    delete:
       parameters:
       - description: Config File ID
         in: path
@@ -652,7 +650,34 @@ paths:
       - BearerAuth: []
       summary: Destruct a config file instance
       tags:
-      - config_files
+      - Instance
+    post:
+      parameters:
+      - description: Config File ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.MessageResponse'
+        "400":
+          description: Invalid ID
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Instantiate a config file instance
+      tags:
+      - Instance
   /login:
     post:
       consumes:

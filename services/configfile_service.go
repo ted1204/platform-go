@@ -145,6 +145,7 @@ func updateYamlContent(c *gin.Context, cf *models.ConfigFile, rawYaml string) er
 	}
 	return nil
 }
+
 func UpdateConfigFile(c *gin.Context, id uint, input dto.ConfigFileUpdateDTO) (*models.ConfigFile, error) {
 	existing, err := repositories.GetConfigFileByID(id)
 	if err != nil {
@@ -158,6 +159,9 @@ func UpdateConfigFile(c *gin.Context, id uint, input dto.ConfigFileUpdateDTO) (*
 	}
 
 	if input.RawYaml != nil {
+		if err := DeleteConfigFileInstance(id); err != nil {
+			return nil, err
+		}
 		if err := updateYamlContent(c, existing, *input.RawYaml); err != nil {
 			return nil, err
 		}
@@ -182,6 +186,20 @@ func DeleteConfigFile(c *gin.Context, id uint) error {
 	resources, err := ListResourcesByConfigFileID(id)
 	if err != nil {
 		return err
+	}
+
+	users, err := repositories.ListUsersByProjectID(cf.ProjectID)
+	if err != nil {
+		return err
+	}
+
+	for _, user := range users {
+		ns := utils.FormatNamespaceName(cf.ProjectID, user.Username)
+		for _, val := range resources {
+			if err := utils.DeleteByJson(val.ParsedYAML, ns); err != nil {
+				return err
+			}
+		}
 	}
 
 	for _, res := range resources {
@@ -223,25 +241,6 @@ func CreateInstance(c *gin.Context, id uint) error {
 	return nil
 }
 
-func UpdateConfigfile(c *gin.Context, id uint) error {
-	data, err := repositories.ListResourcesByConfigFileID(id)
-	if err != nil {
-		return err
-	}
-	configfile, err := repositories.GetConfigFileByID(id)
-	if err != nil {
-		return err
-	}
-	claims, _ := c.MustGet("claims").(*types.Claims)
-	ns := utils.FormatNamespaceName(configfile.ProjectID, claims.Username)
-	for _, val := range data {
-		if err := utils.UpdateByJson(val.ParsedYAML, ns); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 func DeleteInstance(c *gin.Context, id uint) error {
 	data, err := repositories.ListResourcesByConfigFileID(id)
 	if err != nil {
@@ -258,6 +257,34 @@ func DeleteInstance(c *gin.Context, id uint) error {
 			return err
 		}
 	}
+	return nil
+}
+
+func DeleteConfigFileInstance(id uint) error {
+	configfile, err := repositories.GetConfigFileByID(id)
+	if err != nil {
+		return err
+	}
+
+	resources, err := repositories.ListResourcesByConfigFileID(id)
+	if err != nil {
+		return err
+	}
+
+	users, err := repositories.ListUsersByProjectID(configfile.ProjectID)
+	if err != nil {
+		return err
+	}
+
+	for _, user := range users {
+		ns := utils.FormatNamespaceName(configfile.ProjectID, user.Username)
+		for _, res := range resources {
+			if err := utils.DeleteByJson(res.ParsedYAML, ns); err != nil {
+				return err
+			}
+		}
+	}
+
 	return nil
 }
 

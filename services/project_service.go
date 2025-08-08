@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/gin-gonic/gin"
+	"github.com/linskybing/platform-go/config"
 	"github.com/linskybing/platform-go/dto"
 	"github.com/linskybing/platform-go/models"
 	"github.com/linskybing/platform-go/repositories"
@@ -37,6 +38,11 @@ func CreateProject(c *gin.Context, input dto.CreateProjectDTO) (models.Project, 
 	if err == nil {
 		utils.LogAuditWithConsole(c, "create", "project", fmt.Sprintf("p_id=%d", project.PID), nil, project, "")
 	}
+
+	if err := AllocateProjectResources(project.PID); err != nil {
+		return project, err
+	}
+
 	return project, err
 }
 
@@ -72,6 +78,10 @@ func DeleteProject(c *gin.Context, id uint) error {
 		return ErrProjectNotFound
 	}
 
+	if err := RemoveProjectResources(id); err != nil {
+		return err
+	}
+
 	err = repositories.DeleteProject(id)
 	if err == nil {
 		utils.LogAuditWithConsole(c, "delete", "project", fmt.Sprintf("p_id=%d", project.PID), project, nil, "")
@@ -81,4 +91,42 @@ func DeleteProject(c *gin.Context, id uint) error {
 
 func ListProjects() ([]models.Project, error) {
 	return repositories.ListProjects()
+}
+
+func AllocateProjectResources(projectID uint) error {
+	users, err := repositories.ListUsersByProjectID(projectID)
+	if err != nil {
+		return err
+	}
+
+	for _, user := range users {
+		ns := utils.FormatNamespaceName(projectID, user.Username)
+
+		if err := utils.CreateNamespace(ns); err != nil {
+			return fmt.Errorf("failed to create namespace for %s: %w", user.Username, err)
+		}
+
+		if err := utils.CreatePVC(ns, config.DefaultStorageName, config.DefaultStorageClassName, config.DefaultStorageSize); err != nil {
+			return fmt.Errorf("failed to create PVC for %s: %w", user.Username, err)
+		}
+	}
+
+	return nil
+}
+
+func RemoveProjectResources(projectID uint) error {
+	users, err := repositories.ListUsersByProjectID(projectID)
+	if err != nil {
+		return err
+	}
+
+	for _, user := range users {
+		ns := utils.FormatNamespaceName(projectID, user.Username)
+
+		if err := utils.DeleteNamespace(ns); err != nil {
+			return fmt.Errorf("failed to delete namespace %s: %w", ns, err)
+		}
+	}
+
+	return nil
 }

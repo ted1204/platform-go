@@ -84,3 +84,9 @@ func IsSuperAdmin(uid uint) (bool, error) {
 	}
 	return true, nil
 }
+
+func ListUsersByProjectID(projectID uint) ([]models.ProjectUserView, error) {
+	var users []models.ProjectUserView
+	err := db.DB.Where("p_id = ?", projectID).Find(&users).Error
+	return users, err
+}

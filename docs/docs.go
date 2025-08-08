@@ -313,17 +313,14 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "produces": [
-                    "application/json"
-                ],
                 "tags": [
                     "config_files"
                 ],
-                "summary": "Delete a config file by ID",
+                "summary": "Delete a config file",
                 "parameters": [
                     {
                         "type": "integer",
-                        "description": "Config File ID",
+                        "description": "ConfigFile ID",
                         "name": "id",
                         "in": "path",
                         "required": true
@@ -668,7 +665,50 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "config_files"
+                    "Instance"
+                ],
+                "summary": "Instantiate a config file instance",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Config File ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/response.MessageResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid ID",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Instance"
                 ],
                 "summary": "Destruct a config file instance",
                 "parameters": [

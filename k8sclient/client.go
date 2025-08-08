@@ -208,37 +208,45 @@ func ExecToPodViaWebSocket(
 	return err
 }
 
-func WatchNamespaceResources(conn *websocket.Conn, namespace string) {
+func WatchNamespaceResources(writeChan chan<- []byte, namespace string) {
 	ctx := context.Background()
 
 	gvrs := []schema.GroupVersionResource{
 		{Group: "", Version: "v1", Resource: "pods"},
+		{Group: "", Version: "v1", Resource: "services"},
 		{Group: "apps", Version: "v1", Resource: "deployments"},
 	}
 
 	for _, gvr := range gvrs {
-		go watchAndSend(ctx, DynamicClient, gvr, namespace, conn)
+		go watchAndSend(ctx, DynamicClient, gvr, namespace, writeChan)
 	}
 }
 
-func watchAndSend(ctx context.Context, dynClient dynamic.Interface, gvr schema.GroupVersionResource, ns string, conn *websocket.Conn) {
+func watchAndSend(ctx context.Context, dynClient dynamic.Interface, gvr schema.GroupVersionResource, ns string, writeChan chan<- []byte) {
+	sendObject := func(eventType string, obj *unstructured.Unstructured) error {
+		data := buildDataMap(eventType, obj)
+
+		msg, err := json.Marshal(data)
+		if err != nil {
+			return err
+		}
+
+		select {
+		case writeChan <- msg:
+			return nil
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+
 	list, err := dynClient.Resource(gvr).Namespace(ns).List(ctx, metav1.ListOptions{})
 	if err == nil {
 		for _, item := range list.Items {
-			data := map[string]interface{}{
-				"type": "ADDED", // 模擬 informer 的 ADDED 事件
-				"kind": item.GetKind(),
-				"name": item.GetName(),
-				"ns":   item.GetNamespace(),
+			if err := sendObject("ADDED", &item); err != nil {
+				fmt.Printf("Failed to send list item: %v\n", err)
 			}
-			for k, v := range extractStatusFields(&item) {
-				data[k] = v
-			}
-			msg, _ := json.Marshal(data)
-			_ = conn.WriteMessage(websocket.TextMessage, msg)
 		}
 	} else {
-		// List 失敗也不阻止，繼續 Watch
 		fmt.Printf("List error for %s.%s: %v\n", gvr.Resource, gvr.Group, err)
 	}
 
@@ -260,19 +268,87 @@ func watchAndSend(ctx context.Context, dynClient dynamic.Interface, gvr schema.G
 			if !ok {
 				continue
 			}
-			data := map[string]interface{}{
-				"type": "ADDED", // 模擬 informer 的 ADDED 事件
-				"kind": obj.GetKind(),
-				"name": obj.GetName(),
-				"ns":   obj.GetNamespace(),
+
+			if err := sendObject(string(event.Type), obj); err != nil {
+				fmt.Printf("Failed to send watch event: %v\n", err)
 			}
-			for k, v := range extractStatusFields(obj) {
-				data[k] = v
-			}
-			msg, _ := json.Marshal(data)
-			conn.WriteMessage(websocket.TextMessage, msg)
 		}
 	}
+}
+
+func buildDataMap(eventType string, obj *unstructured.Unstructured) map[string]interface{} {
+	data := map[string]interface{}{
+		"type": eventType,
+		"kind": obj.GetKind(),
+		"name": obj.GetName(),
+		"ns":   obj.GetNamespace(),
+	}
+
+	for k, v := range extractStatusFields(obj) {
+		data[k] = v
+	}
+
+	if isService(obj) {
+		if ips := extractServiceExternalIPs(obj); len(ips) > 0 {
+			data["externalIPs"] = ips
+		}
+		if ports := extractServiceNodePorts(obj); len(ports) > 0 {
+			data["nodePorts"] = ports
+		}
+	}
+
+	return data
+}
+
+func isService(obj *unstructured.Unstructured) bool {
+	return obj.GetKind() == "Service"
+}
+
+func extractServiceExternalIPs(obj *unstructured.Unstructured) []string {
+	var externalIPs []string
+
+	specExternalIPs, found, err := unstructured.NestedSlice(obj.Object, "spec", "externalIPs")
+	if found && err == nil {
+		for _, ip := range specExternalIPs {
+			if s, ok := ip.(string); ok {
+				externalIPs = append(externalIPs, s)
+			}
+		}
+	}
+
+	ingressList, found, err := unstructured.NestedSlice(obj.Object, "status", "loadBalancer", "ingress")
+	if found && err == nil {
+		for _, ingress := range ingressList {
+			if m, ok := ingress.(map[string]interface{}); ok {
+				if ip, ok := m["ip"].(string); ok {
+					externalIPs = append(externalIPs, ip)
+				}
+			}
+		}
+	}
+
+	return externalIPs
+}
+
+func extractServiceNodePorts(obj *unstructured.Unstructured) []int64 {
+	var nodePorts []int64
+
+	ports, found, err := unstructured.NestedSlice(obj.Object, "spec", "ports")
+	if !found || err != nil {
+		return nodePorts
+	}
+
+	for _, port := range ports {
+		if m, ok := port.(map[string]interface{}); ok {
+			if np, ok := m["nodePort"].(int64); ok {
+				nodePorts = append(nodePorts, np)
+			} else if npf, ok := m["nodePort"].(float64); ok {
+				nodePorts = append(nodePorts, int64(npf))
+			}
+		}
+	}
+
+	return nodePorts
 }
 
 func getWatchableNamespacedResources(dc *discovery.DiscoveryClient) ([]schema.GroupVersionResource, error) {

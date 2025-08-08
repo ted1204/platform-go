@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"strings"
 	"time"
 
 	"github.com/gin-contrib/cors"
@@ -16,5 +17,13 @@ func CORSMiddleware() gin.HandlerFunc {
 		AllowCredentials: true,
 		MaxAge:           12 * time.Hour,
 	}
-	return cors.New(config)
+	corsHandler := cors.New(config)
+	return func(c *gin.Context) {
+		upgrade := c.GetHeader("Upgrade")
+		if strings.ToLower(upgrade) == "websocket" {
+			c.Next()
+			return
+		}
+		corsHandler(c)
+	}
 }

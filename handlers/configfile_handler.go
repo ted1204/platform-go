@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"fmt"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -135,10 +134,6 @@ func DeleteConfigFileHandler(c *gin.Context) {
 	if err != nil {
 		c.JSON(http.StatusBadRequest, response.ErrorResponse{Error: "invalid config file ID"})
 		return
-	}
-
-	if err := services.DeleteInstance(c, id); err != nil {
-		c.JSON(http.StatusInternalServerError, response.ErrorResponse{Error: fmt.Sprintf("warning: failed to delete instance for config %d: %v", id, err)})
 	}
 
 	err = services.DeleteConfigFile(c, uint(id))

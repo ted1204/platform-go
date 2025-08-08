@@ -162,6 +162,21 @@ SELECT
 FROM users u
 LEFT JOIN user_group_views ug ON u.u_id = ug.u_id AND ug.group_name = 'super' AND ug.role = 'admin';
 
+-- View: project_user_views
+
+CREATE OR REPLACE VIEW project_user_views AS
+SELECT
+  p.p_id,
+  p.project_name,
+  g.g_id,
+  g.group_name,
+  u.u_id,
+  u.username
+FROM projects p
+JOIN group_list g ON p.g_id = g.g_id
+JOIN user_group ug ON ug.g_id = g.g_id
+JOIN users u ON u.u_id = ug.u_id;
+
 -- 初始化資料
 INSERT INTO group_list (group_name, description)
 VALUES ('super', 'Super administrator group')

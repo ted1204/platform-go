@@ -56,6 +56,15 @@ type UserWithSuperAdmin struct {
 	IsSuperAdmin bool      `gorm:"column:is_super_admin" json:"is_super_admin"`
 }
 
+type ProjectUserView struct {
+	PID         uint   `gorm:"column:p_id" json:"p_id"`
+	ProjectName string `gorm:"column:project_name" json:"project_name"`
+	GID         uint   `gorm:"column:g_id" json:"g_id"`
+	GroupName   string `gorm:"column:group_name" json:"group_name"`
+	UID         uint   `gorm:"column:u_id" json:"u_id"`
+	Username    string `gorm:"column:username" json:"username"`
+}
+
 func (UserWithSuperAdmin) TableName() string {
 	return "users_with_superadmin"
 }
