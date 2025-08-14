@@ -5,6 +5,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/linskybing/platform-go/config"
+	"github.com/linskybing/platform-go/dto"
 	"github.com/linskybing/platform-go/models"
 	"github.com/linskybing/platform-go/repositories"
 	"github.com/linskybing/platform-go/utils"
@@ -138,4 +139,33 @@ func GetUserGroupsByUID(uid uint) ([]models.UserGroupView, error) {
 
 func GetUserGroupsByGID(gid uint) ([]models.UserGroupView, error) {
 	return repositories.GetUserGroupsByGID(gid)
+}
+
+func GetFormattedUserGroupsByUID(uid uint) ([]dto.UserGroups, error) {
+	records, err := repositories.GetUserGroupsByUID(uid)
+	if err != nil {
+		return nil, err
+	}
+
+	userMap := make(map[uint]*dto.UserGroups)
+	for _, r := range records {
+		if _, exists := userMap[r.UID]; !exists {
+			userMap[r.UID] = &dto.UserGroups{
+				UID:      r.UID,
+				Username: r.Username,
+				Groups:   []dto.GroupInfo{},
+			}
+		}
+		userMap[r.UID].Groups = append(userMap[r.UID].Groups, dto.GroupInfo{
+			GID:       r.GID,
+			GroupName: r.GroupName,
+			Role:      r.Role,
+		})
+	}
+
+	result := make([]dto.UserGroups, 0, len(userMap))
+	for _, v := range userMap {
+		result = append(result, *v)
+	}
+	return result, nil
 }

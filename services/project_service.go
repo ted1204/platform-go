@@ -3,6 +3,7 @@ package services
 import (
 	"errors"
 	"fmt"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"github.com/linskybing/platform-go/config"
@@ -20,6 +21,36 @@ func GetProject(id uint) (models.Project, error) {
 		return models.Project{}, ErrProjectNotFound
 	}
 	return project, nil
+}
+
+func GetProjectsByUser(id uint) ([]models.ProjectUserView, error) {
+	project, err := repositories.ListProjectsByUserID(id)
+	if err != nil {
+		return nil, ErrProjectNotFound
+	}
+	return project, nil
+}
+
+func GroupProjectsByGID(records []models.ProjectUserView) map[string]dto.GroupProjects {
+	grouped := make(map[string]dto.GroupProjects)
+
+	for _, r := range records {
+		key := strconv.Itoa(int(r.GID))
+		gp, exists := grouped[key]
+		if !exists {
+			gp = dto.GroupProjects{
+				GroupName: r.GroupName,
+				Projects:  []dto.SimpleProjectInfo{},
+			}
+		}
+		gp.Projects = append(gp.Projects, dto.SimpleProjectInfo{
+			PID:         r.PID,
+			ProjectName: r.ProjectName,
+		})
+		grouped[key] = gp
+	}
+
+	return grouped
 }
 
 func GetProjectsByGroupId(id uint) ([]models.Project, error) {

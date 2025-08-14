@@ -13,6 +13,24 @@ func GetAllUsers() ([]models.UserWithSuperAdmin, error) {
 	return users, nil
 }
 
+func ListUsersPaging(page, limit int) ([]models.UserWithSuperAdmin, error) {
+	var users []models.UserWithSuperAdmin
+
+	if page == 0 {
+		page = 1
+	}
+	if limit == 0 {
+		limit = 10
+	}
+
+	offset := (page - 1) * limit
+
+	if err := db.DB.Offset(int(offset)).Limit(int(limit)).Find(&users).Error; err != nil {
+		return nil, err
+	}
+	return users, nil
+}
+
 func GetUserByID(id uint) (models.UserWithSuperAdmin, error) {
 	var user models.UserWithSuperAdmin
 	if err := db.DB.First(&user, id).Error; err != nil {

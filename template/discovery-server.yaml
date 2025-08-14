@@ -1,0 +1,27 @@
+{{- if eq .Values.role "discovery" }}
+apiVersion: v1
+kind: Pod
+metadata:
+  name: {{ .Values.pod.name }}
+  labels:
+    app: ros2-discovery-server
+spec:
+  nodeSelector:
+    kubernetes.io/hostname: k8s-work1
+  containers:
+  - name: discovery-server
+    image: master.harbor.registry/library/ubuntu-fastdds:v3.2.2
+    imagePullPolicy: Always
+    command: ["/bin/bash", "-c"]
+    args: ["source /usr/local/eprosima/setup.bash && fastdds discovery -i 0 -p 11811"]
+    ports:
+      - containerPort: 11811
+        protocol: UDP
+    env:
+      - name: ROS_DOMAIN_ID
+        value: "{{ .Values.domain.id }}"
+      - name: FASTRTPS_LOG_LEVEL
+        value: "INFO"
+      - name: RMW_IMPLEMENTATION
+        value: "rmw_fastrtps_cpp"
+{{- end }}

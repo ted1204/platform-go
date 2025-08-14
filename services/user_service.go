@@ -76,6 +76,10 @@ func ListUsers() ([]models.UserWithSuperAdmin, error) {
 	return repositories.GetAllUsers()
 }
 
+func ListUserByPaging(page, limit int) ([]models.UserWithSuperAdmin, error) {
+	return repositories.ListUsersPaging(page, limit)
+}
+
 func FindUserByID(id uint) (models.UserWithSuperAdmin, error) {
 	return repositories.GetUserByID(id)
 }

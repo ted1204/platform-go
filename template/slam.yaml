@@ -1,0 +1,85 @@
+{{- if eq .Values.role "slam" }}
+apiVersion: v1
+kind: Pod
+metadata:
+  name: {{ .Values.pod.name }}
+  labels:
+    user: {{ .Values.labels.user }}
+    app: pros_app
+spec:
+  nodeSelector:
+    kubernetes.io/hostname: k8s-work1
+  containers:
+    - name: rplidar
+      image: "{{ .Values.image.registry }}/screamlab/pros_jetson_driver_image:0.1.0"
+      envFrom:
+        - configMapRef:
+            name: slam-unity-env-config
+      securityContext:
+        privileged: true
+      volumeMounts:
+        - name: demo-volume
+          mountPath: /workspace/demo
+        - name: usb-lidar-device
+          mountPath: /dev/usb_lidar
+      command: ["/bin/bash", "-c"]
+      securityContext:
+        privileged: true
+      args:
+        - |
+          source /opt/ros/humble/setup.bash && \
+          source /workspaces/install/setup.bash && \
+          ros2 launch /workspace/demo/rplidar.xml
+
+    # # -------------------- slam service --------------------
+    - name: slam
+      image: "{{ .Values.image.registry }}/screamlab/pros_jetson_driver_image:0.1.0"
+      envFrom:
+        - configMapRef:
+            name: slam-unity-env-config
+      volumeMounts:
+        - name: demo-volume
+          mountPath: /workspace/demo
+      command: ["/bin/bash", "-c"]
+      args:
+        - |
+          source /opt/ros/humble/setup.bash && \
+          source /workspaces/install/setup.bash && \
+          ros2 launch /workspace/demo/slam.xml
+
+    # -------------------- rosbridge service --------------------
+    - name: rosbridge
+      image: "{{ .Values.image.registry }}/screamlab/pros_jetson_driver_image:0.1.0"
+      envFrom:
+        - configMapRef:
+            name: slam-unity-env-config
+      ports:
+        - containerPort: 9090
+      command: ["/bin/bash", "-c"]
+      args:
+        - |
+          source /opt/ros/humble/setup.bash && \
+          source /workspaces/install/setup.bash && \
+          ros2 launch rosbridge_server rosbridge_websocket_launch.xml
+  # -------------------- Shared volume definition --------------------
+  volumes:
+    - name: demo-volume
+      hostPath:
+        path: "{{ .Values.workspace.path }}/pros_app/docker/compose/demo" # Replace with actual host path
+        type: Directory
+    - name: usb-lidar-device
+      hostPath:
+        path: /dev/usb_lidar
+        type: CharDevice
+---
+# Environment variable configuration (must create ConfigMap first)
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: slam-unity-env-config
+data:
+  ROS_DOMAIN_ID: "{{ .Values.domain.id }}"
+  ROS_DISCOVERY_SERVER: "{{ .Values.discover.ip }}"
+  RMW_IMPLEMENTATION: "rmw_fastrtps_cpp"
+  ROS_SUPER_CLIENT: "true"
+{{- end }}

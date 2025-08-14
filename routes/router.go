@@ -48,6 +48,7 @@ func RegisterRoutes(r *gin.Engine) {
 		projects := auth.Group("/projects")
 		{
 			projects.GET("", handlers.GetProjects)
+			projects.GET("/by-user", handlers.GetProjectsByUser)
 			projects.GET("/:id", handlers.GetProjectByID)
 			projects.GET("/:id/config-files", handlers.ListConfigFilesByProjectIDHandler)
 			projects.GET("/:id/resources", handlers.ListResourcesByProjectID)
@@ -59,6 +60,7 @@ func RegisterRoutes(r *gin.Engine) {
 		users := auth.Group("/users")
 		{
 			users.GET("", handlers.GetUsers)
+			users.GET("/paging", handlers.ListUsersPaging)
 			users.GET("/:id", handlers.GetUserByID)
 			users.PUT("/:id", middleware.AuthorizeUserOrAdmin(), handlers.UpdateUser)
 			users.DELETE("/:id", middleware.AuthorizeUserOrAdmin(), handlers.DeleteUser)

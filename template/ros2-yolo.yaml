@@ -1,0 +1,55 @@
+{{- if eq .Values.role "yolo" }}
+apiVersion: v1
+kind: Pod
+metadata:
+  name: {{ .Values.pod.name }}
+  labels:
+    user: {{ .Values.labels.user }}
+    app: ros2_yolo
+spec:
+  nodeSelector:
+    kubernetes.io/hostname: k8s-work1
+  containers:
+    - name: pros-cameraapi
+      image: master.harbor.registry/screamlab/screamlab/pros_cameraapi:0.0.2
+      command: ["/bin/bash", "-c", "--"]
+      args: ["trap : TERM INT; sleep infinity & wait"]
+      envFrom:
+        - configMapRef:
+            name: yolo-env
+      volumeMounts:
+        - name: src-volume
+          mountPath: /workspaces/src
+        - name: screenshots-volume
+          mountPath: /workspaces/screenshots
+        - name: fps-screenshots-volume
+          mountPath: /workspaces/fps_screenshots
+      resources:
+        requests:
+          memory: "256Mi"
+        limits:
+          nvidia.com/gpu.shared: 1
+  volumes:
+    - name: src-volume
+      hostPath:
+        path: "{{ .Values.workspace.path }}/ros2_yolo_integration/src"
+        type: Directory
+    - name: screenshots-volume
+      hostPath:
+        path: "{{ .Values.workspace.path }}/ros2_yolo_integration/screenshots"
+        type: Directory
+    - name: fps-screenshots-volume
+      hostPath:
+        path: "{{ .Values.workspace.path }}/ros2_yolo_integration/fps_screenshots"
+        type: Directory
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: yolo-env
+data:
+  ROS_DOMAIN_ID: "{{ .Values.domain.id }}"
+  ROS_DISCOVERY_SERVER: "{{ .Values.discover.ip }}"
+  RMW_IMPLEMENTATION: "rmw_fastrtps_cpp"
+  ROS_SUPER_CLIENT: "true"
+{{- end }}

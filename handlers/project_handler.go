@@ -28,6 +28,32 @@ func GetProjects(c *gin.Context) {
 	c.JSON(http.StatusOK, projects)
 }
 
+// GetProjectsByUser godoc
+// @Summary List projects by user
+// @Tags projects
+// @Security BearerAuth
+// @Produce json
+// @Param id path int true "User ID"
+// @Success 200 {array} map[string]dto.GroupProjects
+// @Failure 500 {object} response.ErrorResponse
+// @Router /projects/by-user [get]
+func GetProjectsByUser(c *gin.Context) {
+	id, err := utils.GetUserIDFromContext(c)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, response.ErrorResponse{Error: "invalid project id"})
+		return
+	}
+	records, err := services.GetProjectsByUser(id)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, response.ErrorResponse{Error: err.Error()})
+		return
+	}
+
+	grouped := services.GroupProjectsByGID(records)
+
+	c.JSON(http.StatusOK, grouped)
+}
+
 // GetProjectByID godoc
 // @Summary Get project by ID
 // @Tags projects

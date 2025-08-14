@@ -90,3 +90,11 @@ func ListUsersByProjectID(projectID uint) ([]models.ProjectUserView, error) {
 	err := db.DB.Where("p_id = ?", projectID).Find(&users).Error
 	return users, err
 }
+
+func ListProjectsByUserID(userID uint) ([]models.ProjectUserView, error) {
+	var projects []models.ProjectUserView
+	if err := db.DB.Where("u_id = ?", userID).Find(&projects).Error; err != nil {
+		return nil, err
+	}
+	return projects, nil
+}

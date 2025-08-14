@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"net/http"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"github.com/linskybing/platform-go/dto"
@@ -25,6 +26,35 @@ func GetUsers(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, users)
+}
+
+// ListUsersPaging godoc
+// @Summary List all users with pagination
+// @Tags users
+// @Security BearerAuth
+// @Produce json
+// @Param page query int false "Page number (default: 1)"
+// @Param limit query int false "Items per page (default: 10, max: 100)"
+// @Success 200 {object} response.SuccessResponse{data=[]models.UserWithSuperAdmin}
+// @Failure 500 {object} response.ErrorResponse "Internal server error"
+// @Router /users/paging [get]
+func ListUsersPaging(c *gin.Context) {
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "10"))
+
+	if page < 1 {
+		page = 1
+	}
+	if limit <= 0 || limit > 100 {
+		limit = 10
+	}
+
+	users, err := services.ListUserByPaging(page, limit)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, response.ErrorResponse{Error: err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, response.SuccessResponse{Data: users})
 }
 
 // GetUserByID godoc

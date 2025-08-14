@@ -30,6 +30,24 @@ definitions:
     - password
     - username
     type: object
+  dto.GroupInfo:
+    properties:
+      gid:
+        type: integer
+      groupName:
+        type: string
+      role:
+        type: string
+    type: object
+  dto.GroupProjects:
+    properties:
+      group_name:
+        type: string
+      projects:
+        items:
+          $ref: '#/definitions/dto.SimpleProjectInfo'
+        type: array
+    type: object
   dto.PVC:
     properties:
       name:
@@ -43,6 +61,13 @@ definitions:
         type: string
       status:
         example: Bound
+        type: string
+    type: object
+  dto.SimpleProjectInfo:
+    properties:
+      p_id:
+        type: integer
+      project_name:
         type: string
     type: object
   dto.UserDTO:
@@ -73,6 +98,17 @@ definitions:
         type: string
       username:
         example: johndoe
+        type: string
+    type: object
+  dto.UserGroups:
+    properties:
+      groups:
+        items:
+          $ref: '#/definitions/dto.GroupInfo'
+        type: array
+      uid:
+        type: integer
+      username:
         type: string
     type: object
   handlers.PVCRequest:
@@ -937,6 +973,34 @@ paths:
       summary: List resources by project ID
       tags:
       - resources
+  /projects/by-user:
+    get:
+      parameters:
+      - description: User ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              additionalProperties:
+                $ref: '#/definitions/dto.GroupProjects'
+              type: object
+            type: array
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List projects by user
+      tags:
+      - projects
   /pvc:
     post:
       consumes:
@@ -1433,7 +1497,7 @@ paths:
             - properties:
                 data:
                   items:
-                    $ref: '#/definitions/models.UserGroup'
+                    $ref: '#/definitions/dto.UserGroups'
                   type: array
               type: object
         "400":
@@ -1584,6 +1648,40 @@ paths:
       security:
       - BearerAuth: []
       summary: Update user
+      tags:
+      - users
+  /users/paging:
+    get:
+      parameters:
+      - description: 'Page number (default: 1)'
+        in: query
+        name: page
+        type: integer
+      - description: 'Items per page (default: 10, max: 100)'
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SuccessResponse'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/models.UserWithSuperAdmin'
+                  type: array
+              type: object
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List all users with pagination
       tags:
       - users
 securityDefinitions:

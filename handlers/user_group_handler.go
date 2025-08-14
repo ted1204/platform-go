@@ -86,11 +86,12 @@ func GetUserGroupsByGID(c *gin.Context) {
 	})
 }
 
+// controller
 // @Summary Get all groups for a user
 // @Tags user_group
 // @Produce json
 // @Param u_id query uint true "User ID"
-// @Success 200 {object} response.SuccessResponse{data=[]models.UserGroup}
+// @Success 200 {object} response.SuccessResponse{data=[]dto.UserGroups}
 // @Failure 400 {object} response.ErrorResponse
 // @Failure 500 {object} response.ErrorResponse
 // @Router /user-group/by-user [get]
@@ -106,7 +107,7 @@ func GetUserGroupsByUID(c *gin.Context) {
 		return
 	}
 
-	userGroups, err := services.GetUserGroupsByUID(uint(uid))
+	userGroups, err := services.GetFormattedUserGroupsByUID(uint(uid))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, response.ErrorResponse{Error: err.Error()})
 		return
