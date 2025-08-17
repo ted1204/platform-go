@@ -2467,9 +2467,6 @@ const docTemplate = `{
                 "filename": {
                     "type": "string"
                 },
-                "minIOPath": {
-                    "type": "string"
-                },
                 "projectID": {
                     "type": "integer"
                 }
@@ -2569,31 +2566,31 @@ const docTemplate = `{
         "models.UserWithSuperAdmin": {
             "type": "object",
             "properties": {
-                "create_at": {
+                "CreatedAt": {
                     "type": "string"
                 },
-                "email": {
+                "Email": {
                     "type": "string"
                 },
-                "full_name": {
+                "FullName": {
                     "type": "string"
                 },
-                "is_super_admin": {
+                "IsSuperAdmin": {
                     "type": "boolean"
                 },
-                "status": {
+                "Status": {
                     "type": "string"
                 },
-                "type": {
+                "Type": {
                     "type": "string"
                 },
-                "u_id": {
+                "UID": {
                     "type": "integer"
                 },
-                "update_at": {
+                "UpdatedAt": {
                     "type": "string"
                 },
-                "username": {
+                "Username": {
                     "type": "string"
                 }
             }
