@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: Pod
 metadata:
-  name: pros-app
+  name: ros2-slam-unity
   labels:
     app: pros_app
 spec:
@@ -12,15 +12,14 @@ spec:
         - configMapRef:
             name: slam-unity-env-config
       volumeMounts:
-        - name: workdir
-          mountPath: /workspace/demo
-          subPath: pros_app/docker/compose/demo
+        - name: demo-volume
+          mountPath: /workspace
       command: ["/bin/bash", "-c"]
       args:
         - |
           source /opt/ros/humble/setup.bash && \
           source /workspaces/install/setup.bash && \
-          ros2 launch /workspace/demo/rplidar_unity.xml
+          ros2 launch /workspace/pros_app/docker/compose/demo/rplidar_unity.xml
     - name: lidar-transform
       image: "master.harbor.registry/ghcr/screamlab/pros_unity_lidar_trans_image:latest"
       envFrom:
@@ -38,15 +37,14 @@ spec:
         - configMapRef:
             name: slam-unity-env-config
       volumeMounts:
-        - name: workdir
-          mountPath: /workspace/demo
-          subPath: pros_app/docker/compose/demo
+        - name: demo-volume
+          mountPath: /workspace
       command: ["/bin/bash", "-c"]
       args:
         - |
           source /opt/ros/humble/setup.bash && \
           source /workspaces/install/setup.bash && \
-          ros2 launch /workspace/demo/slam.xml
+          ros2 launch /workspace/pros_app/docker/compose/demo/slam.xml
     - name: rosbridge
       image: "master.harbor.registry/ghcr/screamlab/pros_jetson_driver_image:0.1.0"
       envFrom:
@@ -61,7 +59,7 @@ spec:
           source /workspaces/install/setup.bash && \
           ros2 launch rosbridge_server rosbridge_websocket_launch.xml
   volumes:
-    - name: workdir
+    - name: demo-volume
       persistentVolumeClaim:
         claimName: "project"
 ---
@@ -71,6 +69,6 @@ metadata:
   name: slam-unity-env-config
 data:
   ROS_DOMAIN_ID: "1"
-  ROS_DISCOVERY_SERVER: "discovery-server-svc:11811"
+  ROS_DISCOVERY_SERVER: "ros2-discovery-server:11811"
   RMW_IMPLEMENTATION: "rmw_fastrtps_cpp"
   ROS_SUPER_CLIENT: "true"

@@ -3,66 +3,66 @@ package models
 import "time"
 
 type ProjectGroupView struct {
-	GID           uint   `gorm:"column:g_id"`
-	GroupName     string `gorm:"column:group_name"`
-	ProjectCount  int64  `gorm:"column:project_count"`
-	ResourceCount int64  `gorm:"column:resource_count"`
-	GroupCreateAt string `gorm:"column:group_create_at"`
-	GroupUpdateAt string `gorm:"column:group_update_at"`
+	GID           uint   `gorm:"column:g_id" json:"GID"`
+	GroupName     string `gorm:"column:group_name" json:"GroupName"`
+	ProjectCount  int64  `gorm:"column:project_count" json:"ProjectCount"`
+	ResourceCount int64  `gorm:"column:resource_count" json:"ResourceCount"`
+	GroupCreateAt string `gorm:"column:group_create_at" json:"GroupCreateAt"`
+	GroupUpdateAt string `gorm:"column:group_update_at" json:"GroupUpdateAt"`
 }
 
 type ProjectResourceView struct {
-	PID              uint   `gorm:"column:p_id"`
-	ProjectName      string `gorm:"column:project_name"`
-	RID              uint   `gorm:"column:r_id"`
-	Type             string `gorm:"column:type"`
-	Name             string `gorm:"column:name"`
-	Filename         string `gorm:"column:filename"`
-	ResourceCreateAt string `gorm:"column:resource_create_at"`
-	ResourceUpdateAt string `gorm:"column:resource_update_at"`
+	PID              uint   `gorm:"column:p_id" json:"PID"`
+	ProjectName      string `gorm:"column:project_name" json:"ProjectName"`
+	RID              uint   `gorm:"column:r_id" json:"RID"`
+	Type             string `gorm:"column:type" json:"Type"`
+	Name             string `gorm:"column:name" json:"Name"`
+	Filename         string `gorm:"column:filename" json:"Filename"`
+	ResourceCreateAt string `gorm:"column:resource_create_at" json:"ResourceCreateAt"`
+	ResourceUpdateAt string `gorm:"column:resource_update_at" json:"ResourceUpdateAt"`
 }
 
 type GroupResourceView struct {
-	GID              uint   `gorm:"column:g_id"`
-	GroupName        string `gorm:"column:group_name"`
-	PID              uint   `gorm:"column:p_id"`
-	ProjectName      string `gorm:"column:project_name"`
-	RID              uint   `gorm:"column:r_id"`
-	ResourceType     string `gorm:"column:resource_type"`
-	ResourceName     string `gorm:"column:resource_name"`
-	Filename         string `gorm:"column:filename"`
-	ResourceCreateAt string `gorm:"column:resource_create_at"`
-	ResourceUpdateAt string `gorm:"column:resource_update_at"`
+	GID              uint   `gorm:"column:g_id" json:"GID"`
+	GroupName        string `gorm:"column:group_name" json:"GroupName"`
+	PID              uint   `gorm:"column:p_id" json:"PID"`
+	ProjectName      string `gorm:"column:project_name" json:"ProjectName"`
+	RID              uint   `gorm:"column:r_id" json:"RID"`
+	ResourceType     string `gorm:"column:resource_type" json:"ResourceType"`
+	ResourceName     string `gorm:"column:resource_name" json:"ResourceName"`
+	Filename         string `gorm:"column:filename" json:"Filename"`
+	ResourceCreateAt string `gorm:"column:resource_create_at" json:"ResourceCreateAt"`
+	ResourceUpdateAt string `gorm:"column:resource_update_at" json:"ResourceUpdateAt"`
 }
 
 type UserGroupView struct {
-	UID       uint   `gorm:"column:u_id"`
-	Username  string `gorm:"column:username"`
-	GID       uint   `gorm:"column:g_id"`
-	GroupName string `gorm:"column:group_name"`
-	Role      string `gorm:"column:role"`
+	UID       uint   `gorm:"column:u_id" json:"UID"`
+	Username  string `gorm:"column:username" json:"Username"`
+	GID       uint   `gorm:"column:g_id" json:"GID"`
+	GroupName string `gorm:"column:group_name" json:"GroupName"`
+	Role      string `gorm:"column:role" json:"Role"`
 }
 
 type UserWithSuperAdmin struct {
-	UID          uint      `gorm:"column:u_id" json:"u_id"`
-	Username     string    `gorm:"column:username" json:"username"`
+	UID          uint      `gorm:"column:u_id" json:"UID"`
+	Username     string    `gorm:"column:username" json:"Username"`
 	Password     string    `gorm:"column:password" json:"-"`
-	Email        string    `gorm:"column:email" json:"email"`
-	FullName     string    `gorm:"column:full_name" json:"full_name"`
-	Type         string    `gorm:"column:type" json:"type"`
-	Status       string    `gorm:"column:status" json:"status"`
-	CreatedAt    time.Time `gorm:"column:create_at" json:"create_at"`
-	UpdatedAt    time.Time `gorm:"column:update_at" json:"update_at"`
-	IsSuperAdmin bool      `gorm:"column:is_super_admin" json:"is_super_admin"`
+	Email        string    `gorm:"column:email" json:"Email"`
+	FullName     string    `gorm:"column:full_name" json:"FullName"`
+	Type         string    `gorm:"column:type" json:"Type"`
+	Status       string    `gorm:"column:status" json:"Status"`
+	CreatedAt    time.Time `gorm:"column:create_at" json:"CreatedAt"`
+	UpdatedAt    time.Time `gorm:"column:update_at" json:"UpdatedAt"`
+	IsSuperAdmin bool      `gorm:"column:is_super_admin" json:"IsSuperAdmin"`
 }
 
 type ProjectUserView struct {
-	PID         uint   `gorm:"column:p_id" json:"p_id"`
-	ProjectName string `gorm:"column:project_name" json:"project_name"`
-	GID         uint   `gorm:"column:g_id" json:"g_id"`
-	GroupName   string `gorm:"column:group_name" json:"group_name"`
-	UID         uint   `gorm:"column:u_id" json:"u_id"`
-	Username    string `gorm:"column:username" json:"username"`
+	PID         uint   `gorm:"column:p_id" json:"PID"`
+	ProjectName string `gorm:"column:project_name" json:"ProjectName"`
+	GID         uint   `gorm:"column:g_id" json:"GID"`
+	GroupName   string `gorm:"column:group_name" json:"GroupName"`
+	UID         uint   `gorm:"column:u_id" json:"UID"`
+	Username    string `gorm:"column:username" json:"Username"`
 }
 
 func (UserWithSuperAdmin) TableName() string {

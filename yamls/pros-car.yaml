@@ -1,32 +1,32 @@
 apiVersion: v1
 kind: Pod
 metadata:
-  name: pros-car
+  name: ros2-pros-car
   labels:
     app: pros_car
 spec:
   containers:
     - name: pros-car
-      image: master.harbor.registry/ghcr/screamlab/pros_car_docker_image:latest
+      image: "master.harbor.registry/ghcr/screamlab/pros_car_docker_image:latest"
       command: ["/bin/bash", "-c", "--"]
       args: ["trap : TERM INT; sleep infinity & wait"]
       envFrom:
         - configMapRef:
             name: pros-car-env
       volumeMounts:
-        - name: workdir
+        - name: volume
           mountPath: /workspaces/src
           subPath: pros_car/src
-        - name: workdir
+        - name: volume
           mountPath: /workspaces/screenshots
           subPath: pros_car/screenshots
       resources:
         requests:
           memory: "256Mi"
-        limits:
-          nvidia.com/gpu.shared: 1 
+        # limits:
+        #   nvidia.com/gpu.shared: 1 
   volumes:
-    - name: workdir
+    - name: volume
       persistentVolumeClaim:
         claimName: "project"
 ---
@@ -37,6 +37,6 @@ metadata:
 data:
   ROS_DOMAIN_ID: "1"
   WHEEL_SPEED: "10"
-  ROS_DISCOVERY_SERVER: "discovery-server-svc:11811"
+  ROS_DISCOVERY_SERVER: "ros2-discovery-server:11811"
   RMW_IMPLEMENTATION: "rmw_fastrtps_cpp"
   ROS_SUPER_CLIENT: "true"

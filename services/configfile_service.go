@@ -29,28 +29,12 @@ func GetConfigFile(id uint) (*models.ConfigFile, error) {
 }
 
 func CreateConfigFile(c *gin.Context, cf dto.CreateConfigFileInput) (*models.ConfigFile, error) {
-
-	minioPath, err := utils.CreateYamlFile(c, "config", cf.RawYaml)
-	if err != nil {
-		return nil, ErrUploadYAMLFailed
-	}
-
-	createdCF := &models.ConfigFile{
-		Filename:  cf.Filename,
-		MinIOPath: minioPath,
-		ProjectID: cf.ProjectID,
-	}
-
-	if err := repositories.CreateConfigFile(createdCF); err != nil {
-		return nil, err
-	}
-
-	utils.LogAuditWithConsole(c, "create", "config_file", fmt.Sprintf("cf_id=%d", createdCF.CFID), nil, *createdCF, "")
 	yamlArray := utils.SplitYAMLDocuments(cf.RawYaml)
 	if len(yamlArray) == 0 {
 		return nil, ErrNoValidYAMLDocument
 	}
 
+	var resources []*models.Resource
 	for i, doc := range yamlArray {
 		jsonContent, err := utils.YAMLToJSON(doc)
 		if err != nil {
@@ -62,29 +46,34 @@ func CreateConfigFile(c *gin.Context, cf dto.CreateConfigFileInput) (*models.Con
 			return nil, fmt.Errorf("failed to validate YAML document %d: %w", i+1, err)
 		}
 
-		resource := &models.Resource{
-			CFID:       createdCF.CFID,
+		resources = append(resources, &models.Resource{
 			Type:       gvk.Kind,
 			Name:       name,
 			ParsedYAML: datatypes.JSON([]byte(jsonContent)),
-		}
-
-		if _, err := CreateResource(c, resource); err != nil {
-			return nil, fmt.Errorf("failed to create resource for document %d: %w", i+1, err)
-		}
-		utils.LogAuditWithConsole(c, "create", "resource", fmt.Sprintf("r_id=%d", resource.RID), nil, *resource, "")
+		})
 	}
+
+	createdCF := &models.ConfigFile{
+		Filename:  cf.Filename,
+		ProjectID: cf.ProjectID,
+	}
+	if err := repositories.CreateConfigFile(createdCF); err != nil {
+		return nil, err
+	}
+	utils.LogAuditWithConsole(c, "create", "config_file", fmt.Sprintf("cf_id=%d", createdCF.CFID), nil, *createdCF, "")
+
+	for _, res := range resources {
+		res.CFID = createdCF.CFID
+		if _, err := CreateResource(c, res); err != nil {
+			return nil, fmt.Errorf("failed to create resource %s/%s: %w", res.Type, res.Name, err)
+		}
+		utils.LogAuditWithConsole(c, "create", "resource", fmt.Sprintf("r_id=%d", res.RID), nil, *res, "")
+	}
+
 	return createdCF, nil
 }
 
 func updateYamlContent(c *gin.Context, cf *models.ConfigFile, rawYaml string) error {
-	minioPath, err := utils.CreateYamlFile(c, "config", rawYaml)
-	if err != nil {
-		return ErrUploadYAMLFailed
-	}
-
-	cf.MinIOPath = minioPath
-
 	yamlArray := utils.SplitYAMLDocuments(rawYaml)
 	if len(yamlArray) == 0 {
 		return ErrNoValidYAMLDocument
@@ -119,6 +108,7 @@ func updateYamlContent(c *gin.Context, cf *models.ConfigFile, rawYaml string) er
 				Name:       name,
 				ParsedYAML: datatypes.JSON([]byte(jsonContent)),
 			}
+			fmt.Printf("update resource for ccc document %d: %s", i+1, name)
 			if err := repositories.CreateResource(resource); err != nil {
 				return fmt.Errorf("failed to create resource for document %d: %w", i+1, err)
 			}
@@ -128,6 +118,7 @@ func updateYamlContent(c *gin.Context, cf *models.ConfigFile, rawYaml string) er
 			oldTarget := val
 			val.Name = name
 			val.ParsedYAML = datatypes.JSON([]byte(jsonContent))
+			fmt.Printf("update resource for document %d: %s", i+1, name)
 			if err := repositories.UpdateResource(&val); err != nil {
 				return fmt.Errorf("failed to update resource for document %d: %w", i+1, err)
 			}

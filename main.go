@@ -13,7 +13,6 @@ import (
 	_ "github.com/linskybing/platform-go/docs"
 	"github.com/linskybing/platform-go/k8sclient"
 	"github.com/linskybing/platform-go/middleware"
-	"github.com/linskybing/platform-go/minio"
 	"github.com/linskybing/platform-go/routes"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
@@ -23,7 +22,7 @@ func main() {
 	config.LoadConfig()
 	config.InitK8sConfig()
 	db.Init()
-	minio.InitMinio()
+	// minio.InitMinio()
 	k8sclient.Init()
 	middleware.Init()
 
