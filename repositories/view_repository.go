@@ -8,25 +8,38 @@ import (
 	"gorm.io/gorm"
 )
 
-func GetAllProjectGroupViews() ([]models.ProjectGroupView, error) {
+type ViewRepo interface {
+	GetAllProjectGroupViews() ([]models.ProjectGroupView, error)
+	GetProjectResourcesByGroupID(groupID uint) ([]models.ProjectResourceView, error)
+	GetGroupResourcesByGroupID(groupID uint) ([]models.GroupResourceView, error)
+	GetGroupIDByResourceID(rID uint) (uint, error)
+	GetGroupIDByConfigFileID(cfID uint) (uint, error)
+	IsSuperAdmin(uid uint) (bool, error)
+	ListUsersByProjectID(projectID uint) ([]models.ProjectUserView, error)
+	ListProjectsByUserID(userID uint) ([]models.ProjectUserView, error)
+}
+
+type DBViewRepo struct{}
+
+func (r *DBViewRepo) GetAllProjectGroupViews() ([]models.ProjectGroupView, error) {
 	var results []models.ProjectGroupView
 	err := db.DB.Find(&results).Error
 	return results, err
 }
 
-func GetProjectResourcesByGroupID(groupID uint) ([]models.ProjectResourceView, error) {
+func (r *DBViewRepo) GetProjectResourcesByGroupID(groupID uint) ([]models.ProjectResourceView, error) {
 	var results []models.ProjectResourceView
 	err := db.DB.Where("g_id = ?", groupID).Find(&results).Error
 	return results, err
 }
 
-func GetGroupResourcesByGroupID(groupID uint) ([]models.GroupResourceView, error) {
+func (r *DBViewRepo) GetGroupResourcesByGroupID(groupID uint) ([]models.GroupResourceView, error) {
 	var results []models.GroupResourceView
 	err := db.DB.Where("g_id = ?", groupID).Find(&results).Error
 	return results, err
 }
 
-func GetGroupIDByResourceID(rID uint) (uint, error) {
+func (r *DBViewRepo) GetGroupIDByResourceID(rID uint) (uint, error) {
 	type result struct {
 		GID uint `gorm:"column:g_id"`
 	}
@@ -50,7 +63,7 @@ func GetGroupIDByResourceID(rID uint) (uint, error) {
 	return res.GID, nil
 }
 
-func GetGroupIDByConfigFileID(cfID uint) (uint, error) {
+func (r *DBViewRepo) GetGroupIDByConfigFileID(cfID uint) (uint, error) {
 	type result struct {
 		GID uint `gorm:"column:g_id"`
 	}
@@ -70,7 +83,7 @@ func GetGroupIDByConfigFileID(cfID uint) (uint, error) {
 	return res.GID, nil
 }
 
-func IsSuperAdmin(uid uint) (bool, error) {
+func (r *DBViewRepo) IsSuperAdmin(uid uint) (bool, error) {
 	var view models.UserGroupView
 	err := db.DB.
 		Where("u_id = ? AND group_name = ? AND role = ?", uid, "super", "admin").
@@ -85,13 +98,13 @@ func IsSuperAdmin(uid uint) (bool, error) {
 	return true, nil
 }
 
-func ListUsersByProjectID(projectID uint) ([]models.ProjectUserView, error) {
+func (r *DBViewRepo) ListUsersByProjectID(projectID uint) ([]models.ProjectUserView, error) {
 	var users []models.ProjectUserView
 	err := db.DB.Where("p_id = ?", projectID).Find(&users).Error
 	return users, err
 }
 
-func ListProjectsByUserID(userID uint) ([]models.ProjectUserView, error) {
+func (r *DBViewRepo) ListProjectsByUserID(userID uint) ([]models.ProjectUserView, error) {
 	var projects []models.ProjectUserView
 	if err := db.DB.Where("u_id = ?", userID).Find(&projects).Error; err != nil {
 		return nil, err

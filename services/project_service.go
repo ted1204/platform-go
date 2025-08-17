@@ -15,23 +15,33 @@ import (
 
 var ErrProjectNotFound = errors.New("project not found")
 
-func GetProject(id uint) (models.Project, error) {
-	project, err := repositories.GetProjectByID(id)
+type ProjectService struct {
+	Repos *repositories.Repos
+}
+
+func NewProjectService(repos *repositories.Repos) *ProjectService {
+	return &ProjectService{
+		Repos: repos,
+	}
+}
+
+func (s *ProjectService) GetProject(id uint) (models.Project, error) {
+	project, err := s.Repos.Project.GetProjectByID(id)
 	if err != nil {
 		return models.Project{}, ErrProjectNotFound
 	}
 	return project, nil
 }
 
-func GetProjectsByUser(id uint) ([]models.ProjectUserView, error) {
-	project, err := repositories.ListProjectsByUserID(id)
+func (s *ProjectService) GetProjectsByUser(id uint) ([]models.ProjectUserView, error) {
+	project, err := s.Repos.View.ListProjectsByUserID(id)
 	if err != nil {
 		return nil, ErrProjectNotFound
 	}
 	return project, nil
 }
 
-func GroupProjectsByGID(records []models.ProjectUserView) map[string]dto.GroupProjects {
+func (s *ProjectService) GroupProjectsByGID(records []models.ProjectUserView) map[string]dto.GroupProjects {
 	grouped := make(map[string]dto.GroupProjects)
 
 	for _, r := range records {
@@ -53,11 +63,11 @@ func GroupProjectsByGID(records []models.ProjectUserView) map[string]dto.GroupPr
 	return grouped
 }
 
-func GetProjectsByGroupId(id uint) ([]models.Project, error) {
-	return repositories.ListProjectsByGroup(id)
+func (s *ProjectService) GetProjectsByGroupId(id uint) ([]models.Project, error) {
+	return s.Repos.Project.ListProjectsByGroup(id)
 }
 
-func CreateProject(c *gin.Context, input dto.CreateProjectDTO) (models.Project, error) {
+func (s *ProjectService) CreateProject(c *gin.Context, input dto.CreateProjectDTO) (models.Project, error) {
 	project := models.Project{
 		ProjectName: input.ProjectName,
 		GID:         input.GID,
@@ -65,20 +75,20 @@ func CreateProject(c *gin.Context, input dto.CreateProjectDTO) (models.Project, 
 	if input.Description != nil {
 		project.Description = *input.Description
 	}
-	err := repositories.CreateProject(&project)
+	err := s.Repos.Project.CreateProject(&project)
 	if err == nil {
-		utils.LogAuditWithConsole(c, "create", "project", fmt.Sprintf("p_id=%d", project.PID), nil, project, "")
+		utils.LogAuditWithConsole(c, "create", "project", fmt.Sprintf("p_id=%d", project.PID), nil, project, "", s.Repos.Audit)
 	}
 
-	if err := AllocateProjectResources(project.PID); err != nil {
+	if err := s.AllocateProjectResources(project.PID); err != nil {
 		return project, err
 	}
 
 	return project, err
 }
 
-func UpdateProject(c *gin.Context, id uint, input dto.UpdateProjectDTO) (models.Project, error) {
-	project, err := repositories.GetProjectByID(id)
+func (s *ProjectService) UpdateProject(c *gin.Context, id uint, input dto.UpdateProjectDTO) (models.Project, error) {
+	project, err := s.Repos.Project.GetProjectByID(id)
 	if err != nil {
 		return models.Project{}, ErrProjectNotFound
 	}
@@ -95,37 +105,37 @@ func UpdateProject(c *gin.Context, id uint, input dto.UpdateProjectDTO) (models.
 		project.GID = *input.GID
 	}
 
-	err = repositories.UpdateProject(&project)
+	err = s.Repos.Project.UpdateProject(&project)
 	if err == nil {
-		utils.LogAuditWithConsole(c, "update", "project", fmt.Sprintf("p_id=%d", project.PID), oldProject, project, "")
+		utils.LogAuditWithConsole(c, "update", "project", fmt.Sprintf("p_id=%d", project.PID), oldProject, project, "", s.Repos.Audit)
 	}
 
 	return project, err
 }
 
-func DeleteProject(c *gin.Context, id uint) error {
-	project, err := repositories.GetProjectByID(id)
+func (s *ProjectService) DeleteProject(c *gin.Context, id uint) error {
+	project, err := s.Repos.Project.GetProjectByID(id)
 	if err != nil {
 		return ErrProjectNotFound
 	}
 
-	if err := RemoveProjectResources(id); err != nil {
+	if err := s.RemoveProjectResources(id); err != nil {
 		return err
 	}
 
-	err = repositories.DeleteProject(id)
+	err = s.Repos.Project.DeleteProject(id)
 	if err == nil {
-		utils.LogAuditWithConsole(c, "delete", "project", fmt.Sprintf("p_id=%d", project.PID), project, nil, "")
+		utils.LogAuditWithConsole(c, "delete", "project", fmt.Sprintf("p_id=%d", project.PID), project, nil, "", s.Repos.Audit)
 	}
 	return err
 }
 
-func ListProjects() ([]models.Project, error) {
-	return repositories.ListProjects()
+func (s *ProjectService) ListProjects() ([]models.Project, error) {
+	return s.Repos.Project.ListProjects()
 }
 
-func AllocateProjectResources(projectID uint) error {
-	users, err := repositories.ListUsersByProjectID(projectID)
+func (s *ProjectService) AllocateProjectResources(projectID uint) error {
+	users, err := s.Repos.View.ListUsersByProjectID(projectID)
 	if err != nil {
 		return err
 	}
@@ -145,8 +155,8 @@ func AllocateProjectResources(projectID uint) error {
 	return nil
 }
 
-func RemoveProjectResources(projectID uint) error {
-	users, err := repositories.ListUsersByProjectID(projectID)
+func (s *ProjectService) RemoveProjectResources(projectID uint) error {
+	users, err := s.Repos.View.ListUsersByProjectID(projectID)
 	if err != nil {
 		return err
 	}

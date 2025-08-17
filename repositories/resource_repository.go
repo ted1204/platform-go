@@ -8,11 +8,23 @@ import (
 	"gorm.io/gorm"
 )
 
-func CreateResource(resource *models.Resource) error {
+type ResourceRepo interface {
+	CreateResource(resource *models.Resource) error
+	GetResourceByID(rid uint) (*models.Resource, error)
+	UpdateResource(resource *models.Resource) error
+	DeleteResource(rid uint) error
+	ListResourcesByProjectID(pid uint) ([]models.Resource, error)
+	ListResourcesByConfigFileID(cfID uint) ([]models.Resource, error)
+	GetResourceByConfigFileIDAndName(cfID uint, name string) (*models.Resource, error)
+}
+
+type DBResourceRepo struct{}
+
+func (r *DBResourceRepo) CreateResource(resource *models.Resource) error {
 	return db.DB.Create(resource).Error
 }
 
-func GetResourceByID(rid uint) (*models.Resource, error) {
+func (r *DBResourceRepo) GetResourceByID(rid uint) (*models.Resource, error) {
 	var resource models.Resource
 	err := db.DB.First(&resource, "r_id = ?", rid).Error
 	if err != nil {
@@ -21,18 +33,18 @@ func GetResourceByID(rid uint) (*models.Resource, error) {
 	return &resource, nil
 }
 
-func UpdateResource(resource *models.Resource) error {
+func (r *DBResourceRepo) UpdateResource(resource *models.Resource) error {
 	if resource.RID == 0 {
 		return errors.New("resource RID is required")
 	}
 	return db.DB.Save(resource).Error
 }
 
-func DeleteResource(rid uint) error {
+func (r *DBResourceRepo) DeleteResource(rid uint) error {
 	return db.DB.Delete(&models.Resource{}, "r_id = ?", rid).Error
 }
 
-func ListResourcesByProjectID(pid uint) ([]models.Resource, error) {
+func (r *DBResourceRepo) ListResourcesByProjectID(pid uint) ([]models.Resource, error) {
 	var resources []models.Resource
 	err := db.DB.
 		Joins("JOIN config_files cf ON cf.cf_id = resources.cf_id").
@@ -41,7 +53,7 @@ func ListResourcesByProjectID(pid uint) ([]models.Resource, error) {
 	return resources, err
 }
 
-func ListResourcesByConfigFileID(cfID uint) ([]models.Resource, error) {
+func (r *DBResourceRepo) ListResourcesByConfigFileID(cfID uint) ([]models.Resource, error) {
 	var resources []models.Resource
 	err := db.DB.
 		Where("cf_id = ?", cfID).
@@ -49,7 +61,7 @@ func ListResourcesByConfigFileID(cfID uint) ([]models.Resource, error) {
 	return resources, err
 }
 
-func GetResourceByConfigFileIDAndName(cfID uint, name string) (*models.Resource, error) {
+func (r *DBResourceRepo) GetResourceByConfigFileIDAndName(cfID uint, name string) (*models.Resource, error) {
 	var resource models.Resource
 	err := db.DB.
 		Where("cf_id = ? AND name = ?", cfID, name).

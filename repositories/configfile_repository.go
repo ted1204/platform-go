@@ -7,11 +7,22 @@ import (
 	"github.com/linskybing/platform-go/models"
 )
 
-func CreateConfigFile(cf *models.ConfigFile) error {
+type ConfigFileRepo interface {
+	CreateConfigFile(cf *models.ConfigFile) error
+	GetConfigFileByID(id uint) (*models.ConfigFile, error)
+	UpdateConfigFile(cf *models.ConfigFile) error
+	DeleteConfigFile(id uint) error
+	ListConfigFiles() ([]models.ConfigFile, error)
+	GetConfigFilesByProjectID(projectID uint) ([]models.ConfigFile, error)
+}
+
+type DBConfigFileRepo struct{}
+
+func (r *DBConfigFileRepo) CreateConfigFile(cf *models.ConfigFile) error {
 	return db.DB.Create(cf).Error
 }
 
-func GetConfigFileByID(id uint) (*models.ConfigFile, error) {
+func (r *DBConfigFileRepo) GetConfigFileByID(id uint) (*models.ConfigFile, error) {
 	var cf models.ConfigFile
 	if err := db.DB.First(&cf, id).Error; err != nil {
 		return nil, err
@@ -19,18 +30,18 @@ func GetConfigFileByID(id uint) (*models.ConfigFile, error) {
 	return &cf, nil
 }
 
-func UpdateConfigFile(cf *models.ConfigFile) error {
+func (r *DBConfigFileRepo) UpdateConfigFile(cf *models.ConfigFile) error {
 	if cf.CFID == 0 {
 		return errors.New("missing ConfigFile ID")
 	}
 	return db.DB.Save(cf).Error
 }
 
-func DeleteConfigFile(id uint) error {
+func (r *DBConfigFileRepo) DeleteConfigFile(id uint) error {
 	return db.DB.Delete(&models.ConfigFile{}, id).Error
 }
 
-func ListConfigFiles() ([]models.ConfigFile, error) {
+func (r *DBConfigFileRepo) ListConfigFiles() ([]models.ConfigFile, error) {
 	var list []models.ConfigFile
 	if err := db.DB.Find(&list).Error; err != nil {
 		return nil, err
@@ -38,7 +49,7 @@ func ListConfigFiles() ([]models.ConfigFile, error) {
 	return list, nil
 }
 
-func GetConfigFilesByProjectID(projectID uint) ([]models.ConfigFile, error) {
+func (r *DBConfigFileRepo) GetConfigFilesByProjectID(projectID uint) ([]models.ConfigFile, error) {
 	var files []models.ConfigFile
 	if err := db.DB.Where("project_id = ?", projectID).Find(&files).Error; err != nil {
 		return nil, err

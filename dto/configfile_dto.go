@@ -13,7 +13,11 @@ type CreateConfigFileInput struct {
 	ProjectID uint   `form:"project_id"`
 }
 
-func (d CreateConfigFileInput) GetGID() uint {
-	gId, _ := repositories.GetGroupIDByProjectID(d.ProjectID)
+type ProjectGetter interface {
+	GetGroupIDByProjectID(projectID uint) uint
+}
+
+func (d CreateConfigFileInput) GetGIDByRepo(repo *repositories.Repos) uint {
+	gId, _ := repo.Project.GetGroupIDByProjectID(d.ProjectID)
 	return gId
 }

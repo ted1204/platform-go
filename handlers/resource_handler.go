@@ -11,6 +11,14 @@ import (
 	"github.com/linskybing/platform-go/utils"
 )
 
+type ResourceHandler struct {
+	svc *services.ResourceService
+}
+
+func NewResourceHandler(svc *services.ResourceService) *ResourceHandler {
+	return &ResourceHandler{svc: svc}
+}
+
 // ListResourcesByProjectID godoc
 // @Summary List resources by project ID
 // @Tags resources
@@ -20,14 +28,14 @@ import (
 // @Success 200 {array} models.ResourceSwagger
 // @Failure 400 {object} response.ErrorResponse "Invalid project ID"
 // @Router /projects/{id}/resources [get]
-func ListResourcesByProjectID(c *gin.Context) {
+func (h *ResourceHandler) ListResourcesByProjectID(c *gin.Context) {
 	projectID, err := utils.ParseIDParam(c, "id")
 	if err != nil {
 		c.JSON(http.StatusBadRequest, response.ErrorResponse{Error: "invalid project id"})
 		return
 	}
 
-	resources, err := services.ListResourcesByProjectID(projectID)
+	resources, err := h.svc.ListResourcesByProjectID(projectID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, response.ErrorResponse{Error: err.Error()})
 		return
@@ -45,14 +53,14 @@ func ListResourcesByProjectID(c *gin.Context) {
 // @Success 200 {array} models.ResourceSwagger
 // @Failure 400 {object} response.ErrorResponse "Invalid config file ID"
 // @Router /config-files/{id}/resources [get]
-func ListResourcesByConfigFileID(c *gin.Context) {
+func (h *ResourceHandler) ListResourcesByConfigFileID(c *gin.Context) {
 	cfID, err := utils.ParseIDParam(c, "id")
 	if err != nil {
 		c.JSON(http.StatusBadRequest, response.ErrorResponse{Error: "invalid config file id"})
 		return
 	}
 
-	resources, err := services.ListResourcesByConfigFileID(cfID)
+	resources, err := h.svc.ListResourcesByConfigFileID(cfID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, response.ErrorResponse{Error: err.Error()})
 		return
@@ -71,14 +79,14 @@ func ListResourcesByConfigFileID(c *gin.Context) {
 // @Failure 400 {object} response.ErrorResponse "Invalid ID"
 // @Failure 404 {object} response.ErrorResponse "Resource not found"
 // @Router /resources/{id} [get]
-func GetResource(c *gin.Context) {
+func (h *ResourceHandler) GetResource(c *gin.Context) {
 	id, err := utils.ParseIDParam(c, "id")
 	if err != nil {
 		c.JSON(http.StatusBadRequest, response.ErrorResponse{Error: "invalid resource id"})
 		return
 	}
 
-	resource, err := services.GetResource(id)
+	resource, err := h.svc.GetResource(id)
 	if err != nil || resource == nil {
 		c.JSON(http.StatusNotFound, response.ErrorResponse{Error: "resource not found"})
 		return
@@ -103,7 +111,7 @@ func GetResource(c *gin.Context) {
 // @Failure 404 {object} response.ErrorResponse "Resource not found"
 // @Failure 500 {object} response.ErrorResponse "Internal server error"
 // @Router /resources/{id} [put]
-func UpdateResource(c *gin.Context) {
+func (h *ResourceHandler) UpdateResource(c *gin.Context) {
 	id, err := utils.ParseIDParam(c, "id")
 	if err != nil {
 		c.JSON(http.StatusBadRequest, response.ErrorResponse{Error: "invalid resource id"})
@@ -116,7 +124,7 @@ func UpdateResource(c *gin.Context) {
 		return
 	}
 
-	resource, err := services.UpdateResource(c, id, input)
+	resource, err := h.svc.UpdateResource(c, id, input)
 	if err != nil {
 		if errors.Is(err, services.ErrResourceNotFound) {
 			c.JSON(http.StatusNotFound, response.ErrorResponse{Error: "resource not found"})
@@ -140,14 +148,14 @@ func UpdateResource(c *gin.Context) {
 // @Failure 404 {object} response.ErrorResponse "Resource not found"
 // @Failure 500 {object} response.ErrorResponse "Internal server error"
 // @Router /resources/{id} [delete]
-func DeleteResource(c *gin.Context) {
+func (h *ResourceHandler) DeleteResource(c *gin.Context) {
 	id, err := utils.ParseIDParam(c, "id")
 	if err != nil {
 		c.JSON(http.StatusBadRequest, response.ErrorResponse{Error: "invalid resource id"})
 		return
 	}
 
-	err = services.DeleteResource(c, id)
+	err = h.svc.DeleteResource(c, id)
 	if err != nil {
 		if errors.Is(err, services.ErrResourceNotFound) {
 			c.JSON(http.StatusNotFound, response.ErrorResponse{Error: "resource not found"})

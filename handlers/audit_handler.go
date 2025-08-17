@@ -13,6 +13,14 @@ import (
 	"github.com/linskybing/platform-go/utils"
 )
 
+type AuditHandler struct {
+	svc *services.AuditService
+}
+
+func NewAuditHandler(svc *services.AuditService) *AuditHandler {
+	return &AuditHandler{svc: svc}
+}
+
 // GetAuditLogs godoc
 // @Summary      Query audit logs
 // @Description  Retrieve audit logs filtered by optional parameters like user_id, resource_type, action, time range, with pagination support.
@@ -30,7 +38,7 @@ import (
 // @Failure      400 {object}  response.ErrorResponse "Invalid query parameters"
 // @Failure      500 {object}  response.ErrorResponse "Internal server error"
 // @Router       /audit/logs [get]
-func GetAuditLogs(c *gin.Context) {
+func (h *AuditHandler) GetAuditLogs(c *gin.Context) {
 	var params repositories.AuditQueryParams
 
 	if uid, err := utils.ParseQueryUintParam(c, "user_id"); err != nil {
@@ -79,7 +87,7 @@ func GetAuditLogs(c *gin.Context) {
 	params.Limit = limit
 	params.Offset = offset
 
-	logs, err := services.QueryAuditLogs(params)
+	logs, err := h.svc.QueryAuditLogs(params)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, response.ErrorResponse{Error: err.Error()})
 		return

@@ -13,15 +13,25 @@ import (
 
 var ErrReservedGroupName = errors.New("cannot use reserved group name 'super'")
 
-func ListGroups() ([]models.Group, error) {
-	return repositories.GetAllGroups()
+type GroupService struct {
+	Repos *repositories.Repos
 }
 
-func GetGroup(id uint) (models.Group, error) {
-	return repositories.GetGroupByID(id)
+func NewGroupService(repos *repositories.Repos) *GroupService {
+	return &GroupService{
+		Repos: repos,
+	}
 }
 
-func CreateGroup(c *gin.Context, input dto.GroupCreateDTO) (models.Group, error) {
+func (s *GroupService) ListGroups() ([]models.Group, error) {
+	return s.Repos.Group.GetAllGroups()
+}
+
+func (s *GroupService) GetGroup(id uint) (models.Group, error) {
+	return s.Repos.Group.GetGroupByID(id)
+}
+
+func (s *GroupService) CreateGroup(c *gin.Context, input dto.GroupCreateDTO) (models.Group, error) {
 	if input.GroupName == "super" {
 		return models.Group{}, ErrReservedGroupName
 	}
@@ -33,17 +43,17 @@ func CreateGroup(c *gin.Context, input dto.GroupCreateDTO) (models.Group, error)
 		group.Description = *input.Description
 	}
 
-	err := repositories.CreateGroup(&group)
+	err := s.Repos.Group.CreateGroup(&group)
 	if err != nil {
 		return models.Group{}, err
 	}
-	utils.LogAuditWithConsole(c, "create", "group", fmt.Sprintf("g_id=%d", group.GID), nil, group, "")
+	utils.LogAuditWithConsole(c, "create", "group", fmt.Sprintf("g_id=%d", group.GID), nil, group, "", s.Repos.Audit)
 
 	return group, nil
 }
 
-func UpdateGroup(c *gin.Context, id uint, input dto.GroupUpdateDTO) (models.Group, error) {
-	group, err := repositories.GetGroupByID(id)
+func (s *GroupService) UpdateGroup(c *gin.Context, id uint, input dto.GroupUpdateDTO) (models.Group, error) {
+	group, err := s.Repos.Group.GetGroupByID(id)
 	if err != nil {
 		return models.Group{}, err
 	}
@@ -60,28 +70,28 @@ func UpdateGroup(c *gin.Context, id uint, input dto.GroupUpdateDTO) (models.Grou
 		group.Description = *input.Description
 	}
 
-	err = repositories.UpdateGroup(&group)
+	err = s.Repos.Group.UpdateGroup(&group)
 	if err != nil {
 		return models.Group{}, err
 	}
 
-	utils.LogAuditWithConsole(c, "update", "group", fmt.Sprintf("g_id=%d", group.GID), oldGroup, group, "")
+	utils.LogAuditWithConsole(c, "update", "group", fmt.Sprintf("g_id=%d", group.GID), oldGroup, group, "", s.Repos.Audit)
 
 	return group, nil
 }
 
-func DeleteGroup(c *gin.Context, id uint) error {
-	group, err := repositories.GetGroupByID(id)
+func (s *GroupService) DeleteGroup(c *gin.Context, id uint) error {
+	group, err := s.Repos.Group.GetGroupByID(id)
 	if err != nil {
 		return err
 	}
 
-	err = repositories.DeleteGroup(id)
+	err = s.Repos.Group.DeleteGroup(id)
 	if err != nil {
 		return err
 	}
 
-	utils.LogAuditWithConsole(c, "delete", "group", fmt.Sprintf("g_id=%d", group.GID), group, nil, "")
+	utils.LogAuditWithConsole(c, "delete", "group", fmt.Sprintf("g_id=%d", group.GID), group, nil, "", s.Repos.Audit)
 
 	return nil
 }

@@ -12,8 +12,8 @@ import (
 	"gorm.io/gorm"
 )
 
-func IsSuperAdmin(uid uint) (bool, error) {
-	return repositories.IsSuperAdmin(uid)
+func IsSuperAdmin(uid uint, repos repositories.ViewRepo) (bool, error) {
+	return repos.IsSuperAdmin(uid)
 }
 
 func GetUserIDFromContext(c *gin.Context) (uint, error) {
@@ -44,7 +44,7 @@ func HasGroupRole(userID uint, gid uint, roles []string) (bool, error) {
 	return true, nil
 }
 
-func CheckGroupPermission(UID uint, GID uint) (bool, error) {
+func CheckGroupPermission(UID uint, GID uint, repos repositories.ViewRepo) (bool, error) {
 	// Check if the user is a group manager (admin role in the group)
 	isManager, err := HasGroupRole(UID, GID, config.GroupAdminRoles)
 	if err != nil {
@@ -55,7 +55,7 @@ func CheckGroupPermission(UID uint, GID uint) (bool, error) {
 	}
 
 	// If not group admin, check if the user is a super admin
-	isSuper, err := IsSuperAdmin(UID)
+	isSuper, err := repos.IsSuperAdmin(UID)
 	if err != nil {
 		return false, err
 	}

@@ -10,9 +10,9 @@ import (
 	"github.com/linskybing/platform-go/repositories"
 )
 
-func LogAuditWithConsole(c *gin.Context, action, resourceType, resourceID string, oldData, newData interface{}, msg string) {
+func LogAuditWithConsole(c *gin.Context, action, resourceType, resourceID string, oldData, newData interface{}, msg string, repos repositories.AuditRepo) {
 	userID, _ := GetUserIDFromContext(c)
-	if err := LogAudit(c, userID, action, resourceType, resourceID, oldData, newData, msg); err != nil {
+	if err := LogAudit(c, userID, action, resourceType, resourceID, oldData, newData, msg, repos); err != nil {
 		fmt.Printf("[LogAudit] error: %v\n", err)
 	}
 }
@@ -26,6 +26,7 @@ func LogAudit(
 	before any,
 	after any,
 	description string,
+	repos repositories.AuditRepo,
 ) error {
 	var oldData, newData []byte
 	var err error
@@ -58,5 +59,5 @@ func LogAudit(
 		Description:  description,
 	}
 
-	return repositories.CreateAuditLog(audit)
+	return repos.CreateAuditLog(audit)
 }

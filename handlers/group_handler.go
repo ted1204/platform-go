@@ -12,6 +12,14 @@ import (
 	"gorm.io/gorm"
 )
 
+type GroupHandler struct {
+	svc *services.GroupService
+}
+
+func NewGroupHandler(svc *services.GroupService) *GroupHandler {
+	return &GroupHandler{svc: svc}
+}
+
 // GetGroups godoc
 // @Summary List all groups
 // @Tags groups
@@ -20,8 +28,8 @@ import (
 // @Success 200 {array} models.Group
 // @Failure 500 {object} response.ErrorResponse "Internal server error"
 // @Router /groups [get]
-func GetGroups(c *gin.Context) {
-	groups, err := services.ListGroups()
+func (h *GroupHandler) GetGroups(c *gin.Context) {
+	groups, err := h.svc.ListGroups()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, response.ErrorResponse{Error: err.Error()})
 		return
@@ -40,13 +48,13 @@ func GetGroups(c *gin.Context) {
 // @Failure 404 {object} response.ErrorResponse "Group not found"
 // @Failure 500 {object} response.ErrorResponse "Internal server error"
 // @Router /groups/{id} [get]
-func GetGroupByID(c *gin.Context) {
+func (h *GroupHandler) GetGroupByID(c *gin.Context) {
 	gid, err := utils.ParseIDParam(c, "id")
 	if err != nil {
 		c.JSON(http.StatusBadRequest, response.ErrorResponse{Error: "invalid group id"})
 		return
 	}
-	group, err := services.GetGroup(uint(gid))
+	group, err := h.svc.GetGroup(uint(gid))
 	if err != nil {
 		c.JSON(http.StatusNotFound, response.ErrorResponse{Error: "group not found"})
 		return
@@ -68,14 +76,14 @@ func GetGroupByID(c *gin.Context) {
 // @Failure 403 {object} response.ErrorResponse "Forbidden (reserved name)"
 // @Failure 500 {object} response.ErrorResponse "Internal server error"
 // @Router /groups [post]
-func CreateGroup(c *gin.Context) {
+func (h *GroupHandler) CreateGroup(c *gin.Context) {
 	var input dto.GroupCreateDTO
 	if err := c.ShouldBind(&input); err != nil {
 		c.JSON(http.StatusBadRequest, response.ErrorResponse{Error: err.Error()})
 		return
 	}
 
-	group, err := services.CreateGroup(c, input)
+	group, err := h.svc.CreateGroup(c, input)
 	if err != nil {
 		if err == services.ErrReservedGroupName {
 			c.JSON(http.StatusForbidden, response.ErrorResponse{Error: err.Error()})
@@ -102,7 +110,7 @@ func CreateGroup(c *gin.Context) {
 // @Failure 404 {object} response.ErrorResponse "Group not found"
 // @Failure 500 {object} response.ErrorResponse "Internal server error"
 // @Router /groups/{id} [put]
-func UpdateGroup(c *gin.Context) {
+func (h *GroupHandler) UpdateGroup(c *gin.Context) {
 	id, err := utils.ParseIDParam(c, "id")
 	if err != nil {
 		c.JSON(http.StatusBadRequest, response.ErrorResponse{Error: "invalid group id"})
@@ -115,7 +123,7 @@ func UpdateGroup(c *gin.Context) {
 		return
 	}
 
-	group, err := services.UpdateGroup(c, id, input)
+	group, err := h.svc.UpdateGroup(c, id, input)
 	if err != nil {
 		if err == services.ErrReservedGroupName {
 			c.JSON(http.StatusForbidden, response.ErrorResponse{Error: err.Error()})
@@ -142,14 +150,14 @@ func UpdateGroup(c *gin.Context) {
 // @Failure 404 {object} response.ErrorResponse "Group not found"
 // @Failure 500 {object} response.ErrorResponse "Internal server error"
 // @Router /groups/{id} [delete]
-func DeleteGroup(c *gin.Context) {
+func (h *GroupHandler) DeleteGroup(c *gin.Context) {
 	id, err := utils.ParseIDParam(c, "id")
 	if err != nil {
 		c.JSON(http.StatusBadRequest, response.ErrorResponse{Error: "invalid group id"})
 		return
 	}
 
-	err = services.DeleteGroup(c, id)
+	err = h.svc.DeleteGroup(c, id)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			c.JSON(http.StatusNotFound, response.ErrorResponse{Error: "group not found"})

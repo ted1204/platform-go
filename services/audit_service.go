@@ -5,6 +5,16 @@ import (
 	"github.com/linskybing/platform-go/repositories"
 )
 
-func QueryAuditLogs(params repositories.AuditQueryParams) ([]models.AuditLog, error) {
-	return repositories.GetAuditLogs(params)
+type AuditService struct {
+	Repos *repositories.Repos
+}
+
+func NewAuditService(repos *repositories.Repos) *AuditService {
+	return &AuditService{
+		Repos: repos,
+	}
+}
+
+func (s *AuditService) QueryAuditLogs(params repositories.AuditQueryParams) ([]models.AuditLog, error) {
+	return s.Repos.Audit.GetAuditLogs(params)
 }

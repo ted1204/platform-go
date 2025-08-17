@@ -7,12 +7,13 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/linskybing/platform-go/dto"
+	"github.com/linskybing/platform-go/repositories"
 	"github.com/linskybing/platform-go/response"
 	"github.com/linskybing/platform-go/types"
 	"github.com/linskybing/platform-go/utils"
 )
 
-func AuthorizeUserOrAdmin() gin.HandlerFunc {
+func AuthorizeUserOrAdmin(repos repositories.ViewRepo) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		claims, ok := c.MustGet("claims").(*types.Claims)
 		if !ok {
@@ -39,7 +40,7 @@ func AuthorizeUserOrAdmin() gin.HandlerFunc {
 			return
 		}
 
-		isAdmin, err := utils.IsSuperAdmin(currentUID)
+		isAdmin, err := utils.IsSuperAdmin(currentUID, repos)
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Internal server error"})
 			return
@@ -53,7 +54,7 @@ func AuthorizeUserOrAdmin() gin.HandlerFunc {
 	}
 }
 
-func AuthorizeAdmin() gin.HandlerFunc {
+func AuthorizeAdmin(repos repositories.ViewRepo) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		claims, ok := c.MustGet("claims").(*types.Claims)
 		if !ok {
@@ -63,7 +64,7 @@ func AuthorizeAdmin() gin.HandlerFunc {
 
 		uid := claims.UserID
 
-		isAdmin, err := utils.IsSuperAdmin(uid)
+		isAdmin, err := utils.IsSuperAdmin(uid, repos)
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 			return
@@ -77,7 +78,7 @@ func AuthorizeAdmin() gin.HandlerFunc {
 	}
 }
 
-func CheckPermissionPayload(permission string, dtoType any) gin.HandlerFunc {
+func CheckPermissionPayload(permission string, dtoType any, repos repositories.ViewRepo) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// Dynamically create a new DTO instance (must implement GIDGetter)
 		dtoValue := reflect.New(reflect.TypeOf(dtoType)).Interface()
@@ -109,7 +110,7 @@ func CheckPermissionPayload(permission string, dtoType any) gin.HandlerFunc {
 			return
 		}
 
-		permitted, err := utils.CheckGroupPermission(uid, gid)
+		permitted, err := utils.CheckGroupPermission(uid, gid, repos)
 		if err != nil || !permitted {
 			c.JSON(http.StatusForbidden, response.ErrorResponse{Error: "Permission denied for this group"})
 			c.Abort()
@@ -120,7 +121,50 @@ func CheckPermissionPayload(permission string, dtoType any) gin.HandlerFunc {
 	}
 }
 
-func CheckPermissionByParam(getDataByID func(uint) (uint, error)) gin.HandlerFunc {
+func CheckPermissionPayloadByRepo(permission string, dtoType any, repos *repositories.Repos) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// Dynamically create a new DTO instance (must implement GIDGetter)
+		dtoValue := reflect.New(reflect.TypeOf(dtoType)).Interface()
+
+		// Bind form data directly (supports x-www-form-urlencoded, multipart/form-data)
+		if err := c.ShouldBind(dtoValue); err != nil {
+			c.JSON(http.StatusBadRequest, response.ErrorResponse{Error: "Invalid input: " + err.Error()})
+			c.Abort()
+			return
+		}
+
+		gidGetter, ok := dtoValue.(dto.GIDGetter)
+		if !ok {
+			c.JSON(http.StatusInternalServerError, response.ErrorResponse{Error: "DTO does not implement GIDGetter"})
+			c.Abort()
+			return
+		}
+
+		gid := gidGetter.GetGIDByRepo(repos)
+		if gid == 0 {
+			c.JSON(http.StatusBadRequest, response.ErrorResponse{Error: "Group ID cannot be zero"})
+			c.Abort()
+			return
+		}
+		uid, err := utils.GetUserIDFromContext(c)
+		if err != nil {
+			c.JSON(http.StatusUnauthorized, response.ErrorResponse{Error: "Unauthorized"})
+			c.Abort()
+			return
+		}
+
+		permitted, err := utils.CheckGroupPermission(uid, gid, repos.View)
+		if err != nil || !permitted {
+			c.JSON(http.StatusForbidden, response.ErrorResponse{Error: "Permission denied for this group"})
+			c.Abort()
+			return
+		}
+
+		c.Next()
+	}
+}
+
+func CheckPermissionByParam(getDataByID func(uint) (uint, error), repos repositories.ViewRepo) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id, err := utils.ParseIDParam(c, "id")
 		if err != nil {
@@ -145,7 +189,7 @@ func CheckPermissionByParam(getDataByID func(uint) (uint, error)) gin.HandlerFun
 		}
 
 		// Check permission using the resolved GID
-		permitted, err := utils.CheckGroupPermission(uid, gid)
+		permitted, err := utils.CheckGroupPermission(uid, gid, repos)
 		if err != nil || !permitted {
 			c.JSON(http.StatusForbidden, response.ErrorResponse{Error: "Permission denied for this group"})
 			c.Abort()

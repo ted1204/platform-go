@@ -11,6 +11,14 @@ import (
 	"github.com/linskybing/platform-go/utils"
 )
 
+type ProjectHandler struct {
+	svc *services.ProjectService
+}
+
+func NewProjectHandler(svc *services.ProjectService) *ProjectHandler {
+	return &ProjectHandler{svc: svc}
+}
+
 // GetProjects godoc
 // @Summary List all projects
 // @Tags projects
@@ -19,8 +27,8 @@ import (
 // @Success 200 {array} models.Project
 // @Failure 500 {object} response.ErrorResponse
 // @Router /projects [get]
-func GetProjects(c *gin.Context) {
-	projects, err := services.ListProjects()
+func (h *ProjectHandler) GetProjects(c *gin.Context) {
+	projects, err := h.svc.ListProjects()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, response.ErrorResponse{Error: err.Error()})
 		return
@@ -37,19 +45,19 @@ func GetProjects(c *gin.Context) {
 // @Success 200 {array} map[string]dto.GroupProjects
 // @Failure 500 {object} response.ErrorResponse
 // @Router /projects/by-user [get]
-func GetProjectsByUser(c *gin.Context) {
+func (h *ProjectHandler) GetProjectsByUser(c *gin.Context) {
 	id, err := utils.GetUserIDFromContext(c)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, response.ErrorResponse{Error: "invalid project id"})
 		return
 	}
-	records, err := services.GetProjectsByUser(id)
+	records, err := h.svc.GetProjectsByUser(id)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, response.ErrorResponse{Error: err.Error()})
 		return
 	}
 
-	grouped := services.GroupProjectsByGID(records)
+	grouped := h.svc.GroupProjectsByGID(records)
 
 	c.JSON(http.StatusOK, grouped)
 }
@@ -65,13 +73,13 @@ func GetProjectsByUser(c *gin.Context) {
 // @Failure 404 {object} response.ErrorResponse "Project not found"
 // @Failure 500 {object} response.ErrorResponse "Internal server error"
 // @Router /projects/{id} [get]
-func GetProjectByID(c *gin.Context) {
+func (h *ProjectHandler) GetProjectByID(c *gin.Context) {
 	id, err := utils.ParseIDParam(c, "id")
 	if err != nil {
 		c.JSON(http.StatusBadRequest, response.ErrorResponse{Error: "invalid project id"})
 		return
 	}
-	project, err := services.GetProject(id)
+	project, err := h.svc.GetProject(id)
 	if err != nil {
 		c.JSON(http.StatusNotFound, response.ErrorResponse{Error: "project not found"})
 		return
@@ -92,14 +100,14 @@ func GetProjectByID(c *gin.Context) {
 // @Failure 400 {object} response.ErrorResponse "Bad request"
 // @Failure 500 {object} response.ErrorResponse "Internal server error"
 // @Router /projects [post]
-func CreateProject(c *gin.Context) {
+func (h *ProjectHandler) CreateProject(c *gin.Context) {
 	var input dto.CreateProjectDTO
 	if err := c.ShouldBind(&input); err != nil {
 		c.JSON(http.StatusBadRequest, response.ErrorResponse{Error: err.Error()})
 		return
 	}
 
-	project, err := services.CreateProject(c, input)
+	project, err := h.svc.CreateProject(c, input)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, response.ErrorResponse{Error: err.Error()})
 		return
@@ -123,7 +131,7 @@ func CreateProject(c *gin.Context) {
 // @Failure 404 {object} response.ErrorResponse "Project not found"
 // @Failure 500 {object} response.ErrorResponse "Internal server error"
 // @Router /projects/{id} [put]
-func UpdateProject(c *gin.Context) {
+func (h *ProjectHandler) UpdateProject(c *gin.Context) {
 	id, err := utils.ParseIDParam(c, "id")
 	if err != nil {
 		c.JSON(http.StatusBadRequest, response.ErrorResponse{Error: "invalid project id"})
@@ -135,7 +143,7 @@ func UpdateProject(c *gin.Context) {
 		return
 	}
 
-	project, err := services.UpdateProject(c, id, input)
+	project, err := h.svc.UpdateProject(c, id, input)
 	if err != nil {
 		if errors.Is(err, services.ErrProjectNotFound) {
 			c.JSON(http.StatusNotFound, response.ErrorResponse{Error: "project not found"})
@@ -159,14 +167,14 @@ func UpdateProject(c *gin.Context) {
 // @Failure 404 {object} response.ErrorResponse "Project not found"
 // @Failure 500 {object} response.ErrorResponse "Internal server error"
 // @Router /projects/{id} [delete]
-func DeleteProject(c *gin.Context) {
+func (h *ProjectHandler) DeleteProject(c *gin.Context) {
 	id, err := utils.ParseIDParam(c, "id")
 	if err != nil {
 		c.JSON(http.StatusBadRequest, response.ErrorResponse{Error: "invalid project id"})
 		return
 	}
 
-	err = services.DeleteProject(c, id)
+	err = h.svc.DeleteProject(c, id)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, response.ErrorResponse{Error: err.Error()})
 		return

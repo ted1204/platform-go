@@ -5,19 +5,30 @@ import (
 	"github.com/linskybing/platform-go/models"
 )
 
-func CreateUserGroup(userGroup *models.UserGroup) error {
+type UserGroupRepo interface {
+	CreateUserGroup(userGroup *models.UserGroup) error
+	UpdateUserGroup(userGroup *models.UserGroup) error
+	DeleteUserGroup(uid, gid uint) error
+	GetUserGroupsByUID(uid uint) ([]models.UserGroupView, error)
+	GetUserGroupsByGID(gid uint) ([]models.UserGroupView, error)
+	GetUserGroup(uid, gid uint) (models.UserGroupView, error)
+}
+
+type DBUserGroupRepo struct{}
+
+func (r *DBUserGroupRepo) CreateUserGroup(userGroup *models.UserGroup) error {
 	return db.DB.Create(userGroup).Error
 }
 
-func UpdateUserGroup(userGroup *models.UserGroup) error {
+func (r *DBUserGroupRepo) UpdateUserGroup(userGroup *models.UserGroup) error {
 	return db.DB.Save(userGroup).Error
 }
 
-func DeleteUserGroup(uid, gid uint) error {
+func (r *DBUserGroupRepo) DeleteUserGroup(uid, gid uint) error {
 	return db.DB.Where("u_id = ? AND g_id = ?", uid, gid).Delete(&models.UserGroup{}).Error
 }
 
-func GetUserGroupsByUID(uid uint) ([]models.UserGroupView, error) {
+func (r *DBUserGroupRepo) GetUserGroupsByUID(uid uint) ([]models.UserGroupView, error) {
 	var userGroups []models.UserGroupView
 	err := db.DB.
 		Where("u_id = ?", uid).
@@ -25,7 +36,7 @@ func GetUserGroupsByUID(uid uint) ([]models.UserGroupView, error) {
 	return userGroups, err
 }
 
-func GetUserGroupsByGID(gid uint) ([]models.UserGroupView, error) {
+func (r *DBUserGroupRepo) GetUserGroupsByGID(gid uint) ([]models.UserGroupView, error) {
 	var userGroups []models.UserGroupView
 	err := db.DB.
 		Where("g_id = ?", gid).
@@ -33,7 +44,7 @@ func GetUserGroupsByGID(gid uint) ([]models.UserGroupView, error) {
 	return userGroups, err
 }
 
-func GetUserGroup(uid, gid uint) (models.UserGroupView, error) {
+func (r *DBUserGroupRepo) GetUserGroup(uid, gid uint) (models.UserGroupView, error) {
 	var userGroup models.UserGroupView
 	err := db.DB.First(&userGroup, "u_id = ? AND g_id = ?", uid, gid).Error
 	return userGroup, err

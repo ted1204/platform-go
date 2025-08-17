@@ -11,6 +11,14 @@ import (
 	"github.com/linskybing/platform-go/services"
 )
 
+type UserGroupHandler struct {
+	svc *services.UserGroupService
+}
+
+func NewUserGroupHandler(svc *services.UserGroupService) *UserGroupHandler {
+	return &UserGroupHandler{svc: svc}
+}
+
 // @Summary Get a user-group relation by user ID and group ID
 // @Tags user_group
 // @Produce json
@@ -20,7 +28,7 @@ import (
 // @Failure 400 {object} response.ErrorResponse
 // @Failure 404 {object} response.ErrorResponse
 // @Router /user-group [get]
-func GetUserGroup(c *gin.Context) {
+func (h *UserGroupHandler) GetUserGroup(c *gin.Context) {
 	uidStr := c.Query("u_id")
 	gidStr := c.Query("g_id")
 
@@ -40,7 +48,7 @@ func GetUserGroup(c *gin.Context) {
 		return
 	}
 
-	userGroup, err := services.GetUserGroup(uint(uid), uint(gid))
+	userGroup, err := h.svc.GetUserGroup(uint(uid), uint(gid))
 	if err != nil {
 		c.JSON(http.StatusNotFound, response.ErrorResponse{Error: "User-Group relation not found"})
 		return
@@ -61,7 +69,7 @@ func GetUserGroup(c *gin.Context) {
 // @Failure 400 {object} response.ErrorResponse
 // @Failure 500 {object} response.ErrorResponse
 // @Router /user-group/by-group [get]
-func GetUserGroupsByGID(c *gin.Context) {
+func (h *UserGroupHandler) GetUserGroupsByGID(c *gin.Context) {
 	gidStr := c.Query("g_id")
 	if gidStr == "" {
 		c.JSON(http.StatusBadRequest, response.ErrorResponse{Error: "Missing g_id"})
@@ -73,7 +81,7 @@ func GetUserGroupsByGID(c *gin.Context) {
 		return
 	}
 
-	userGroups, err := services.GetUserGroupsByGID(uint(gid))
+	userGroups, err := h.svc.GetUserGroupsByGID(uint(gid))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, response.ErrorResponse{Error: err.Error()})
 		return
@@ -95,7 +103,7 @@ func GetUserGroupsByGID(c *gin.Context) {
 // @Failure 400 {object} response.ErrorResponse
 // @Failure 500 {object} response.ErrorResponse
 // @Router /user-group/by-user [get]
-func GetUserGroupsByUID(c *gin.Context) {
+func (h *UserGroupHandler) GetUserGroupsByUID(c *gin.Context) {
 	uidStr := c.Query("u_id")
 	if uidStr == "" {
 		c.JSON(http.StatusBadRequest, response.ErrorResponse{Error: "Missing u_id"})
@@ -107,7 +115,7 @@ func GetUserGroupsByUID(c *gin.Context) {
 		return
 	}
 
-	userGroups, err := services.GetFormattedUserGroupsByUID(uint(uid))
+	userGroups, err := h.svc.GetFormattedUserGroupsByUID(uint(uid))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, response.ErrorResponse{Error: err.Error()})
 		return
@@ -131,7 +139,7 @@ func GetUserGroupsByUID(c *gin.Context) {
 // @Failure 400 {object} response.ErrorResponse
 // @Failure 500 {object} response.ErrorResponse
 // @Router /user-group [post]
-func CreateUserGroup(c *gin.Context) {
+func (h *UserGroupHandler) CreateUserGroup(c *gin.Context) {
 	var input dto.UserGroupInputDTO
 	if err := c.ShouldBind(&input); err != nil {
 		c.JSON(http.StatusBadRequest, response.ErrorResponse{Error: err.Error()})
@@ -144,7 +152,7 @@ func CreateUserGroup(c *gin.Context) {
 		Role: input.Role,
 	}
 
-	if _, err := services.CreateUserGroup(c, userGroup); err != nil {
+	if _, err := h.svc.CreateUserGroup(c, userGroup); err != nil {
 		c.JSON(http.StatusInternalServerError, response.ErrorResponse{Error: err.Error()})
 		return
 	}
@@ -163,14 +171,14 @@ func CreateUserGroup(c *gin.Context) {
 // @Failure 404 {object} response.ErrorResponse
 // @Failure 500 {object} response.ErrorResponse
 // @Router /user-group [put]
-func UpdateUserGroup(c *gin.Context) {
+func (h *UserGroupHandler) UpdateUserGroup(c *gin.Context) {
 	var input dto.UserGroupInputDTO
 	if err := c.ShouldBind(&input); err != nil {
 		c.JSON(http.StatusBadRequest, response.ErrorResponse{Error: err.Error()})
 		return
 	}
 
-	existing, err := services.GetUserGroup(input.UID, input.GID)
+	existing, err := h.svc.GetUserGroup(input.UID, input.GID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, response.ErrorResponse{Error: "User-Group relation not found"})
 		return
@@ -182,7 +190,7 @@ func UpdateUserGroup(c *gin.Context) {
 		Role: input.Role,
 	}
 
-	if _, err := services.UpdateUserGroup(c, updated); err != nil {
+	if _, err := h.svc.UpdateUserGroup(c, updated); err != nil {
 		c.JSON(http.StatusInternalServerError, response.ErrorResponse{Error: err.Error()})
 		return
 	}
@@ -200,14 +208,14 @@ func UpdateUserGroup(c *gin.Context) {
 // @Failure 400 {object} response.ErrorResponse
 // @Failure 500 {object} response.ErrorResponse
 // @Router /user-group [delete]
-func DeleteUserGroup(c *gin.Context) {
+func (h *UserGroupHandler) DeleteUserGroup(c *gin.Context) {
 	var input dto.UserGroupDeleteDTO
 	if err := c.ShouldBind(&input); err != nil {
 		c.JSON(http.StatusBadRequest, response.ErrorResponse{Error: err.Error()})
 		return
 	}
 
-	err := services.DeleteUserGroup(c, input.UID, input.GID)
+	err := h.svc.DeleteUserGroup(c, input.UID, input.GID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, response.ErrorResponse{Error: err.Error()})
 		return

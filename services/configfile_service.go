@@ -10,6 +10,7 @@ import (
 	"github.com/linskybing/platform-go/repositories"
 	"github.com/linskybing/platform-go/types"
 	"github.com/linskybing/platform-go/utils"
+
 	"gorm.io/datatypes"
 )
 
@@ -20,15 +21,25 @@ var (
 	ErrUploadYAMLFailed    = errors.New("failed to upload YAML file")
 )
 
-func ListConfigFiles() ([]models.ConfigFile, error) {
-	return repositories.ListConfigFiles()
+type ConfigFileService struct {
+	Repos *repositories.Repos
 }
 
-func GetConfigFile(id uint) (*models.ConfigFile, error) {
-	return repositories.GetConfigFileByID(id)
+func NewConfigFileService(repos *repositories.Repos) *ConfigFileService {
+	return &ConfigFileService{
+		Repos: repos,
+	}
 }
 
-func CreateConfigFile(c *gin.Context, cf dto.CreateConfigFileInput) (*models.ConfigFile, error) {
+func (s *ConfigFileService) ListConfigFiles() ([]models.ConfigFile, error) {
+	return s.Repos.ConfigFile.ListConfigFiles()
+}
+
+func (s *ConfigFileService) GetConfigFile(id uint) (*models.ConfigFile, error) {
+	return s.Repos.ConfigFile.GetConfigFileByID(id)
+}
+
+func (s *ConfigFileService) CreateConfigFile(c *gin.Context, cf dto.CreateConfigFileInput) (*models.ConfigFile, error) {
 	yamlArray := utils.SplitYAMLDocuments(cf.RawYaml)
 	if len(yamlArray) == 0 {
 		return nil, ErrNoValidYAMLDocument
@@ -57,29 +68,29 @@ func CreateConfigFile(c *gin.Context, cf dto.CreateConfigFileInput) (*models.Con
 		Filename:  cf.Filename,
 		ProjectID: cf.ProjectID,
 	}
-	if err := repositories.CreateConfigFile(createdCF); err != nil {
+	if err := s.Repos.ConfigFile.CreateConfigFile(createdCF); err != nil {
 		return nil, err
 	}
-	utils.LogAuditWithConsole(c, "create", "config_file", fmt.Sprintf("cf_id=%d", createdCF.CFID), nil, *createdCF, "")
+	utils.LogAuditWithConsole(c, "create", "config_file", fmt.Sprintf("cf_id=%d", createdCF.CFID), nil, *createdCF, "", s.Repos.Audit)
 
 	for _, res := range resources {
 		res.CFID = createdCF.CFID
-		if _, err := CreateResource(c, res); err != nil {
+		if err := s.Repos.Resource.CreateResource(res); err != nil {
 			return nil, fmt.Errorf("failed to create resource %s/%s: %w", res.Type, res.Name, err)
 		}
-		utils.LogAuditWithConsole(c, "create", "resource", fmt.Sprintf("r_id=%d", res.RID), nil, *res, "")
+		utils.LogAuditWithConsole(c, "create", "resource", fmt.Sprintf("r_id=%d", res.RID), nil, *res, "", s.Repos.Audit)
 	}
 
 	return createdCF, nil
 }
 
-func updateYamlContent(c *gin.Context, cf *models.ConfigFile, rawYaml string) error {
+func (s *ConfigFileService) updateYamlContent(c *gin.Context, cf *models.ConfigFile, rawYaml string) error {
 	yamlArray := utils.SplitYAMLDocuments(rawYaml)
 	if len(yamlArray) == 0 {
 		return ErrNoValidYAMLDocument
 	}
 
-	resources, err := repositories.ListResourcesByConfigFileID(cf.CFID)
+	resources, err := s.Repos.Resource.ListResourcesByConfigFileID(cf.CFID)
 	if err != nil {
 		return fmt.Errorf("failed to list resources for config file %d: %w", cf.CFID, err)
 	}
@@ -109,36 +120,36 @@ func updateYamlContent(c *gin.Context, cf *models.ConfigFile, rawYaml string) er
 				ParsedYAML: datatypes.JSON([]byte(jsonContent)),
 			}
 			fmt.Printf("update resource for ccc document %d: %s", i+1, name)
-			if err := repositories.CreateResource(resource); err != nil {
+			if err := s.Repos.Resource.CreateResource(resource); err != nil {
 				return fmt.Errorf("failed to create resource for document %d: %w", i+1, err)
 			}
-			utils.LogAuditWithConsole(c, "create", "resource", fmt.Sprintf("r_id=%d", resource.RID), nil, *resource, "")
+			utils.LogAuditWithConsole(c, "create", "resource", fmt.Sprintf("r_id=%d", resource.RID), nil, *resource, "", s.Repos.Audit)
 		} else {
 			usedKeys[name] = true
 			oldTarget := val
 			val.Name = name
 			val.ParsedYAML = datatypes.JSON([]byte(jsonContent))
 			fmt.Printf("update resource for document %d: %s", i+1, name)
-			if err := repositories.UpdateResource(&val); err != nil {
+			if err := s.Repos.Resource.UpdateResource(&val); err != nil {
 				return fmt.Errorf("failed to update resource for document %d: %w", i+1, err)
 			}
-			utils.LogAuditWithConsole(c, "update", "resource", fmt.Sprintf("r_id=%d", val.RID), oldTarget, val, "")
+			utils.LogAuditWithConsole(c, "update", "resource", fmt.Sprintf("r_id=%d", val.RID), oldTarget, val, "", s.Repos.Audit)
 		}
 	}
 
 	for key, val := range usedKeys {
 		if !val {
-			if err := repositories.DeleteResource(resourceMap[key].RID); err != nil {
+			if err := s.Repos.Resource.DeleteResource(resourceMap[key].RID); err != nil {
 				return fmt.Errorf("failed to delete unused resource %s: %w", key, err)
 			}
-			utils.LogAuditWithConsole(c, "delete", "resource", fmt.Sprintf("r_id=%d", resourceMap[key].RID), resourceMap[key], nil, "")
+			utils.LogAuditWithConsole(c, "delete", "resource", fmt.Sprintf("r_id=%d", resourceMap[key].RID), resourceMap[key], nil, "", s.Repos.Audit)
 		}
 	}
 	return nil
 }
 
-func UpdateConfigFile(c *gin.Context, id uint, input dto.ConfigFileUpdateDTO) (*models.ConfigFile, error) {
-	existing, err := repositories.GetConfigFileByID(id)
+func (s *ConfigFileService) UpdateConfigFile(c *gin.Context, id uint, input dto.ConfigFileUpdateDTO) (*models.ConfigFile, error) {
+	existing, err := s.Repos.ConfigFile.GetConfigFileByID(id)
 	if err != nil {
 		return nil, ErrConfigFileNotFound
 	}
@@ -150,36 +161,36 @@ func UpdateConfigFile(c *gin.Context, id uint, input dto.ConfigFileUpdateDTO) (*
 	}
 
 	if input.RawYaml != nil {
-		if err := DeleteConfigFileInstance(id); err != nil {
+		if err := s.DeleteConfigFileInstance(id); err != nil {
 			return nil, err
 		}
-		if err := updateYamlContent(c, existing, *input.RawYaml); err != nil {
+		if err := s.updateYamlContent(c, existing, *input.RawYaml); err != nil {
 			return nil, err
 		}
 	}
 
-	err = repositories.UpdateConfigFile(existing)
+	err = s.Repos.ConfigFile.UpdateConfigFile(existing)
 	if err != nil {
 		return nil, err
 	}
 
-	utils.LogAuditWithConsole(c, "update", "config_file", fmt.Sprintf("cf_id=%d", existing.CFID), oldCF, *existing, "")
+	utils.LogAuditWithConsole(c, "update", "config_file", fmt.Sprintf("cf_id=%d", existing.CFID), oldCF, *existing, "", s.Repos.Audit)
 
 	return existing, nil
 }
 
-func DeleteConfigFile(c *gin.Context, id uint) error {
-	cf, err := repositories.GetConfigFileByID(id)
+func (s *ConfigFileService) DeleteConfigFile(c *gin.Context, id uint) error {
+	cf, err := s.Repos.ConfigFile.GetConfigFileByID(id)
 	if err != nil {
 		return ErrConfigFileNotFound
 	}
 
-	resources, err := ListResourcesByConfigFileID(id)
+	resources, err := s.Repos.Resource.ListResourcesByConfigFileID(id)
 	if err != nil {
 		return err
 	}
 
-	users, err := repositories.ListUsersByProjectID(cf.ProjectID)
+	users, err := s.Repos.View.ListUsersByProjectID(cf.ProjectID)
 	if err != nil {
 		return err
 	}
@@ -194,31 +205,31 @@ func DeleteConfigFile(c *gin.Context, id uint) error {
 	}
 
 	for _, res := range resources {
-		err := DeleteResource(c, res.RID)
+		err := s.Repos.Resource.DeleteResource(res.RID)
 		if err != nil {
 			return err
 		}
 	}
 
-	err = repositories.DeleteConfigFile(id)
+	err = s.Repos.ConfigFile.DeleteConfigFile(id)
 	if err != nil {
 		return err
 	}
 
-	utils.LogAuditWithConsole(c, "delete", "config_file", fmt.Sprintf("cf_id=%d", cf.CFID), *cf, nil, "")
+	utils.LogAuditWithConsole(c, "delete", "config_file", fmt.Sprintf("cf_id=%d", cf.CFID), *cf, nil, "", s.Repos.Audit)
 	return nil
 }
 
-func ListConfigFilesByProjectID(projectID uint) ([]models.ConfigFile, error) {
-	return repositories.GetConfigFilesByProjectID(projectID)
+func (s *ConfigFileService) ListConfigFilesByProjectID(projectID uint) ([]models.ConfigFile, error) {
+	return s.Repos.ConfigFile.GetConfigFilesByProjectID(projectID)
 }
 
-func CreateInstance(c *gin.Context, id uint) error {
-	data, err := repositories.ListResourcesByConfigFileID(id)
+func (s *ConfigFileService) CreateInstance(c *gin.Context, id uint) error {
+	data, err := s.Repos.Resource.ListResourcesByConfigFileID(id)
 	if err != nil {
 		return err
 	}
-	configfile, err := repositories.GetConfigFileByID(id)
+	configfile, err := s.Repos.ConfigFile.GetConfigFileByID(id)
 	if err != nil {
 		return err
 	}
@@ -232,12 +243,12 @@ func CreateInstance(c *gin.Context, id uint) error {
 	return nil
 }
 
-func DeleteInstance(c *gin.Context, id uint) error {
-	data, err := repositories.ListResourcesByConfigFileID(id)
+func (s *ConfigFileService) DeleteInstance(c *gin.Context, id uint) error {
+	data, err := s.Repos.Resource.ListResourcesByConfigFileID(id)
 	if err != nil {
 		return err
 	}
-	configfile, err := repositories.GetConfigFileByID(id)
+	configfile, err := s.Repos.ConfigFile.GetConfigFileByID(id)
 	if err != nil {
 		return err
 	}
@@ -251,18 +262,18 @@ func DeleteInstance(c *gin.Context, id uint) error {
 	return nil
 }
 
-func DeleteConfigFileInstance(id uint) error {
-	configfile, err := repositories.GetConfigFileByID(id)
+func (s *ConfigFileService) DeleteConfigFileInstance(id uint) error {
+	configfile, err := s.Repos.ConfigFile.GetConfigFileByID(id)
 	if err != nil {
 		return err
 	}
 
-	resources, err := repositories.ListResourcesByConfigFileID(id)
+	resources, err := s.Repos.Resource.ListResourcesByConfigFileID(id)
 	if err != nil {
 		return err
 	}
 
-	users, err := repositories.ListUsersByProjectID(configfile.ProjectID)
+	users, err := s.Repos.View.ListUsersByProjectID(configfile.ProjectID)
 	if err != nil {
 		return err
 	}
@@ -278,18 +289,3 @@ func DeleteConfigFileInstance(id uint) error {
 
 	return nil
 }
-
-//    nsName := "my-namespace"
-//     ns := &corev1.Namespace{
-//         ObjectMeta: metav1.ObjectMeta{
-//             Name: nsName,
-//         },
-//     }
-
-//     // 創建 namespace
-//     createdNS, err := clientset.CoreV1().Namespaces().Create(context.TODO(), ns, metav1.CreateOptions{})
-//     if err != nil {
-//         log.Fatalf("創建 namespace 失敗: %v", err)
-//     }
-
-//     fmt.Printf("成功創建 Namespace: %s\n", createdNS.Name)

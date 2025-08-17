@@ -21,7 +21,17 @@ var (
 	ErrUsernameTaken       = errors.New("username already taken")
 )
 
-func RegisterUser(input dto.CreateUserInput) error {
+type UserService struct {
+	Repos *repositories.Repos
+}
+
+func NewUserService(repos *repositories.Repos) *UserService {
+	return &UserService{
+		Repos: repos,
+	}
+}
+
+func (s *UserService) RegisterUser(input dto.CreateUserInput) error {
 	var existing models.User
 	err := db.DB.Where("username = ?", input.Username).First(&existing).Error
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
@@ -55,7 +65,7 @@ func RegisterUser(input dto.CreateUserInput) error {
 	return db.DB.Create(&user).Error
 }
 
-func LoginUser(username, password string) (models.User, string, bool, error) {
+func (s *UserService) LoginUser(username, password string) (models.User, string, bool, error) {
 	var user models.User
 	if err := db.DB.Where("username = ?", username).First(&user).Error; err != nil {
 		return user, "", false, errors.New("invalid credentials")
@@ -64,7 +74,7 @@ func LoginUser(username, password string) (models.User, string, bool, error) {
 		return user, "", false, errors.New("invalid credentials")
 	}
 
-	token, isAdmin, err := middleware.GenerateToken(user.UID, user.Username, 24*time.Hour)
+	token, isAdmin, err := middleware.GenerateToken(user.UID, user.Username, 24*time.Hour, s.Repos.View)
 	if err != nil {
 		return user, "", false, err
 	}
@@ -72,20 +82,20 @@ func LoginUser(username, password string) (models.User, string, bool, error) {
 	return user, token, isAdmin, nil
 }
 
-func ListUsers() ([]models.UserWithSuperAdmin, error) {
-	return repositories.GetAllUsers()
+func (s *UserService) ListUsers() ([]models.UserWithSuperAdmin, error) {
+	return s.Repos.User.GetAllUsers()
 }
 
-func ListUserByPaging(page, limit int) ([]models.UserWithSuperAdmin, error) {
-	return repositories.ListUsersPaging(page, limit)
+func (s *UserService) ListUserByPaging(page, limit int) ([]models.UserWithSuperAdmin, error) {
+	return s.Repos.User.ListUsersPaging(page, limit)
 }
 
-func FindUserByID(id uint) (models.UserWithSuperAdmin, error) {
-	return repositories.GetUserByID(id)
+func (s *UserService) FindUserByID(id uint) (models.UserWithSuperAdmin, error) {
+	return s.Repos.User.GetUserByID(id)
 }
 
-func UpdateUser(id uint, input dto.UpdateUserInput) (models.User, error) {
-	user, err := repositories.GetUserRawByID(id)
+func (s *UserService) UpdateUser(id uint, input dto.UpdateUserInput) (models.User, error) {
+	user, err := s.Repos.User.GetUserRawByID(id)
 	if err != nil {
 		return models.User{}, ErrUserNotFound
 	}
@@ -117,12 +127,12 @@ func UpdateUser(id uint, input dto.UpdateUserInput) (models.User, error) {
 		user.FullName = input.FullName
 	}
 
-	if err := repositories.SaveUser(&user); err != nil {
+	if err := s.Repos.User.SaveUser(&user); err != nil {
 		return models.User{}, err
 	}
 	return user, nil
 }
 
-func RemoveUser(id uint) error {
-	return repositories.DeleteUser(id)
+func (s *UserService) RemoveUser(id uint) error {
+	return s.Repos.User.DeleteUser(id)
 }

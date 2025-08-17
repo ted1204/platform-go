@@ -11,8 +11,18 @@ import (
 	"github.com/linskybing/platform-go/utils"
 )
 
-func AllocateGroupResource(gid uint, userName string) error {
-	projects, err := GetProjectsByGroupId(gid)
+type UserGroupService struct {
+	Repos *repositories.Repos
+}
+
+func NewUserGroupService(repos *repositories.Repos) *UserGroupService {
+	return &UserGroupService{
+		Repos: repos,
+	}
+}
+
+func (s *UserGroupService) AllocateGroupResource(gid uint, userName string) error {
+	projects, err := s.Repos.Project.ListProjectsByGroup(gid)
 
 	if err != nil {
 		return err
@@ -31,8 +41,8 @@ func AllocateGroupResource(gid uint, userName string) error {
 	return nil
 }
 
-func RemoveGroupResource(gid uint, userName string) error {
-	projects, err := GetProjectsByGroupId(gid)
+func (s *UserGroupService) RemoveGroupResource(gid uint, userName string) error {
+	projects, err := s.Repos.Project.ListProjectsByGroup(gid)
 
 	if err != nil {
 		return err
@@ -48,101 +58,101 @@ func RemoveGroupResource(gid uint, userName string) error {
 	return nil
 }
 
-func CreateUserGroup(c *gin.Context, userGroup *models.UserGroup) (*models.UserGroup, error) {
-	if err := repositories.CreateUserGroup(userGroup); err != nil {
+func (s *UserGroupService) CreateUserGroup(c *gin.Context, userGroup *models.UserGroup) (*models.UserGroup, error) {
+	if err := s.Repos.UserGroup.CreateUserGroup(userGroup); err != nil {
 		return nil, err
 	}
 
-	uesrName, err := repositories.GetUsernameByID(userGroup.UID)
+	uesrName, err := s.Repos.User.GetUsernameByID(userGroup.UID)
 
 	if err != nil {
 		return nil, err
 	}
 
-	if err := AllocateGroupResource(userGroup.GID, uesrName); err != nil {
+	if err := s.AllocateGroupResource(userGroup.GID, uesrName); err != nil {
 		return nil, err
 	}
 
 	utils.LogAuditWithConsole(c, "create", "user_group",
 		fmt.Sprintf("u_id=%d,g_id=%d", userGroup.UID, userGroup.GID),
-		nil, *userGroup, "")
+		nil, *userGroup, "", s.Repos.Audit)
 
 	return userGroup, nil
 }
 
-func UpdateUserGroup(c *gin.Context, userGroup *models.UserGroup) (*models.UserGroup, error) {
-	oldUserGroup, err := repositories.GetUserGroup(userGroup.UID, userGroup.GID)
+func (s *UserGroupService) UpdateUserGroup(c *gin.Context, userGroup *models.UserGroup) (*models.UserGroup, error) {
+	oldUserGroup, err := s.Repos.UserGroup.GetUserGroup(userGroup.UID, userGroup.GID)
 	if err != nil {
 		return nil, err
 	}
 
-	if err := repositories.UpdateUserGroup(userGroup); err != nil {
+	if err := s.Repos.UserGroup.UpdateUserGroup(userGroup); err != nil {
 		return nil, err
 	}
 
 	if oldUserGroup.GID != userGroup.GID {
-		uesrName, err := repositories.GetUsernameByID(userGroup.UID)
+		uesrName, err := s.Repos.User.GetUsernameByID(userGroup.UID)
 
 		if err != nil {
 			return nil, err
 		}
 
-		if err := AllocateGroupResource(userGroup.GID, uesrName); err != nil {
+		if err := s.AllocateGroupResource(userGroup.GID, uesrName); err != nil {
 			return nil, err
 		}
 
-		if err := RemoveGroupResource(oldUserGroup.GID, uesrName); err != nil {
+		if err := s.RemoveGroupResource(oldUserGroup.GID, uesrName); err != nil {
 			return nil, err
 		}
 
 	}
 	utils.LogAuditWithConsole(c, "update", "user_group",
 		fmt.Sprintf("u_id=%d,g_id=%d", userGroup.UID, userGroup.GID),
-		oldUserGroup, *userGroup, "")
+		oldUserGroup, *userGroup, "", s.Repos.Audit)
 
 	return userGroup, nil
 }
 
-func DeleteUserGroup(c *gin.Context, uid, gid uint) error {
-	oldUserGroup, err := repositories.GetUserGroup(uid, gid)
+func (s *UserGroupService) DeleteUserGroup(c *gin.Context, uid, gid uint) error {
+	oldUserGroup, err := s.Repos.UserGroup.GetUserGroup(uid, gid)
 	if err != nil {
 		return err
 	}
 
-	if err := repositories.DeleteUserGroup(uid, gid); err != nil {
+	if err := s.Repos.UserGroup.DeleteUserGroup(uid, gid); err != nil {
 		return err
 	}
 
-	uesrName, err := repositories.GetUsernameByID(uid)
+	uesrName, err := s.Repos.User.GetUsernameByID(uid)
 	if err != nil {
 		return err
 	}
 
-	if err := RemoveGroupResource(gid, uesrName); err != nil {
+	if err := s.RemoveGroupResource(gid, uesrName); err != nil {
 		return err
 	}
 
 	utils.LogAuditWithConsole(c, "delete", "user_group",
 		fmt.Sprintf("u_id=%d,g_id=%d", uid, gid),
-		oldUserGroup, nil, "")
+		oldUserGroup, nil, "", s.Repos.Audit)
 
 	return nil
 }
 
-func GetUserGroup(uid, gid uint) (models.UserGroupView, error) {
-	return repositories.GetUserGroup(uid, gid)
+func (s *UserGroupService) GetUserGroup(uid, gid uint) (models.UserGroupView, error) {
+	return s.Repos.UserGroup.GetUserGroup(uid, gid)
 }
 
-func GetUserGroupsByUID(uid uint) ([]models.UserGroupView, error) {
-	return repositories.GetUserGroupsByUID(uid)
+func (s *UserGroupService) GetUserGroupsByUID(uid uint) ([]models.UserGroupView, error) {
+	return s.Repos.UserGroup.GetUserGroupsByUID(uid)
 }
 
-func GetUserGroupsByGID(gid uint) ([]models.UserGroupView, error) {
-	return repositories.GetUserGroupsByGID(gid)
+func (s *UserGroupService) GetUserGroupsByGID(gid uint) ([]models.UserGroupView, error) {
+	return s.Repos.UserGroup.GetUserGroupsByGID(gid)
 }
 
-func GetFormattedUserGroupsByUID(uid uint) ([]dto.UserGroups, error) {
-	records, err := repositories.GetUserGroupsByUID(uid)
+func (s *UserGroupService) GetFormattedUserGroupsByUID(uid uint) ([]dto.UserGroups, error) {
+	records, err := s.Repos.UserGroup.GetUserGroupsByUID(uid)
 	if err != nil {
 		return nil, err
 	}

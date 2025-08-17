@@ -17,7 +17,14 @@ type AuditQueryParams struct {
 	Offset       int
 }
 
-func GetAuditLogs(params AuditQueryParams) ([]models.AuditLog, error) {
+type AuditRepo interface {
+	GetAuditLogs(params AuditQueryParams) ([]models.AuditLog, error)
+	CreateAuditLog(audit *models.AuditLog) error
+}
+
+type DBAuditRepo struct{}
+
+func (r *DBAuditRepo) GetAuditLogs(params AuditQueryParams) ([]models.AuditLog, error) {
 	var logs []models.AuditLog
 	query := db.DB.Model(&models.AuditLog{})
 
@@ -49,6 +56,6 @@ func GetAuditLogs(params AuditQueryParams) ([]models.AuditLog, error) {
 	return logs, err
 }
 
-func CreateAuditLog(audit *models.AuditLog) error {
+func (r *DBAuditRepo) CreateAuditLog(audit *models.AuditLog) error {
 	return db.DB.Create(audit).Error
 }

@@ -8,6 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/linskybing/platform-go/config"
+	"github.com/linskybing/platform-go/repositories"
 	"github.com/linskybing/platform-go/types"
 	"github.com/linskybing/platform-go/utils"
 )
@@ -18,8 +19,8 @@ func Init() {
 	jwtKey = []byte(config.JwtSecret)
 }
 
-func GenerateToken(userID uint, username string, expireDuration time.Duration) (string, bool, error) {
-	isAdmin, err := utils.IsSuperAdmin(userID)
+func GenerateToken(userID uint, username string, expireDuration time.Duration, repos repositories.ViewRepo) (string, bool, error) {
+	isAdmin, err := utils.IsSuperAdmin(userID, repos)
 	if err != nil {
 		return "", false, err
 	}
