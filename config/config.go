@@ -20,7 +20,8 @@ var (
 	DbName                  string
 	ServerPort              string
 	Issuer                  string
-	GroupAdminRoles         = []string{"admin", "manager"}
+	GroupAdminRoles         = []string{"admin"}
+	GroupUpdateRoles        = []string{"admin", "manager"}
 	MinioEndpoint           string
 	MinioAccessKey          string
 	MinioSecretKey          string

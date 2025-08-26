@@ -49,6 +49,45 @@ var (
 	DynamicClient *dynamic.DynamicClient
 )
 
+func InitTestCluster() {
+	kubeconfig := os.Getenv("KUBECONFIG")
+	if kubeconfig == "" {
+		log.Fatal("KUBECONFIG is not set, cannot initialize test cluster")
+	}
+
+	var err error
+	Config, err = clientcmd.BuildConfigFromFlags("", kubeconfig)
+	if err != nil {
+		log.Fatalf("failed to load kubeconfig: %v", err)
+	}
+
+	Clientset, err = kubernetes.NewForConfig(Config)
+	if err != nil {
+		log.Fatalf("failed to create clientset: %v", err)
+	}
+
+	server := Config.Host
+	if !strings.Contains(server, "127.0.0.1") && !strings.Contains(server, "localhost") {
+		log.Fatalf("unsafe cluster detected: %s, abort test", server)
+	}
+
+	Dc, err = discovery.NewDiscoveryClientForConfig(Config)
+	if err != nil {
+		log.Fatalf("failed to create discovery client: %v", err)
+	}
+
+	Resources, err = restmapper.GetAPIGroupResources(Dc)
+	if err != nil {
+		log.Fatalf("failed to get API group resources: %v", err)
+	}
+	Mapper = restmapper.NewDiscoveryRESTMapper(Resources)
+
+	DynamicClient, err = dynamic.NewForConfig(Config)
+	if err != nil {
+		log.Fatalf("failed to create dynamic client: %v", err)
+	}
+}
+
 // Init 載入 kubeconfig，初始化 Clientset
 func Init() {
 	var err error

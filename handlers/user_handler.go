@@ -7,9 +7,11 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/linskybing/platform-go/dto"
+	"github.com/linskybing/platform-go/models"
 	"github.com/linskybing/platform-go/response"
 	"github.com/linskybing/platform-go/services"
 	"github.com/linskybing/platform-go/utils"
+	"gorm.io/gorm"
 )
 
 type UserHandler struct {
@@ -100,6 +102,10 @@ func (h *UserHandler) Login(c *gin.Context) {
 func (h *UserHandler) GetUsers(c *gin.Context) {
 	users, err := h.svc.ListUsers()
 	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			c.JSON(http.StatusOK, []models.UserWithSuperAdmin{})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, response.ErrorResponse{Error: err.Error()})
 		return
 	}

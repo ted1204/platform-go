@@ -24,7 +24,7 @@ func NewUserGroupHandler(svc *services.UserGroupService) *UserGroupHandler {
 // @Produce json
 // @Param u_id query uint true "User ID"
 // @Param g_id query uint true "Group ID"
-// @Success 200 {object} response.SuccessResponse{data=models.UserGroup}
+// @Success 200 {object} response.SuccessResponse{data=models.UserGroupView}
 // @Failure 400 {object} response.ErrorResponse
 // @Failure 404 {object} response.ErrorResponse
 // @Router /user-group [get]
@@ -65,7 +65,7 @@ func (h *UserGroupHandler) GetUserGroup(c *gin.Context) {
 // @Tags user_group
 // @Produce json
 // @Param g_id query uint true "Group ID"
-// @Success 200 {object} response.SuccessResponse{data=[]models.UserGroup}
+// @Success 200 {object} response.SuccessResponse{data=[]models.GroupUsers}
 // @Failure 400 {object} response.ErrorResponse
 // @Failure 500 {object} response.ErrorResponse
 // @Router /user-group/by-group [get]
@@ -210,15 +210,29 @@ func (h *UserGroupHandler) UpdateUserGroup(c *gin.Context) {
 // @Failure 500 {object} response.ErrorResponse
 // @Router /user-group [delete]
 func (h *UserGroupHandler) DeleteUserGroup(c *gin.Context) {
-	var input dto.UserGroupDeleteDTO
-	if err := c.ShouldBind(&input); err != nil {
-		c.JSON(http.StatusBadRequest, response.ErrorResponse{Error: err.Error()})
+	uidStr := c.Query("u_id")
+	gidStr := c.Query("g_id")
+
+	if uidStr == "" || gidStr == "" {
+		c.JSON(http.StatusBadRequest, response.ErrorResponse{Error: "Missing u_id or g_id"})
 		return
 	}
-	err := h.svc.DeleteUserGroup(c, input.UID, input.GID)
+
+	uid64, err := strconv.ParseUint(uidStr, 10, 64)
 	if err != nil {
+		c.JSON(http.StatusBadRequest, response.ErrorResponse{Error: "Invalid u_id"})
+		return
+	}
+	gid64, err := strconv.ParseUint(gidStr, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, response.ErrorResponse{Error: "Invalid g_id"})
+		return
+	}
+
+	if err := h.svc.DeleteUserGroup(c, uint(uid64), uint(gid64)); err != nil {
 		c.JSON(http.StatusInternalServerError, response.ErrorResponse{Error: err.Error()})
 		return
 	}
+
 	c.Status(http.StatusNoContent)
 }

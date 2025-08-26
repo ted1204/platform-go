@@ -1,8 +1,4 @@
--- 建立資料庫
-CREATE DATABASE platform;
-\c platform;
-
--- 建立 enum 類型
+-- create enum type
 CREATE TYPE resource_type AS ENUM ('Pod','Service','Deployment','ConfigMap','Ingress');
 CREATE TYPE user_type AS ENUM ('origin','oauth2');
 CREATE TYPE user_status AS ENUM ('online','offline','delete');
@@ -190,10 +186,10 @@ SELECT u.u_id, g.g_id, 'admin'
 FROM users u, group_list g
 WHERE u.username = 'admin' AND g.group_name = 'super';
 
--- 若要使用 pg_cron 清理日誌，可解除註解並確保 extension 已安裝
-CREATE EXTENSION pg_cron;
-SELECT cron.schedule(
-  'clear_audit_logs',
-  '0 3 * * *',
-  $$DELETE FROM audit_logs WHERE created_at < NOW() - INTERVAL '30 days'$$
-);
+-- -- 若要使用 pg_cron 清理日誌，可解除註解並確保 extension 已安裝
+-- CREATE EXTENSION pg_cron;
+-- SELECT cron.schedule(
+--   'clear_audit_logs',
+--   '0 3 * * *',
+--   $$DELETE FROM audit_logs WHERE created_at < NOW() - INTERVAL '30 days'$$
+-- );

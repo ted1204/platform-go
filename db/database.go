@@ -34,3 +34,7 @@ func Init() {
 
 	log.Println("Database connected and migrated")
 }
+
+func InitWithGormDB(gormDB *gorm.DB) {
+	DB = gormDB
+}

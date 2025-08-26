@@ -46,6 +46,28 @@ func HasGroupRole(userID uint, gid uint, roles []string) (bool, error) {
 
 func CheckGroupPermission(UID uint, GID uint, repos repositories.ViewRepo) (bool, error) {
 	// Check if the user is a group manager (admin role in the group)
+	isManager, err := HasGroupRole(UID, GID, config.GroupUpdateRoles)
+	if err != nil {
+		return false, err
+	}
+	if isManager {
+		return true, nil
+	}
+
+	// If not group admin, check if the user is a super admin
+	isSuper, err := repos.IsSuperAdmin(UID)
+	if err != nil {
+		return false, err
+	}
+	if isSuper {
+		return true, nil
+	}
+
+	return false, errors.New("permission denied")
+}
+
+func CheckGroupAdminPermission(UID uint, GID uint, repos repositories.ViewRepo) (bool, error) {
+	// Check if the user is a group manager (admin role in the group)
 	isManager, err := HasGroupRole(UID, GID, config.GroupAdminRoles)
 	if err != nil {
 		return false, err

@@ -26,13 +26,13 @@ func RegisterRoutes(r *gin.Engine) {
 	{
 		userGroup := auth.Group("/user-group")
 		{
-			userGroup.GET("", handlers_instance.UserGroup.GetUserGroup)
+			userGroup.GET("", middleware.AuthorizeAdmin(repos_instance.View), handlers_instance.UserGroup.GetUserGroup)
 			userGroup.GET("/by-group", handlers_instance.UserGroup.GetUserGroupsByGID)
 			userGroup.GET("/by-user", handlers_instance.UserGroup.GetUserGroupsByUID)
 
-			userGroup.POST("", handlers_instance.UserGroup.CreateUserGroup)
-			userGroup.PUT("", handlers_instance.UserGroup.UpdateUserGroup)
-			userGroup.DELETE("", handlers_instance.UserGroup.DeleteUserGroup)
+			userGroup.POST("", middleware.CheckStrictPermissionPayload("Group Admin", dto.UserGroupInputDTO{}, repos_instance.View), handlers_instance.UserGroup.CreateUserGroup)
+			userGroup.PUT("", middleware.CheckStrictPermissionPayload("Group Admin", dto.UserGroupInputDTO{}, repos_instance.View), handlers_instance.UserGroup.UpdateUserGroup)
+			userGroup.DELETE("", middleware.CheckStrictPermissionPayload("Group Admin", dto.UserGroupDeleteDTO{}, repos_instance.View), handlers_instance.UserGroup.DeleteUserGroup)
 		}
 		audit := auth.Group("/audit/logs")
 		{

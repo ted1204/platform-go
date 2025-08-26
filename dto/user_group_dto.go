@@ -10,3 +10,11 @@ type UserGroupDeleteDTO struct {
 	UID uint `form:"u_id" binding:"required"`
 	GID uint `form:"g_id" binding:"required"`
 }
+
+func (d UserGroupInputDTO) GetGID() uint {
+	return d.GID
+}
+
+func (d UserGroupDeleteDTO) GetGID() uint {
+	return d.GID
+}

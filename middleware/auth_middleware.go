@@ -121,6 +121,49 @@ func CheckPermissionPayload(permission string, dtoType any, repos repositories.V
 	}
 }
 
+func CheckStrictPermissionPayload(permission string, dtoType any, repos repositories.ViewRepo) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// Dynamically create a new DTO instance (must implement GIDGetter)
+		dtoValue := reflect.New(reflect.TypeOf(dtoType)).Interface()
+
+		// Bind form data directly (supports x-www-form-urlencoded, multipart/form-data)
+		if err := c.ShouldBind(dtoValue); err != nil {
+			c.JSON(http.StatusBadRequest, response.ErrorResponse{Error: "Invalid input: " + err.Error()})
+			c.Abort()
+			return
+		}
+
+		gidGetter, ok := dtoValue.(dto.GIDGetter)
+		if !ok {
+			c.JSON(http.StatusInternalServerError, response.ErrorResponse{Error: "DTO does not implement GIDGetter"})
+			c.Abort()
+			return
+		}
+
+		gid := gidGetter.GetGID()
+		if gid == 0 {
+			c.JSON(http.StatusBadRequest, response.ErrorResponse{Error: "Group ID cannot be zero"})
+			c.Abort()
+			return
+		}
+		uid, err := utils.GetUserIDFromContext(c)
+		if err != nil {
+			c.JSON(http.StatusUnauthorized, response.ErrorResponse{Error: "Unauthorized"})
+			c.Abort()
+			return
+		}
+
+		permitted, err := utils.CheckGroupAdminPermission(uid, gid, repos)
+		if err != nil || !permitted {
+			c.JSON(http.StatusForbidden, response.ErrorResponse{Error: "Permission denied for this group"})
+			c.Abort()
+			return
+		}
+
+		c.Next()
+	}
+}
+
 func CheckPermissionPayloadByRepo(permission string, dtoType any, repos *repositories.Repos) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// Dynamically create a new DTO instance (must implement GIDGetter)
