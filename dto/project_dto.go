@@ -16,6 +16,9 @@ type UpdateProjectDTO struct {
 
 type GIDGetter interface {
 	GetGID() uint
+}
+
+type GIDByRepoGetter interface {
 	GetGIDByRepo(repos *repositories.Repos) uint
 }
 

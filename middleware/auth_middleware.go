@@ -133,7 +133,7 @@ func CheckPermissionPayloadByRepo(permission string, dtoType any, repos *reposit
 			return
 		}
 
-		gidGetter, ok := dtoValue.(dto.GIDGetter)
+		gidGetter, ok := dtoValue.(dto.GIDByRepoGetter)
 		if !ok {
 			c.JSON(http.StatusInternalServerError, response.ErrorResponse{Error: "DTO does not implement GIDGetter"})
 			c.Abort()
