@@ -126,7 +126,7 @@ func TestGroupUpdateAndDeleteFlow(t *testing.T) {
 	require.Equal(t, "Group deleted", msgResp.Message)
 
 	// 5 Verify group no longer exists
-	resp = doRequest(t, "GET", fmt.Sprintf("/groups/%d", createdGroup.GID), adminToken, nil, http.StatusNotFound)
+	_ = doRequest(t, "GET", fmt.Sprintf("/groups/%d", createdGroup.GID), adminToken, nil, http.StatusNotFound)
 }
 
 func TestGroupUpdateAndDeleteFlowWithForbiddenUser(t *testing.T) {
@@ -143,8 +143,8 @@ func TestGroupUpdateAndDeleteFlowWithForbiddenUser(t *testing.T) {
 	groupForm.Add("group_name", "test_team")
 	groupForm.Add("description", "original description")
 
-	resp := doRequest(t, "POST", "/groups", userToken, groupForm, http.StatusForbidden)
-	resp = doRequest(t, "POST", "/groups", adminToken, groupForm, http.StatusCreated)
+	_ = doRequest(t, "POST", "/groups", userToken, groupForm, http.StatusForbidden)
+	resp := doRequest(t, "POST", "/groups", adminToken, groupForm, http.StatusCreated)
 
 	var createdGroup models.Group
 	err := json.Unmarshal(resp.Body.Bytes(), &createdGroup)
@@ -281,13 +281,13 @@ func TestUpdateUserGroup(t *testing.T) {
 	require.Equal(t, "manager", updatedUserGroup.Role)
 
 	updateForm.Set("role", "admin")
-	resp = doRequest(t, "PUT", "/user-group", userToken, updateForm, http.StatusForbidden)
-	resp = doRequest(t, "PUT", "/user-group", adminToken, updateForm, http.StatusOK)
+	_ = doRequest(t, "PUT", "/user-group", userToken, updateForm, http.StatusForbidden)
+	_ = doRequest(t, "PUT", "/user-group", adminToken, updateForm, http.StatusOK)
 	removeUserFromGroup(t, userToken, group.GID, 2, http.StatusNoContent)
 
 	updateForm.Set("u_id", "9999")
-	resp = doRequest(t, "PUT", "/user-group", userToken, updateForm, http.StatusForbidden)
-	resp = doRequest(t, "PUT", "/user-group", adminToken, updateForm, http.StatusNotFound)
+	_ = doRequest(t, "PUT", "/user-group", userToken, updateForm, http.StatusForbidden)
+	_ = doRequest(t, "PUT", "/user-group", adminToken, updateForm, http.StatusNotFound)
 }
 
 func TestUserSelfRemovalFromGroup(t *testing.T) {

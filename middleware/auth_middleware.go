@@ -211,7 +211,7 @@ func CheckPermissionByParam(getDataByID func(uint) (uint, error), repos reposito
 	return func(c *gin.Context) {
 		id, err := utils.ParseIDParam(c, "id")
 		if err != nil {
-			c.JSON(http.StatusBadRequest, response.ErrorResponse{Error: "invalid group id"})
+			c.JSON(http.StatusBadRequest, response.ErrorResponse{Error: "invalid id"})
 			return
 		}
 

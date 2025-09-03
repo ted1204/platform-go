@@ -18,6 +18,7 @@ import (
 	"github.com/linskybing/platform-go/config"
 	"github.com/linskybing/platform-go/db"
 	"github.com/linskybing/platform-go/internal/testutils"
+	"github.com/linskybing/platform-go/k8sclient"
 	"github.com/linskybing/platform-go/routes"
 	"github.com/stretchr/testify/require"
 	"gorm.io/driver/postgres"
@@ -28,8 +29,7 @@ import (
 )
 
 var (
-	cleanup func()
-	router  *gin.Engine
+	router *gin.Engine
 )
 
 func TestMain(m *testing.M) {
@@ -64,6 +64,10 @@ func TestMain(m *testing.M) {
 	registerUserForTests("alice", "123456")
 	registerUserForTests("test1", "123456")
 	registerUserForTests("test2", "123456")
+	registerUserForTests("bob", "123456")
+	// k8s
+	config.InitK8sConfig()
+	k8sclient.InitTestCluster()
 
 	code := m.Run()
 	os.Exit(code)

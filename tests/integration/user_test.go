@@ -50,7 +50,6 @@ func TestGetUsers(t *testing.T) {
 }
 
 func TestListUsersPaging(t *testing.T) {
-	registerUser(t, "bob", "123456")
 	token := loginUser(t, "bob", "123456")
 
 	resp := doRequest(t, "GET", "/users/paging?page=1&limit=10", token, nil, http.StatusOK)
