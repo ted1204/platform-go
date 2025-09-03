@@ -51,13 +51,18 @@ jobs:
 
       - name: Create Kind cluster
         run: |
-          kind create cluster --name test-cluster
-          mkdir -p $HOME/.kube
-          kind get kubeconfig --name test-cluster > $HOME/.kube/config
-          chmod 600 $HOME/.kube/config
+          CLUSTER_NAME=test-cluster
+          kind create cluster --name $CLUSTER_NAME
+          mkdir -p $GITHUB_WORKSPACE/.kube
+          kind get kubeconfig --name $CLUSTER_NAME > $GITHUB_WORKSPACE/.kube/config
+        # Export kubeconfig path to GitHub environment for subsequent steps
+      - name: Export KUBECONFIG
+        run: echo "KUBECONFIG=$GITHUB_WORKSPACE/.kube/config" >> $GITHUB_ENV
 
       - name: Verify Kubernetes cluster
         run: kubectl cluster-info
+        env:
+          KUBECONFIG: ${{ env.KUBECONFIG }}
 
       - name: Wait for Postgres
         run: |
@@ -74,4 +79,4 @@ jobs:
         run: go test ./tests/integration/... -v
         env:
           DATABASE_URL: ${{ env.DATABASE_URL }}
-          KUBECONFIG: $HOME/.kube/config
+          KUBECONFIG: ${{ env.KUBECONFIG }}
