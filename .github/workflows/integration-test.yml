@@ -1,0 +1,82 @@
+name: Integration Tests
+
+on:
+  push:
+    branches: [ "main" ]
+    paths:
+      - 'services/**'
+      - 'routes/**'
+      - 'repositories/**'
+      - 'handlers/**'
+  workflow_dispatch:
+
+jobs:
+  integration-test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: platform
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      - name: Install kubectl
+        run: |
+          curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+          chmod +x kubectl
+          sudo mv kubectl /usr/local/bin/
+
+      - name: Set up Kind
+        uses: helm/kind-action@v1.10.0
+        with:
+          version: v0.24.0
+
+      - name: Create Kind cluster
+        run: |
+          CLUSTER_NAME=test-cluster
+          kind create cluster --name $CLUSTER_NAME
+          mkdir -p $GITHUB_WORKSPACE/.kube
+          kind get kubeconfig --name $CLUSTER_NAME > $GITHUB_WORKSPACE/.kube/config
+        # Export kubeconfig path to GitHub environment for subsequent steps
+      - name: Export KUBECONFIG
+        run: echo "KUBECONFIG=$GITHUB_WORKSPACE/.kube/config" >> $GITHUB_ENV
+
+      - name: Verify Kubernetes cluster
+        run: kubectl cluster-info
+        env:
+          KUBECONFIG: ${{ env.KUBECONFIG }}
+
+      - name: Wait for Postgres
+        run: |
+          echo "Waiting for Postgres to be ready..."
+          for i in {1..10}; do
+            pg_isready -h localhost -p 5432 -U test && break
+            sleep 3
+          done
+
+      - name: Set DATABASE_URL
+        run: echo "DATABASE_URL=postgres://test:test@localhost:5432/platform?sslmode=disable" >> $GITHUB_ENV
+
+      - name: Run integration tests
+        run: go test ./tests/integration/... -v
+        env:
+          DATABASE_URL: ${{ env.DATABASE_URL }}
+          KUBECONFIG: ${{ env.KUBECONFIG }}

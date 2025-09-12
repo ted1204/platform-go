@@ -40,13 +40,13 @@ func RegisterRoutes(r *gin.Engine) {
 		}
 		instances := auth.Group("/instance")
 		{
-			instances.POST("/:id", handlers_instance.ConfigFile.CreateInstanceHandler)
-			instances.DELETE("/:id", handlers_instance.ConfigFile.DestructInstanceHandler)
+			instances.POST("/:id", middleware.CheckPermissionByParam(repos_instance.View.GetGroupIDByConfigFileID, repos_instance.View), handlers_instance.ConfigFile.CreateInstanceHandler)
+			instances.DELETE("/:id", middleware.CheckPermissionByParam(repos_instance.View.GetGroupIDByConfigFileID, repos_instance.View), handlers_instance.ConfigFile.DestructInstanceHandler)
 		}
 		configFiles := auth.Group("/config-files")
 		{
-			configFiles.GET("", handlers_instance.ConfigFile.ListConfigFilesHandler)
-			configFiles.GET("/:id", handlers_instance.ConfigFile.GetConfigFileHandler)
+			configFiles.GET("", middleware.AuthorizeAdmin(repos_instance.View), handlers_instance.ConfigFile.ListConfigFilesHandler)
+			configFiles.GET("/:id", middleware.CheckPermissionByParam(repos_instance.View.GetGroupIDByConfigFileID, repos_instance.View), handlers_instance.ConfigFile.GetConfigFileHandler)
 			configFiles.GET("/:id/resources", middleware.CheckPermissionByParam(repos_instance.View.GetGroupIDByConfigFileID, repos_instance.View), handlers_instance.Resource.ListResourcesByConfigFileID)
 			configFiles.POST("", middleware.CheckPermissionPayloadByRepo("create_config_file", dto.CreateConfigFileInput{}, repos_instance), handlers_instance.ConfigFile.CreateConfigFileHandler)
 			configFiles.PUT("/:id", middleware.CheckPermissionByParam(repos_instance.View.GetGroupIDByConfigFileID, repos_instance.View), handlers_instance.ConfigFile.UpdateConfigFileHandler)
@@ -82,11 +82,11 @@ func RegisterRoutes(r *gin.Engine) {
 		}
 		pvc := auth.Group("/pvc")
 		{
-			pvc.GET("/:namespace/:name", handlers.GetPVCHandler)
-			pvc.GET("/list/:namespace", handlers.ListPVCsHandler)
-			pvc.POST("", handlers.CreatePVCHandler)
-			pvc.PUT("/expand", handlers.ExpandPVCHandler)
-			pvc.DELETE("/:namespace/:name", handlers.DeletePVCHandler)
+			pvc.GET("/:namespace/:name", middleware.AuthorizeAdmin(repos_instance.View), handlers.GetPVCHandler)
+			pvc.GET("/list/:namespace", middleware.AuthorizeAdmin(repos_instance.View), handlers.ListPVCsHandler)
+			pvc.POST("", middleware.AuthorizeAdmin(repos_instance.View), handlers.CreatePVCHandler)
+			pvc.PUT("/expand", middleware.AuthorizeAdmin(repos_instance.View), handlers.ExpandPVCHandler)
+			pvc.DELETE("/:namespace/:name", middleware.AuthorizeAdmin(repos_instance.View), handlers.DeletePVCHandler)
 		}
 
 	}

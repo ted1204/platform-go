@@ -88,7 +88,6 @@ func InitTestCluster() {
 	}
 }
 
-// Init 載入 kubeconfig，初始化 Clientset
 func Init() {
 	var err error
 	if configPath := os.Getenv("KUBECONFIG"); configPath != "" {

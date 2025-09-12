@@ -77,7 +77,7 @@ func TestProjectFlow_UserCreatesProject(t *testing.T) {
 	otherUserToken := loginUser(t, "bob", "123456")
 	require.NotEmpty(t, otherUserToken)
 
-	resp = doRequest(t, "PUT", urlPath, otherUserToken, updateForm, http.StatusForbidden)
+	_ = doRequest(t, "PUT", urlPath, otherUserToken, updateForm, http.StatusForbidden)
 
 	// Get projects by user
 	resp = doRequest(t, "GET", "/projects/by-user", userToken, nil, http.StatusOK)
@@ -87,12 +87,73 @@ func TestProjectFlow_UserCreatesProject(t *testing.T) {
 	require.Contains(t, userProjects, fmt.Sprintf("%d", group.GID))
 
 	// Another user attempts to delete project -> 403 Forbidden
-	resp = doRequest(t, "DELETE", urlPath, otherUserToken, nil, http.StatusForbidden)
+	_ = doRequest(t, "DELETE", urlPath, otherUserToken, nil, http.StatusForbidden)
 
 	// User deletes project
 	resp = doRequest(t, "DELETE", urlPath, userToken, nil, http.StatusOK)
 	var deleteResp response.MessageResponse
 	err = json.Unmarshal(resp.Body.Bytes(), &deleteResp)
 	require.NoError(t, err)
+	require.Equal(t, "project deleted", deleteResp.Message)
+}
+
+func TestProjectFlow_UpdateAndDeleteProject(t *testing.T) {
+	adminToken := loginUser(t, "admin", "1234")
+	require.NotEmpty(t, adminToken)
+
+	userToken := loginUser(t, "alice", "123456")
+	require.NotEmpty(t, userToken)
+
+	otherUserToken := loginUser(t, "bob", "123456")
+	require.NotEmpty(t, otherUserToken)
+
+	groupForm := url.Values{
+		"group_name":  {"project_team"},
+		"description": {"group for project test"},
+	}
+	resp := doRequest(t, "POST", "/groups", adminToken, groupForm, http.StatusCreated)
+
+	var group models.Group
+	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &group))
+
+	userGroupForm := url.Values{
+		"u_id": {"2"},
+		"g_id": {fmt.Sprintf("%d", group.GID)},
+		"role": {"manager"},
+	}
+	resp = doRequest(t, "POST", "/user-group", adminToken, userGroupForm, http.StatusCreated)
+
+	var userGroup models.UserGroup
+	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &userGroup))
+	require.Equal(t, "manager", userGroup.Role)
+
+	projectForm := url.Values{
+		"project_name": {"user_project"},
+		"description":  {"created by user"},
+		"g_id":         {fmt.Sprintf("%d", group.GID)},
+	}
+	resp = doRequest(t, "POST", "/projects", userToken, projectForm, http.StatusCreated)
+
+	var project models.Project
+	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &project))
+	require.Equal(t, "user_project", project.ProjectName)
+
+	projectURL := fmt.Sprintf("/projects/%d", project.PID)
+
+	updateForm := url.Values{"description": {"updated by user"}}
+	resp = doRequest(t, "PUT", projectURL, userToken, updateForm, http.StatusOK)
+
+	var updatedProject models.Project
+	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &updatedProject))
+	require.Equal(t, "updated by user", updatedProject.Description)
+
+	_ = doRequest(t, "PUT", projectURL, otherUserToken, updateForm, http.StatusForbidden)
+
+	_ = doRequest(t, "DELETE", projectURL, otherUserToken, nil, http.StatusForbidden)
+
+	resp = doRequest(t, "DELETE", projectURL, userToken, nil, http.StatusOK)
+
+	var deleteResp response.MessageResponse
+	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &deleteResp))
 	require.Equal(t, "project deleted", deleteResp.Message)
 }
