@@ -1,4 +1,8 @@
--- create enum type
+-- 建立資料庫
+CREATE DATABASE platform;
+\c platform;
+
+-- 建立 enum 類型
 CREATE TYPE resource_type AS ENUM ('Pod','Service','Deployment','ConfigMap','Ingress');
 CREATE TYPE user_type AS ENUM ('origin','oauth2');
 CREATE TYPE user_status AS ENUM ('online','offline','delete');
@@ -27,6 +31,7 @@ CREATE TABLE projects (
 CREATE TABLE config_files (
   cf_id SERIAL PRIMARY KEY,
   filename VARCHAR(200) NOT NULL,
+  content VARCHAR(5000),
   project_id INTEGER NOT NULL REFERENCES projects(p_id) ON DELETE CASCADE ON UPDATE CASCADE,
   create_at TIMESTAMP DEFAULT NOW()
 );
