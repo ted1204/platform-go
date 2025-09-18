@@ -62,24 +62,23 @@ func JWTAuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var tokenStr string
 
-		if cookie, err := c.Cookie("token"); err == nil {
-			tokenStr = cookie
-		} else {
-			authHeader := c.GetHeader("Authorization")
-			if authHeader == "" {
-				c.JSON(http.StatusUnauthorized, gin.H{"error": "Authorization required (header or cookie)"})
-				c.Abort()
-				return
-			}
-
+		authHeader := c.GetHeader("Authorization")
+		if authHeader != "" {
 			parts := strings.SplitN(authHeader, " ", 2)
 			if len(parts) != 2 || parts[0] != "Bearer" {
 				c.JSON(http.StatusUnauthorized, gin.H{"error": "Authorization header format must be Bearer {token}"})
 				c.Abort()
 				return
 			}
-
 			tokenStr = parts[1]
+		} else {
+			if cookie, err := c.Cookie("token"); err == nil {
+				tokenStr = cookie
+			} else {
+				c.JSON(http.StatusUnauthorized, gin.H{"error": "Authorization required (header or cookie)"})
+				c.Abort()
+				return
+			}
 		}
 
 		claims, err := ParseToken(tokenStr)
