@@ -10,6 +10,8 @@ type Services struct {
 	Resource   *ResourceService
 	UserGroup  *UserGroupService
 	User       *UserService
+	K8s        *K8sService
+	Ticket     *TicketService
 }
 
 func New(repos *repositories.Repos) *Services {
@@ -21,5 +23,7 @@ func New(repos *repositories.Repos) *Services {
 		Resource:   NewResourceService(repos),
 		UserGroup:  NewUserGroupService(repos),
 		User:       NewUserService(repos),
+		K8s:        NewK8sService(repos),
+		Ticket:     NewTicketService(repos.Ticket),
 	}
 }

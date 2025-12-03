@@ -13,13 +13,16 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
@@ -180,7 +183,7 @@ func (h *WebSocketIO) Close() {
 
 // readLoop 是核心邏輯，在背景持續讀取 WebSocket 訊息並分發
 func (h *WebSocketIO) readLoop() {
-	// ✅ **核心修正：由 readLoop 自己負責清理**
+	// 核心修正：由 readLoop 自己負責清理
 	// 當這個 goroutine 退出時（無論是正常結束還是出錯），
 	// defer 會確保 Close() 被呼叫，安全地關閉 channels。
 	defer h.Close()
@@ -228,7 +231,7 @@ func ExecToPodViaWebSocket(
 	// Create our handler which implements all necessary interfaces.
 	wsIO := NewWebSocketIO(conn)
 
-	// ✅ **CORE FIX: Remove the defer from the main goroutine.**
+	// CORE FIX: Remove the defer from the main goroutine.
 	// The responsibility of closing the channels is now solely
 	// within the readLoop goroutine. This eliminates the race condition.
 	// defer wsIO.Close()  <-- REMOVE THIS LINE
@@ -293,7 +296,7 @@ func WatchNamespaceResources(ctx context.Context, writeChan chan<- []byte, names
 }
 
 // WatchNamespaceResources 監控單一命名空間的資源變化
-func WatchUserNamespaceResources(namespace string, writeChan chan<- []byte) {
+func WatchUserNamespaceResources(ctx context.Context, namespace string, writeChan chan<- []byte) {
 	gvrs := []schema.GroupVersionResource{
 		{Group: "", Version: "v1", Resource: "pods"},
 		{Group: "", Version: "v1", Resource: "services"},
@@ -308,7 +311,7 @@ func WatchUserNamespaceResources(namespace string, writeChan chan<- []byte) {
 		wg.Add(1)
 		go func(gvr schema.GroupVersionResource) {
 			defer wg.Done()
-			watchUserAndSend(namespace, gvr, writeChan)
+			watchUserAndSend(ctx, namespace, gvr, writeChan)
 		}(gvr)
 	}
 
@@ -316,7 +319,7 @@ func WatchUserNamespaceResources(namespace string, writeChan chan<- []byte) {
 	wg.Wait()
 }
 
-func watchUserAndSend(namespace string, gvr schema.GroupVersionResource, writeChan chan<- []byte) {
+func watchUserAndSend(ctx context.Context, namespace string, gvr schema.GroupVersionResource, writeChan chan<- []byte) {
 	sendObject := func(eventType string, obj *unstructured.Unstructured) error {
 		data := buildDataMap(eventType, obj)
 		msg, err := json.Marshal(data)
@@ -327,13 +330,15 @@ func watchUserAndSend(namespace string, gvr schema.GroupVersionResource, writeCh
 		select {
 		case writeChan <- msg:
 			return nil
+		case <-ctx.Done():
+			return ctx.Err()
 		case <-time.After(time.Second * 10): // 增加超時避免死鎖
 			return fmt.Errorf("timeout sending message")
 		}
 	}
 
 	// initial list of resources
-	list, err := DynamicClient.Resource(gvr).Namespace(namespace).List(context.TODO(), metav1.ListOptions{})
+	list, err := DynamicClient.Resource(gvr).Namespace(namespace).List(ctx, metav1.ListOptions{})
 	if err == nil {
 		for _, item := range list.Items {
 			if err := sendObject("ADDED", &item); err != nil {
@@ -347,21 +352,35 @@ func watchUserAndSend(namespace string, gvr schema.GroupVersionResource, writeCh
 	// watch loop
 	for {
 		select {
+		case <-ctx.Done():
+			return
 		case <-time.After(time.Second * 30): // 進行每 30 秒重連
 			// 每30秒進行一次 watch 重新連接
-			watcher, err := DynamicClient.Resource(gvr).Namespace(namespace).Watch(context.TODO(), metav1.ListOptions{})
+			watcher, err := DynamicClient.Resource(gvr).Namespace(namespace).Watch(ctx, metav1.ListOptions{})
 			if err != nil {
 				fmt.Printf("Failed to start watch: %v\n", err)
 				continue
 			}
 
-			for event := range watcher.ResultChan() {
-				if obj, ok := event.Object.(*unstructured.Unstructured); ok {
-					if err := sendObject(string(event.Type), obj); err != nil {
-						fmt.Printf("Failed to send watch event: %v\n", err)
+			// Handle watcher channel
+			func() {
+				defer watcher.Stop()
+				for {
+					select {
+					case <-ctx.Done():
+						return
+					case event, ok := <-watcher.ResultChan():
+						if !ok {
+							return
+						}
+						if obj, ok := event.Object.(*unstructured.Unstructured); ok {
+							if err := sendObject(string(event.Type), obj); err != nil {
+								fmt.Printf("Failed to send watch event: %v\n", err)
+							}
+						}
 					}
 				}
-			}
+			}()
 		}
 	}
 }
@@ -622,4 +641,192 @@ func GetFilteredNamespaces(filter string) ([]v1.Namespace, error) {
 	}
 
 	return filteredNamespaces, nil
+}
+
+type JobSpec struct {
+	Name        string
+	Namespace   string
+	Image       string
+	Command     []string
+	Parallelism int32
+	Completions int32
+	Volumes     []VolumeSpec
+}
+
+type VolumeSpec struct {
+	Name      string
+	PVCName   string
+	MountPath string
+}
+
+// CreateJob creates a Kubernetes Job with flexible configuration
+func CreateJob(ctx context.Context, spec JobSpec) error {
+	var volumes []corev1.Volume
+	var volumeMounts []corev1.VolumeMount
+
+	for _, v := range spec.Volumes {
+		volumes = append(volumes, corev1.Volume{
+			Name: v.Name,
+			VolumeSource: corev1.VolumeSource{
+				PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+					ClaimName: v.PVCName,
+				},
+			},
+		})
+		volumeMounts = append(volumeMounts, corev1.VolumeMount{
+			Name:      v.Name,
+			MountPath: v.MountPath,
+		})
+	}
+
+	job := &batchv1.Job{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      spec.Name,
+			Namespace: spec.Namespace,
+		},
+		Spec: batchv1.JobSpec{
+			Parallelism: &spec.Parallelism,
+			Completions: &spec.Completions,
+			Template: corev1.PodTemplateSpec{
+				Spec: corev1.PodSpec{
+					RestartPolicy: corev1.RestartPolicyOnFailure,
+					Volumes:       volumes,
+					Containers: []corev1.Container{
+						{
+							Name:         spec.Name,
+							Image:        spec.Image,
+							Command:      spec.Command,
+							VolumeMounts: volumeMounts,
+						},
+					},
+				},
+			},
+		},
+	}
+
+	_, err := Clientset.BatchV1().Jobs(spec.Namespace).Create(ctx, job, metav1.CreateOptions{})
+	return err
+}
+
+// CreateFileBrowserPod creates a pod running filebrowser
+func CreateFileBrowserPod(ctx context.Context, ns, pvcName string) (string, error) {
+	podName := fmt.Sprintf("filebrowser-%s", pvcName)
+	
+	// Check if pod already exists
+	_, err := Clientset.CoreV1().Pods(ns).Get(ctx, podName, metav1.GetOptions{})
+	if err == nil {
+		return podName, nil // Already exists
+	}
+
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      podName,
+			Namespace: ns,
+			Labels: map[string]string{
+				"app": "filebrowser",
+				"pvc": pvcName,
+			},
+		},
+		Spec: corev1.PodSpec{
+			Containers: []corev1.Container{
+				{
+					Name:  "filebrowser",
+					Image: "filebrowser/filebrowser:latest",
+					Args:  []string{"--noauth", "--root", "/srv", "--port", "8080", "--address", "0.0.0.0"},
+					Ports: []corev1.ContainerPort{
+						{ContainerPort: 8080},
+					},
+					VolumeMounts: []corev1.VolumeMount{
+						{
+							Name:      "data",
+							MountPath: "/srv",
+						},
+					},
+				},
+			},
+			Volumes: []corev1.Volume{
+				{
+					Name: "data",
+					VolumeSource: corev1.VolumeSource{
+						PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+							ClaimName: pvcName,
+						},
+					},
+				},
+			},
+		},
+	}
+
+	_, err = Clientset.CoreV1().Pods(ns).Create(ctx, pod, metav1.CreateOptions{})
+	if err != nil {
+		return "", err
+	}
+	return podName, nil
+}
+
+// CreateFileBrowserService creates a service for filebrowser
+func CreateFileBrowserService(ctx context.Context, ns, pvcName string) (string, error) {
+	svcName := fmt.Sprintf("filebrowser-%s-svc", pvcName)
+	
+	// Check if service already exists
+	svc, err := Clientset.CoreV1().Services(ns).Get(ctx, svcName, metav1.GetOptions{})
+	if err == nil {
+		// Return existing NodePort if available
+		if len(svc.Spec.Ports) > 0 {
+			return fmt.Sprintf("%d", svc.Spec.Ports[0].NodePort), nil
+		}
+		return "", nil
+	}
+
+	service := &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      svcName,
+			Namespace: ns,
+		},
+		Spec: corev1.ServiceSpec{
+			Selector: map[string]string{
+				"app": "filebrowser",
+				"pvc": pvcName,
+			},
+			Type: corev1.ServiceTypeNodePort,
+			Ports: []corev1.ServicePort{
+				{
+					Port:       80,
+					TargetPort: intstr.FromInt(8080),
+					Protocol:   corev1.ProtocolTCP,
+				},
+			},
+		},
+	}
+
+
+	createdSvc, err := Clientset.CoreV1().Services(ns).Create(ctx, service, metav1.CreateOptions{})
+	if err != nil {
+		return "", err
+	}
+
+	if len(createdSvc.Spec.Ports) > 0 {
+		return fmt.Sprintf("%d", createdSvc.Spec.Ports[0].NodePort), nil
+	}
+	return "", nil
+}
+
+// DeleteFileBrowserResources deletes the pod and service
+func DeleteFileBrowserResources(ctx context.Context, ns, pvcName string) error {
+	podName := fmt.Sprintf("filebrowser-%s", pvcName)
+	svcName := fmt.Sprintf("filebrowser-%s-svc", pvcName)
+
+	// Delete Service
+	err := Clientset.CoreV1().Services(ns).Delete(ctx, svcName, metav1.DeleteOptions{})
+	if err != nil && !apierrors.IsNotFound(err) {
+		return err
+	}
+
+	// Delete Pod
+	err = Clientset.CoreV1().Pods(ns).Delete(ctx, podName, metav1.DeleteOptions{})
+	if err != nil && !apierrors.IsNotFound(err) {
+		return err
+	}
+
+	return nil
 }

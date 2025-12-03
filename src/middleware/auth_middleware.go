@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"errors"
 	"net/http"
 	"reflect"
 	"strconv"
@@ -13,7 +14,72 @@ import (
 	"github.com/linskybing/platform-go/src/utils"
 )
 
-func AuthorizeUserOrAdmin(repos repositories.ViewRepo) gin.HandlerFunc {
+type Auth struct {
+	repos *repositories.Repos
+}
+
+func NewAuth(repos *repositories.Repos) *Auth {
+	return &Auth{repos: repos}
+}
+
+// --- Extractors ---
+
+type GIDExtractor func(c *gin.Context, repos *repositories.Repos) (uint, error)
+
+func FromPayload(dtoType any) GIDExtractor {
+	return func(c *gin.Context, repos *repositories.Repos) (uint, error) {
+		// Dynamically create a new DTO instance
+		dtoValue := reflect.New(reflect.TypeOf(dtoType)).Interface()
+
+		// Bind form data directly
+		if err := c.ShouldBind(dtoValue); err != nil {
+			return 0, err
+		}
+
+		if getter, ok := dtoValue.(dto.GIDGetter); ok {
+			return getter.GetGID(), nil
+		}
+		if getter, ok := dtoValue.(dto.GIDByRepoGetter); ok {
+			return getter.GetGIDByRepo(repos), nil
+		}
+		return 0, errors.New("DTO does not implement GIDGetter or GIDByRepoGetter")
+	}
+}
+
+func FromIDParam(lookup func(uint) (uint, error)) GIDExtractor {
+	return func(c *gin.Context, repos *repositories.Repos) (uint, error) {
+		id, err := utils.ParseIDParam(c, "id")
+		if err != nil {
+			return 0, err
+		}
+		return lookup(id)
+	}
+}
+
+// --- Middleware Methods ---
+
+func (a *Auth) Admin() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		claims, ok := c.MustGet("claims").(*types.Claims)
+		if !ok {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Invalid token claims"})
+			return
+		}
+
+		isAdmin, err := utils.IsSuperAdmin(claims.UserID, a.repos.View)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+			return
+		}
+		if !isAdmin {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "admin only"})
+			return
+		}
+		c.Next()
+	}
+}
+
+func (a *Auth) UserOrAdmin() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		claims, ok := c.MustGet("claims").(*types.Claims)
 		if !ok {
@@ -40,7 +106,7 @@ func AuthorizeUserOrAdmin(repos repositories.ViewRepo) gin.HandlerFunc {
 			return
 		}
 
-		isAdmin, err := utils.IsSuperAdmin(currentUID, repos)
+		isAdmin, err := utils.IsSuperAdmin(currentUID, a.repos.View)
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Internal server error"})
 			return
@@ -54,55 +120,21 @@ func AuthorizeUserOrAdmin(repos repositories.ViewRepo) gin.HandlerFunc {
 	}
 }
 
-func AuthorizeAdmin(repos repositories.ViewRepo) gin.HandlerFunc {
+func (a *Auth) GroupMember(extractor GIDExtractor) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		claims, ok := c.MustGet("claims").(*types.Claims)
-		if !ok {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Invalid token claims"})
-			return
-		}
-
-		uid := claims.UserID
-
-		isAdmin, err := utils.IsSuperAdmin(uid, repos)
+		gid, err := extractor(c, a.repos)
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
-			return
-		}
-		if !isAdmin {
-			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "admin only"})
-			return
-		}
-
-		c.Next()
-	}
-}
-
-func CheckPermissionPayload(permission string, dtoType any, repos repositories.ViewRepo) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		// Dynamically create a new DTO instance (must implement GIDGetter)
-		dtoValue := reflect.New(reflect.TypeOf(dtoType)).Interface()
-
-		// Bind form data directly (supports x-www-form-urlencoded, multipart/form-data)
-		if err := c.ShouldBind(dtoValue); err != nil {
 			c.JSON(http.StatusBadRequest, response.ErrorResponse{Error: "Invalid input: " + err.Error()})
 			c.Abort()
 			return
 		}
 
-		gidGetter, ok := dtoValue.(dto.GIDGetter)
-		if !ok {
-			c.JSON(http.StatusInternalServerError, response.ErrorResponse{Error: "DTO does not implement GIDGetter"})
-			c.Abort()
-			return
-		}
-
-		gid := gidGetter.GetGID()
 		if gid == 0 {
 			c.JSON(http.StatusBadRequest, response.ErrorResponse{Error: "Group ID cannot be zero"})
 			c.Abort()
 			return
 		}
+
 		uid, err := utils.GetUserIDFromContext(c)
 		if err != nil {
 			c.JSON(http.StatusUnauthorized, response.ErrorResponse{Error: "Unauthorized"})
@@ -110,7 +142,7 @@ func CheckPermissionPayload(permission string, dtoType any, repos repositories.V
 			return
 		}
 
-		permitted, err := utils.CheckGroupPermission(uid, gid, repos)
+		permitted, err := utils.CheckGroupPermission(uid, gid, a.repos.View)
 		if err != nil || !permitted {
 			c.JSON(http.StatusForbidden, response.ErrorResponse{Error: "Permission denied for this group"})
 			c.Abort()
@@ -121,31 +153,21 @@ func CheckPermissionPayload(permission string, dtoType any, repos repositories.V
 	}
 }
 
-func CheckStrictPermissionPayload(permission string, dtoType any, repos repositories.ViewRepo) gin.HandlerFunc {
+func (a *Auth) GroupAdmin(extractor GIDExtractor) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// Dynamically create a new DTO instance (must implement GIDGetter)
-		dtoValue := reflect.New(reflect.TypeOf(dtoType)).Interface()
-
-		// Bind form data directly (supports x-www-form-urlencoded, multipart/form-data)
-		if err := c.ShouldBind(dtoValue); err != nil {
+		gid, err := extractor(c, a.repos)
+		if err != nil {
 			c.JSON(http.StatusBadRequest, response.ErrorResponse{Error: "Invalid input: " + err.Error()})
 			c.Abort()
 			return
 		}
 
-		gidGetter, ok := dtoValue.(dto.GIDGetter)
-		if !ok {
-			c.JSON(http.StatusInternalServerError, response.ErrorResponse{Error: "DTO does not implement GIDGetter"})
-			c.Abort()
-			return
-		}
-
-		gid := gidGetter.GetGID()
 		if gid == 0 {
 			c.JSON(http.StatusBadRequest, response.ErrorResponse{Error: "Group ID cannot be zero"})
 			c.Abort()
 			return
 		}
+
 		uid, err := utils.GetUserIDFromContext(c)
 		if err != nil {
 			c.JSON(http.StatusUnauthorized, response.ErrorResponse{Error: "Unauthorized"})
@@ -153,86 +175,7 @@ func CheckStrictPermissionPayload(permission string, dtoType any, repos reposito
 			return
 		}
 
-		permitted, err := utils.CheckGroupAdminPermission(uid, gid, repos)
-		if err != nil || !permitted {
-			c.JSON(http.StatusForbidden, response.ErrorResponse{Error: "Permission denied for this group"})
-			c.Abort()
-			return
-		}
-
-		c.Next()
-	}
-}
-
-func CheckPermissionPayloadByRepo(permission string, dtoType any, repos *repositories.Repos) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		// Dynamically create a new DTO instance (must implement GIDGetter)
-		dtoValue := reflect.New(reflect.TypeOf(dtoType)).Interface()
-
-		// Bind form data directly (supports x-www-form-urlencoded, multipart/form-data)
-		if err := c.ShouldBind(dtoValue); err != nil {
-			c.JSON(http.StatusBadRequest, response.ErrorResponse{Error: "Invalid input: " + err.Error()})
-			c.Abort()
-			return
-		}
-
-		gidGetter, ok := dtoValue.(dto.GIDByRepoGetter)
-		if !ok {
-			c.JSON(http.StatusInternalServerError, response.ErrorResponse{Error: "DTO does not implement GIDGetter"})
-			c.Abort()
-			return
-		}
-
-		gid := gidGetter.GetGIDByRepo(repos)
-		if gid == 0 {
-			c.JSON(http.StatusBadRequest, response.ErrorResponse{Error: "Group ID cannot be zero"})
-			c.Abort()
-			return
-		}
-		uid, err := utils.GetUserIDFromContext(c)
-		if err != nil {
-			c.JSON(http.StatusUnauthorized, response.ErrorResponse{Error: "Unauthorized"})
-			c.Abort()
-			return
-		}
-
-		permitted, err := utils.CheckGroupPermission(uid, gid, repos.View)
-		if err != nil || !permitted {
-			c.JSON(http.StatusForbidden, response.ErrorResponse{Error: "Permission denied for this group"})
-			c.Abort()
-			return
-		}
-
-		c.Next()
-	}
-}
-
-func CheckPermissionByParam(getDataByID func(uint) (uint, error), repos repositories.ViewRepo) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		id, err := utils.ParseIDParam(c, "id")
-		if err != nil {
-			c.JSON(http.StatusBadRequest, response.ErrorResponse{Error: "invalid id"})
-			return
-		}
-
-		// Lookup GID from the given resource ID using the passed function
-		gid, err := getDataByID(id)
-		if err != nil {
-			c.JSON(http.StatusNotFound, response.ErrorResponse{Error: "Resource not found"})
-			c.Abort()
-			return
-		}
-
-		// Get current user ID
-		uid, err := utils.GetUserIDFromContext(c)
-		if err != nil {
-			c.JSON(http.StatusUnauthorized, response.ErrorResponse{Error: "Unauthorized"})
-			c.Abort()
-			return
-		}
-
-		// Check permission using the resolved GID
-		permitted, err := utils.CheckGroupPermission(uid, gid, repos)
+		permitted, err := utils.CheckGroupAdminPermission(uid, gid, a.repos.View)
 		if err != nil || !permitted {
 			c.JSON(http.StatusForbidden, response.ErrorResponse{Error: "Permission denied for this group"})
 			c.Abort()

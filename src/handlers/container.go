@@ -12,6 +12,8 @@ type Handlers struct {
 	Resource   *ResourceHandler
 	UserGroup  *UserGroupHandler
 	User       *UserHandler
+	K8s        *K8sHandler
+	Ticket     *TicketHandler
 }
 
 func New(svc *services.Services) *Handlers {
@@ -23,5 +25,7 @@ func New(svc *services.Services) *Handlers {
 		Resource:   NewResourceHandler(svc.Resource),
 		UserGroup:  NewUserGroupHandler(svc.UserGroup),
 		User:       NewUserHandler(svc.User),
+		K8s:        NewK8sHandler(svc.K8s),
+		Ticket:     NewTicketHandler(svc.Ticket),
 	}
 }

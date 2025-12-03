@@ -29,7 +29,7 @@ var (
 	MinioBucket             string
 	Scheme                  = runtime.NewScheme()
 	DefaultStorageName      = "project"
-	DefaultStorageClassName = "nfs-sc"
+	DefaultStorageClassName = "longhorn"
 	DefaultStorageSize      = "3Gi"
 )
 

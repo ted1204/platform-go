@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -66,6 +67,7 @@ func JWTAuthMiddleware() gin.HandlerFunc {
 		if authHeader != "" {
 			parts := strings.SplitN(authHeader, " ", 2)
 			if len(parts) != 2 || parts[0] != "Bearer" {
+				fmt.Println("JWT Auth: Invalid header format")
 				c.JSON(http.StatusUnauthorized, gin.H{"error": "Authorization header format must be Bearer {token}"})
 				c.Abort()
 				return
@@ -75,6 +77,7 @@ func JWTAuthMiddleware() gin.HandlerFunc {
 			if cookie, err := c.Cookie("token"); err == nil {
 				tokenStr = cookie
 			} else {
+				fmt.Println("JWT Auth: No cookie or header found")
 				c.JSON(http.StatusUnauthorized, gin.H{"error": "Authorization required (header or cookie)"})
 				c.Abort()
 				return
@@ -83,6 +86,7 @@ func JWTAuthMiddleware() gin.HandlerFunc {
 
 		claims, err := ParseToken(tokenStr)
 		if err != nil {
+			fmt.Printf("JWT Auth: Token parsing failed: %v\n", err)
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token: " + err.Error()})
 			c.Abort()
 			return

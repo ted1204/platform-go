@@ -142,7 +142,7 @@ func WatchUserNamespaceHandler(c *gin.Context) {
 
 	// 為每個 namespace 啟動監控
 	for _, ns := range namespaces {
-		go k8sclient.WatchUserNamespaceResources(ns, writeChan)
+		go k8sclient.WatchUserNamespaceResources(ctx, ns, writeChan)
 	}
 
 	// 監聽 client 關閉
