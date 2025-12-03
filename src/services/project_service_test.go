@@ -142,3 +142,55 @@ func TestProjectServiceCRUD(t *testing.T) {
 		}
 	})
 }
+
+func TestProjectServiceRead(t *testing.T) {
+	svc, mockProject, mockView, _, _ := setupProjectMocks(t)
+
+	t.Run("GetProjects success", func(t *testing.T) {
+		projects := []models.Project{{PID: 1, ProjectName: "p1"}}
+		mockProject.EXPECT().ListProjects().Return(projects, nil)
+
+		res, err := svc.ListProjects()
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(res) != 1 {
+			t.Fatalf("expected 1 project, got %d", len(res))
+		}
+	})
+
+	t.Run("GetProjectsByUser success", func(t *testing.T) {
+		projects := []models.ProjectUserView{{PID: 1, ProjectName: "p1"}}
+		mockView.EXPECT().ListProjectsByUserID(uint(1)).Return(projects, nil)
+
+		res, err := svc.GetProjectsByUser(1)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(res) != 1 {
+			t.Fatalf("expected 1 project, got %d", len(res))
+		}
+	})
+
+	t.Run("GetProjectByID success", func(t *testing.T) {
+		project := models.Project{PID: 1, ProjectName: "p1"}
+		mockProject.EXPECT().GetProjectByID(uint(1)).Return(project, nil)
+
+		res, err := svc.GetProject(1)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if res.ProjectName != "p1" {
+			t.Fatalf("expected p1, got %s", res.ProjectName)
+		}
+	})
+
+	t.Run("GetProjectByID not found", func(t *testing.T) {
+		mockProject.EXPECT().GetProjectByID(uint(99)).Return(models.Project{}, errors.New("not found"))
+
+		_, err := svc.GetProject(99)
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+	})
+}

@@ -86,3 +86,33 @@ func TestResourceCRUD(t *testing.T) {
 		t.Fatalf("DeleteResource failed: %v", err)
 	}
 }
+
+func TestResourceList(t *testing.T) {
+	svc, mockResource, _, _ := setupResourceMocks(t)
+
+	t.Run("ListResourcesByConfigFileID", func(t *testing.T) {
+		resources := []models.Resource{{RID: 1, Name: "r1"}}
+		mockResource.EXPECT().ListResourcesByConfigFileID(uint(10)).Return(resources, nil)
+
+		res, err := svc.ListResourcesByConfigFileID(10)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(res) != 1 {
+			t.Fatalf("expected 1 resource, got %d", len(res))
+		}
+	})
+
+	t.Run("ListResourcesByProjectID", func(t *testing.T) {
+		resources := []models.Resource{{RID: 1, Name: "r1"}}
+		mockResource.EXPECT().ListResourcesByProjectID(uint(20)).Return(resources, nil)
+
+		res, err := svc.ListResourcesByProjectID(20)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(res) != 1 {
+			t.Fatalf("expected 1 resource, got %d", len(res))
+		}
+	})
+}

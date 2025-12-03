@@ -1,7 +1,3 @@
--- 建立資料庫
-CREATE DATABASE platform;
-\c platform;
-
 CREATE TYPE resource_type AS ENUM ('Pod','Service','Deployment','ConfigMap','Ingress');
 CREATE TYPE user_type AS ENUM ('origin','oauth2');
 CREATE TYPE user_status AS ENUM ('online','offline','delete');
@@ -189,7 +185,7 @@ JOIN group_list g ON p.g_id = g.g_id
 JOIN user_group ug ON ug.g_id = g.g_id
 JOIN users u ON u.u_id = ug.u_id;
 
--- 初始化資料
+-- Initialize Data
 INSERT INTO group_list (group_name, description)
 VALUES ('super', 'Super administrator group')
 ON CONFLICT DO NOTHING;
@@ -203,7 +199,7 @@ SELECT u.u_id, g.g_id, 'admin'
 FROM users u, group_list g
 WHERE u.username = 'admin' AND g.group_name = 'super';
 
--- -- 若要使用 pg_cron 清理日誌，可解除註解並確保 extension 已安裝
+-- -- Uncomment to use pg_cron for log cleanup, ensure extension is installed
 -- CREATE EXTENSION pg_cron;
 -- SELECT cron.schedule(
 --   'clear_audit_logs',

@@ -16,18 +16,18 @@ import (
 
 func CreateNs() {
 	nsName := "my-namespace"
-	// Step 1: 檢查 namespace 是否已存在
+	// Step 1: Check if namespace already exists
 	_, err := k8sclient.Clientset.CoreV1().Namespaces().Get(context.TODO(), nsName, metav1.GetOptions{})
 	if err == nil {
-		fmt.Printf("Namespace '%s' 已存在，跳過創建\n", nsName)
+		fmt.Printf("Namespace '%s' already exists, skipping creation\n", nsName)
 		return
 	}
 
 	if !errors.IsNotFound(err) {
-		log.Fatalf("查詢 namespace 錯誤: %v", err)
+		log.Fatalf("Error querying namespace: %v", err)
 	}
 
-	// Step 2: 不存在，創建 namespace
+	// Step 2: Does not exist, create namespace
 	ns := &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: nsName,
@@ -36,10 +36,10 @@ func CreateNs() {
 
 	_, err = k8sclient.Clientset.CoreV1().Namespaces().Create(context.TODO(), ns, metav1.CreateOptions{})
 	if err != nil {
-		log.Fatalf("創建 namespace 失敗: %v", err)
+		log.Fatalf("Failed to create namespace: %v", err)
 	}
 
-	fmt.Printf("成功創建 Namespace: %s\n", nsName)
+	fmt.Printf("Successfully created Namespace: %s\n", nsName)
 }
 
 func main() {

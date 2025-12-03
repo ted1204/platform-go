@@ -4,7 +4,9 @@ on:
   push:
     branches: [ "main" ]
     paths:
-      - 'src/services/**'
+      - 'src/**'
+      - 'go.mod'
+      - 'go.sum'
   workflow_dispatch:
 jobs:
   unit-test:

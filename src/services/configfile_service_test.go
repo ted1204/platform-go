@@ -104,7 +104,7 @@ func TestCreateConfigFile_NoYAMLDocuments(t *testing.T) {
 func TestUpdateConfigFile_Success(t *testing.T) {
 	svc, mockCF, mockRes, mockAudit, mockView, c := setupMocks(t)
 
-	// Mock 原本的 ConfigFile
+	// Mock original ConfigFile
 	existingCF := &models.ConfigFile{
 		CFID:      1,
 		ProjectID: 1,
@@ -240,4 +240,47 @@ func TestDeleteConfigFileInstance_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+}
+
+func TestConfigFileRead(t *testing.T) {
+	svc, mockCF, _, _, _, _ := setupMocks(t)
+
+	t.Run("ListConfigFiles", func(t *testing.T) {
+		cfs := []models.ConfigFile{{CFID: 1, Filename: "f1"}}
+		mockCF.EXPECT().ListConfigFiles().Return(cfs, nil)
+
+		res, err := svc.ListConfigFiles()
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(res) != 1 {
+			t.Fatalf("expected 1 config file, got %d", len(res))
+		}
+	})
+
+	t.Run("GetConfigFile", func(t *testing.T) {
+		cf := &models.ConfigFile{CFID: 1, Filename: "f1"}
+		mockCF.EXPECT().GetConfigFileByID(uint(1)).Return(cf, nil)
+
+		res, err := svc.GetConfigFile(1)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if res.Filename != "f1" {
+			t.Fatalf("expected f1, got %s", res.Filename)
+		}
+	})
+
+	t.Run("ListConfigFilesByProjectID", func(t *testing.T) {
+		cfs := []models.ConfigFile{{CFID: 1, Filename: "f1"}}
+		mockCF.EXPECT().GetConfigFilesByProjectID(uint(10)).Return(cfs, nil)
+
+		res, err := svc.ListConfigFilesByProjectID(10)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(res) != 1 {
+			t.Fatalf("expected 1 config file, got %d", len(res))
+		}
+	})
 }

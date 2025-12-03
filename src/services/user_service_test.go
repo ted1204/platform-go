@@ -173,5 +173,87 @@ func TestRemoveUser_Fail(t *testing.T) {
 	assert.EqualError(t, err, "delete fail")
 }
 
+// --------------------- ListUsers ---------------------
+func TestListUsers_Success(t *testing.T) {
+	svc, mockUser := setupUserServiceMocks(t)
+
+	users := []models.UserWithSuperAdmin{
+		{UID: 1, Username: "alice"},
+		{UID: 2, Username: "bob"},
+	}
+	mockUser.EXPECT().GetAllUsers().Return(users, nil)
+
+	result, err := svc.ListUsers()
+	assert.NoError(t, err)
+	assert.Len(t, result, 2)
+}
+
+// --------------------- ListUserByPaging ---------------------
+func TestListUserByPaging_Success(t *testing.T) {
+	svc, mockUser := setupUserServiceMocks(t)
+
+	users := []models.UserWithSuperAdmin{
+		{UID: 1, Username: "alice"},
+	}
+	mockUser.EXPECT().ListUsersPaging(1, 10).Return(users, nil)
+
+	result, err := svc.ListUserByPaging(1, 10)
+	assert.NoError(t, err)
+	assert.Len(t, result, 1)
+}
+
+// --------------------- FindUserByID ---------------------
+func TestFindUserByID_Success(t *testing.T) {
+	svc, mockUser := setupUserServiceMocks(t)
+
+	user := models.UserWithSuperAdmin{UID: 1, Username: "alice"}
+	mockUser.EXPECT().GetUserByID(uint(1)).Return(user, nil)
+
+	result, err := svc.FindUserByID(1)
+	assert.NoError(t, err)
+	assert.Equal(t, "alice", result.Username)
+}
+
+func TestFindUserByID_NotFound(t *testing.T) {
+	svc, mockUser := setupUserServiceMocks(t)
+
+	mockUser.EXPECT().GetUserByID(uint(999)).Return(models.UserWithSuperAdmin{}, errors.New("not found"))
+
+	_, err := svc.FindUserByID(999)
+	assert.Error(t, err)
+}
+
+// --------------------- UpdateUser (More cases) ---------------------
+func TestUpdateUser_SuccessNoPasswordChange(t *testing.T) {
+	svc, mockUser := setupUserServiceMocks(t)
+
+	oldEmail := "old@test.com"
+	existing := models.User{UID: 1, Username: "alice", Email: &oldEmail}
+	mockUser.EXPECT().GetUserRawByID(uint(1)).Return(existing, nil)
+
+	// Expect SaveUser with updated email
+	mockUser.EXPECT().SaveUser(gomock.Any()).DoAndReturn(func(u *models.User) error {
+		assert.Equal(t, "new@test.com", *u.Email)
+		return nil
+	})
+
+	input := dto.UpdateUserInput{Email: ptrString("new@test.com")}
+	updated, err := svc.UpdateUser(1, input)
+	assert.NoError(t, err)
+	assert.Equal(t, "new@test.com", *updated.Email)
+}
+
+func TestUpdateUser_FailSave(t *testing.T) {
+	svc, mockUser := setupUserServiceMocks(t)
+
+	existing := models.User{UID: 1}
+	mockUser.EXPECT().GetUserRawByID(uint(1)).Return(existing, nil)
+	mockUser.EXPECT().SaveUser(gomock.Any()).Return(errors.New("db error"))
+
+	input := dto.UpdateUserInput{Email: ptrString("new@test.com")}
+	_, err := svc.UpdateUser(1, input)
+	assert.Error(t, err)
+}
+
 // --------------------- Helper ---------------------
 func ptrString(s string) *string { return &s }

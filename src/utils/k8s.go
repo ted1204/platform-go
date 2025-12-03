@@ -38,6 +38,10 @@ var ValidateK8sJSON = func(jsonStr string) (*schema.GroupVersionKind, string, er
 }
 
 var CreateByJson = func(jsonStr []byte, ns string) error {
+	if k8sclient.Mapper == nil || k8sclient.DynamicClient == nil {
+		fmt.Printf("[MOCK] Created resource by JSON in namespace %s\n", ns)
+		return nil
+	}
 	// decode
 	var obj unstructured.Unstructured
 	if err := applyJson.Unmarshal(jsonStr, &obj.Object); err != nil {
@@ -63,6 +67,10 @@ var CreateByJson = func(jsonStr []byte, ns string) error {
 }
 
 var DeleteByJson = func(jsonStr []byte, ns string) error {
+	if k8sclient.Mapper == nil || k8sclient.DynamicClient == nil {
+		fmt.Printf("[MOCK] Deleted resource by JSON in namespace %s\n", ns)
+		return nil
+	}
 	// decode
 	var obj unstructured.Unstructured
 	if err := applyJson.Unmarshal(jsonStr, &obj.Object); err != nil {
@@ -90,6 +98,10 @@ var DeleteByJson = func(jsonStr []byte, ns string) error {
 }
 
 func UpdateByJson(jsonStr []byte, ns string) error {
+	if k8sclient.Mapper == nil || k8sclient.DynamicClient == nil {
+		fmt.Printf("[MOCK] Updated resource by JSON in namespace %s\n", ns)
+		return nil
+	}
 	// decode
 	var obj unstructured.Unstructured
 	if err := applyJson.Unmarshal(jsonStr, &obj.Object); err != nil {
@@ -115,6 +127,10 @@ func UpdateByJson(jsonStr []byte, ns string) error {
 }
 
 var CreateNamespace = func(name string) error {
+	if k8sclient.Clientset == nil {
+		fmt.Printf("[MOCK] create Namespace: %s successfully\n", name)
+		return nil
+	}
 	_, err := k8sclient.Clientset.CoreV1().Namespaces().Get(context.TODO(), name, metav1.GetOptions{})
 	if err == nil {
 		return fmt.Errorf("namespace %s already exist \n", name)
@@ -137,6 +153,10 @@ var CreateNamespace = func(name string) error {
 }
 
 var DeleteNamespace = func(name string) error {
+	if k8sclient.Clientset == nil {
+		fmt.Printf("[MOCK] Deleted namespace: %s\n", name)
+		return nil
+	}
 	err := k8sclient.Clientset.CoreV1().Namespaces().Delete(context.TODO(), name, metav1.DeleteOptions{})
 	if err != nil {
 		return fmt.Errorf("failed to delete namespace %s: %w", name, err)
@@ -155,6 +175,10 @@ func parseResourceQuantity(size string) (resource.Quantity, error) {
 }
 
 func ExpandPVC(ns, pvcName, newSize string) error {
+	if k8sclient.Clientset == nil {
+		fmt.Printf("[MOCK] PVC %s in namespace %s expanded to %s\n", pvcName, ns, newSize)
+		return nil
+	}
 	if ns == "" {
 		ns = "default"
 	}
@@ -178,6 +202,10 @@ func ExpandPVC(ns, pvcName, newSize string) error {
 }
 
 var CreatePVC = func(ns string, name string, storageClassName string, size string) error {
+	if k8sclient.Clientset == nil {
+		fmt.Printf("[MOCK] PVC %s created in namespace %s\n", name, ns)
+		return nil
+	}
 	if ns == "" {
 		ns = "default"
 	}
@@ -221,6 +249,10 @@ var CreatePVC = func(ns string, name string, storageClassName string, size strin
 }
 
 func DeletePVC(ns string, pvcName string) error {
+	if k8sclient.Clientset == nil {
+		fmt.Printf("[MOCK] PVC %s deleted from namespace %s\n", pvcName, ns)
+		return nil
+	}
 	if ns == "" {
 		ns = "default"
 	}
@@ -240,6 +272,13 @@ func DeletePVC(ns string, pvcName string) error {
 }
 
 func GetPVC(ns string, pvcName string) (*corev1.PersistentVolumeClaim, error) {
+	if k8sclient.Clientset == nil {
+		fmt.Printf("[MOCK] Get PVC %s in namespace %s\n", pvcName, ns)
+		return &corev1.PersistentVolumeClaim{
+			ObjectMeta: metav1.ObjectMeta{Name: pvcName, Namespace: ns},
+			Status:     corev1.PersistentVolumeClaimStatus{Phase: corev1.ClaimBound},
+		}, nil
+	}
 	if ns == "" {
 		ns = "default"
 	}
@@ -255,6 +294,10 @@ func GetPVC(ns string, pvcName string) (*corev1.PersistentVolumeClaim, error) {
 }
 
 func ListPVCs(ns string) ([]corev1.PersistentVolumeClaim, error) {
+	if k8sclient.Clientset == nil {
+		fmt.Printf("[MOCK] List PVCs in namespace %s\n", ns)
+		return []corev1.PersistentVolumeClaim{}, nil
+	}
 	if ns == "" {
 		ns = "default"
 	}

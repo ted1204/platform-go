@@ -49,6 +49,6 @@ package main
 // 	if err != nil {
 // 		log.Fatalf("failed to create resource: %v", err)
 // 	}
-// 	fmt.Printf("✅ Created %s/%s\n", result.GetKind(), result.GetName())
-// 	//fmt.Printf("✅ Updated %s/%s\n", result.GetKind(), result.GetName())
+// 	fmt.Printf("Created %s/%s\n", result.GetKind(), result.GetName())
+// 	//fmt.Printf("Updated %s/%s\n", result.GetKind(), result.GetName())
 // }

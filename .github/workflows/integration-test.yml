@@ -4,10 +4,9 @@ on:
   push:
     branches: [ "main" ]
     paths:
-      - 'src/services/**'
-      - 'src/routes/**'
-      - 'src/repositories/**'
-      - 'src/handlers/**'
+      - 'src/**'
+      - 'go.mod'
+      - 'go.sum'
   workflow_dispatch:
 
 jobs:
@@ -55,14 +54,12 @@ jobs:
           kind create cluster --name $CLUSTER_NAME
           mkdir -p $GITHUB_WORKSPACE/.kube
           kind get kubeconfig --name $CLUSTER_NAME > $GITHUB_WORKSPACE/.kube/config
-        # Export kubeconfig path to GitHub environment for subsequent steps
+          
       - name: Export KUBECONFIG
         run: echo "KUBECONFIG=$GITHUB_WORKSPACE/.kube/config" >> $GITHUB_ENV
 
       - name: Verify Kubernetes cluster
         run: kubectl cluster-info
-        env:
-          KUBECONFIG: ${{ env.KUBECONFIG }}
 
       - name: Wait for Postgres
         run: |
@@ -72,11 +69,8 @@ jobs:
             sleep 3
           done
 
-      - name: Set DATABASE_URL
-        run: echo "DATABASE_URL=postgres://test:test@localhost:5432/platform?sslmode=disable" >> $GITHUB_ENV
-
       - name: Run integration tests
         run: go test ./src/tests/integration/... -v
         env:
-          DATABASE_URL: ${{ env.DATABASE_URL }}
+          TEST_DB_DSN: "postgres://test:test@localhost:5432/platform?sslmode=disable"
           KUBECONFIG: ${{ env.KUBECONFIG }}

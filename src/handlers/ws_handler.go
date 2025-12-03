@@ -91,14 +91,14 @@ func WatchNamespaceHandler(c *gin.Context) {
 }
 
 func WatchUserNamespaceHandler(c *gin.Context) {
-	// 從 cookie 取得 username
+	// Get username from cookie
 	username, err := utils.GetUserNameFromContext(c)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, response.ErrorResponse{Error: "missing username cookie"})
 		return
 	}
 
-	// 升級 websocket
+	// Upgrade to websocket
 	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, response.ErrorResponse{Error: "websocket upgrade failed: " + err.Error()})
@@ -110,7 +110,7 @@ func WatchUserNamespaceHandler(c *gin.Context) {
 
 	writeChan := make(chan []byte, 100)
 
-	// 監聽 websocket 寫入
+	// Listen for websocket writes
 	go func() {
 		defer conn.Close()
 		for {
@@ -126,7 +126,7 @@ func WatchUserNamespaceHandler(c *gin.Context) {
 		}
 	}()
 
-	// 取得符合 username 的 namespace 列表
+	// Get list of namespaces matching username
 	namespacesList, err := k8sclient.GetFilteredNamespaces(username)
 	if err != nil {
 		fmt.Printf("Failed to list user namespaces: %v\n", err)
@@ -134,18 +134,18 @@ func WatchUserNamespaceHandler(c *gin.Context) {
 		return
 	}
 
-	// 只取 namespace 名稱
+	// Get only namespace names
 	var namespaces []string
 	for _, ns := range namespacesList {
 		namespaces = append(namespaces, ns.Name)
 	}
 
-	// 為每個 namespace 啟動監控
+	// Start monitoring for each namespace
 	for _, ns := range namespaces {
 		go k8sclient.WatchUserNamespaceResources(ctx, ns, writeChan)
 	}
 
-	// 監聽 client 關閉
+	// Listen for client close
 	for {
 		if _, _, err := conn.ReadMessage(); err != nil {
 			cancel()
