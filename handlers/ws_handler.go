@@ -36,7 +36,7 @@ func ExecWebSocketHandler(c *gin.Context) {
 		c.Query("namespace"),
 		c.Query("pod"),
 		c.Query("container"),
-		[]string{c.DefaultQuery("command", "/bin/sh")},
+		[]string{c.DefaultQuery("command", "/bin/bash")},
 		c.DefaultQuery("tty", "true") == "true",
 	)
 	if err != nil {
