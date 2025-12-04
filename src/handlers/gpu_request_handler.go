@@ -5,7 +5,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/linskybing/platform-go/src/dto"
-	"github.com/linskybing/platform-go/src/models"
 	"github.com/linskybing/platform-go/src/response"
 	"github.com/linskybing/platform-go/src/services"
 	"github.com/linskybing/platform-go/src/types"
