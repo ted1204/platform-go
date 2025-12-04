@@ -20,6 +20,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -648,18 +649,23 @@ func GetFilteredNamespaces(filter string) ([]v1.Namespace, error) {
 }
 
 type JobSpec struct {
-	Name        string
-	Namespace   string
-	Image       string
-	Command     []string
-	Parallelism int32
-	Completions int32
-	Volumes     []VolumeSpec
+	Name              string
+	Namespace         string
+	Image             string
+	Command           []string
+	PriorityClassName string
+	Parallelism       int32
+	Completions       int32
+	Volumes           []VolumeSpec
+	GPUCount          int
+	GPUType           string
+	EnvVars           map[string]string
 }
 
 type VolumeSpec struct {
 	Name      string
 	PVCName   string
+	HostPath  string
 	MountPath string
 }
 
@@ -669,18 +675,62 @@ func CreateJob(ctx context.Context, spec JobSpec) error {
 	var volumeMounts []corev1.VolumeMount
 
 	for _, v := range spec.Volumes {
-		volumes = append(volumes, corev1.Volume{
-			Name: v.Name,
-			VolumeSource: corev1.VolumeSource{
+		var volumeSource corev1.VolumeSource
+		if v.PVCName != "" {
+			volumeSource = corev1.VolumeSource{
 				PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
 					ClaimName: v.PVCName,
 				},
-			},
+			}
+		} else if v.HostPath != "" {
+			volumeSource = corev1.VolumeSource{
+				HostPath: &corev1.HostPathVolumeSource{
+					Path: v.HostPath,
+				},
+			}
+		}
+
+		volumes = append(volumes, corev1.Volume{
+			Name:         v.Name,
+			VolumeSource: volumeSource,
 		})
 		volumeMounts = append(volumeMounts, corev1.VolumeMount{
 			Name:      v.Name,
 			MountPath: v.MountPath,
 		})
+	}
+
+	var env []corev1.EnvVar
+	for k, v := range spec.EnvVars {
+		env = append(env, corev1.EnvVar{
+			Name:  k,
+			Value: v,
+		})
+	}
+
+	container := corev1.Container{
+		Name:         spec.Name,
+		Image:        spec.Image,
+		Command:      spec.Command,
+		VolumeMounts: volumeMounts,
+		Env:          env,
+	}
+
+	if spec.GPUCount > 0 {
+		qty := resource.MustParse(fmt.Sprintf("%d", spec.GPUCount))
+		resourceName := corev1.ResourceName("nvidia.com/gpu")
+		if spec.GPUType == "shared" {
+			resourceName = corev1.ResourceName("nvidia.com/gpu.shared")
+		}
+
+		container.Resources = corev1.ResourceRequirements{
+			Limits: corev1.ResourceList{
+				resourceName: qty,
+			},
+			Requests: corev1.ResourceList{
+				resourceName: qty,
+			},
+		}
 	}
 
 	job := &batchv1.Job{
@@ -693,15 +743,11 @@ func CreateJob(ctx context.Context, spec JobSpec) error {
 			Completions: &spec.Completions,
 			Template: corev1.PodTemplateSpec{
 				Spec: corev1.PodSpec{
-					RestartPolicy: corev1.RestartPolicyOnFailure,
-					Volumes:       volumes,
+					RestartPolicy:     corev1.RestartPolicyOnFailure,
+					PriorityClassName: spec.PriorityClassName,
+					Volumes:           volumes,
 					Containers: []corev1.Container{
-						{
-							Name:         spec.Name,
-							Image:        spec.Image,
-							Command:      spec.Command,
-							VolumeMounts: volumeMounts,
-						},
+						container,
 					},
 				},
 			},

@@ -65,7 +65,14 @@ func RegisterRoutes(r *gin.Engine) {
 			projects.POST("", authMiddleware.GroupMember(middleware.FromPayload(dto.CreateProjectDTO{})), handlers_instance.Project.CreateProject)
 			projects.PUT("/:id", authMiddleware.GroupMember(middleware.FromIDParam(repos_instance.Project.GetGroupIDByProjectID)), handlers_instance.Project.UpdateProject)
 			projects.DELETE("/:id", authMiddleware.GroupMember(middleware.FromIDParam(repos_instance.Project.GetGroupIDByProjectID)), handlers_instance.Project.DeleteProject)
+			projects.POST("/:id/gpu-requests", handlers_instance.GPURequest.CreateRequest)
+			projects.GET("/:id/gpu-requests", handlers_instance.GPURequest.ListRequestsByProject)
 
+		}
+		admin := auth.Group("/admin")
+		{
+			admin.GET("/gpu-requests", handlers_instance.GPURequest.ListPendingRequests)
+			admin.PUT("/gpu-requests/:id/status", handlers_instance.GPURequest.ProcessRequest)
 		}
 		users := auth.Group("/users")
 		{

@@ -40,6 +40,7 @@ func Init() {
 		&models.AuditLog{},
 		&models.Ticket{},
 		&models.Job{},
+		&models.GPURequest{},
 	); err != nil {
 		log.Fatal("Failed to auto migrate:", err)
 	}

@@ -14,6 +14,7 @@ type Handlers struct {
 	User       *UserHandler
 	K8s        *K8sHandler
 	Ticket     *TicketHandler
+	GPURequest *GPURequestHandler
 }
 
 func New(svc *services.Services) *Handlers {
@@ -27,5 +28,6 @@ func New(svc *services.Services) *Handlers {
 		User:       NewUserHandler(svc.User),
 		K8s:        NewK8sHandler(svc.K8s),
 		Ticket:     NewTicketHandler(svc.Ticket),
+		GPURequest: NewGPURequestHandler(svc.GPURequest, svc.Project),
 	}
 }

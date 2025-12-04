@@ -11,6 +11,7 @@ type Job struct {
 	Namespace   string    `gorm:"size:100;not null"`
 	Image       string    `gorm:"size:255;not null"`
 	Status      string    `gorm:"size:50;default:'Pending'"`
+	Priority    string    `gorm:"size:20;default:'low'"` // 'high' or 'low'
 	K8sJobName  string    `gorm:"size:100;not null"`
 	CreatedAt   time.Time `gorm:"column:created_at;autoCreateTime"`
 	UpdatedAt   time.Time `gorm:"column:updated_at;autoUpdateTime"`

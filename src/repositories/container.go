@@ -10,6 +10,7 @@ type Repos struct {
 	View       ViewRepo
 	Audit      AuditRepo
 	Ticket     *TicketRepository
+	GPURequest GPURequestRepo
 }
 
 func New() *Repos {
@@ -23,5 +24,6 @@ func New() *Repos {
 		View:       &DBViewRepo{},
 		Audit:      &DBAuditRepo{},
 		Ticket:     NewTicketRepository(),
+		GPURequest: &DBGPURequestRepo{},
 	}
 }

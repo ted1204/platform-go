@@ -5,6 +5,9 @@ type CreateJobDTO struct {
 	Namespace   string   `json:"namespace" binding:"required"`
 	Image       string   `json:"image" binding:"required"`
 	Command     []string `json:"command" binding:"required"`
+	Priority    string   `json:"priority"` // "high" or "low"
+	GPUCount    int      `json:"gpu_count"`
+	GPUType     string   `json:"gpu_type"` // "dedicated" or "shared"
 	Parallelism int32    `json:"parallelism"`
 	Completions int32    `json:"completions"`
 	Volumes     []Volume `json:"volumes"`

@@ -8,6 +8,7 @@ import (
 	"github.com/linskybing/platform-go/src/dto"
 	"github.com/linskybing/platform-go/src/response"
 	"github.com/linskybing/platform-go/src/services"
+	"github.com/linskybing/platform-go/src/types"
 	"github.com/linskybing/platform-go/src/utils"
 )
 
@@ -107,6 +108,14 @@ func (h *ProjectHandler) CreateProject(c *gin.Context) {
 		return
 	}
 
+	// Only super admin can set GPU quota and access
+	claimsVal, _ := c.Get("claims")
+	claims := claimsVal.(*types.Claims)
+	if !claims.IsAdmin {
+		input.GPUQuota = nil
+		input.GPUAccess = nil
+	}
+
 	project, err := h.svc.CreateProject(c, input)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, response.ErrorResponse{Error: err.Error()})
@@ -141,6 +150,14 @@ func (h *ProjectHandler) UpdateProject(c *gin.Context) {
 	if err := c.ShouldBind(&input); err != nil {
 		c.JSON(http.StatusBadRequest, response.ErrorResponse{Error: err.Error()})
 		return
+	}
+
+	// Only super admin can set GPU quota and access
+	claimsVal, _ := c.Get("claims")
+	claims := claimsVal.(*types.Claims)
+	if !claims.IsAdmin {
+		input.GPUQuota = nil
+		input.GPUAccess = nil
 	}
 
 	project, err := h.svc.UpdateProject(c, id, input)

@@ -75,6 +75,18 @@ func (s *ProjectService) CreateProject(c *gin.Context, input dto.CreateProjectDT
 	if input.Description != nil {
 		project.Description = *input.Description
 	}
+	if input.GPUQuota != nil {
+		project.GPUQuota = *input.GPUQuota
+	}
+	if input.GPUAccess != nil {
+		project.GPUAccess = *input.GPUAccess
+	}
+	if input.MPSLimit != nil {
+		project.MPSLimit = *input.MPSLimit
+	}
+	if input.MPSMemory != nil {
+		project.MPSMemory = *input.MPSMemory
+	}
 	err := s.Repos.Project.CreateProject(&project)
 	if err == nil {
 		utils.LogAuditWithConsole(c, "create", "project", fmt.Sprintf("p_id=%d", project.PID), nil, project, "", s.Repos.Audit)
@@ -103,6 +115,18 @@ func (s *ProjectService) UpdateProject(c *gin.Context, id uint, input dto.Update
 	}
 	if input.GID != nil {
 		project.GID = *input.GID
+	}
+	if input.GPUQuota != nil {
+		project.GPUQuota = *input.GPUQuota
+	}
+	if input.GPUAccess != nil {
+		project.GPUAccess = *input.GPUAccess
+	}
+	if input.MPSLimit != nil {
+		project.MPSLimit = *input.MPSLimit
+	}
+	if input.MPSMemory != nil {
+		project.MPSMemory = *input.MPSMemory
 	}
 
 	err = s.Repos.Project.UpdateProject(&project)

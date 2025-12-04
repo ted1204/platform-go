@@ -2,6 +2,9 @@ package services
 
 import (
 	"context"
+	"fmt"
+	"strconv"
+	"strings"
 
 	"github.com/linskybing/platform-go/src/db"
 	"github.com/linskybing/platform-go/src/dto"
@@ -10,6 +13,7 @@ import (
 	"github.com/linskybing/platform-go/src/repositories"
 	"github.com/linskybing/platform-go/src/utils"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 type K8sService struct {
@@ -30,14 +34,108 @@ func (s *K8sService) CreateJob(ctx context.Context, userID uint, input dto.Creat
 		})
 	}
 
+	envVars := make(map[string]string)
+
+	// Check GPU Quota and Access
+	if input.GPUCount > 0 {
+		// Parse Project ID from Namespace (format: pid-username)
+		parts := strings.Split(input.Namespace, "-")
+		if len(parts) >= 2 {
+			pidStr := parts[0]
+			pid, err := strconv.Atoi(pidStr)
+			if err == nil {
+				project, err := s.repos.Project.GetProjectByID(uint(pid))
+				if err == nil {
+					// Check Access Type
+					allowedTypes := strings.Split(project.GPUAccess, ",")
+					isAllowed := false
+					requestedType := input.GPUType
+					if requestedType == "" {
+						requestedType = "dedicated" // Default to dedicated if not specified
+					}
+
+					for _, t := range allowedTypes {
+						if strings.TrimSpace(t) == requestedType {
+							isAllowed = true
+							break
+						}
+					}
+
+					if !isAllowed {
+						return fmt.Errorf("GPU access type '%s' is not allowed for this project. Allowed: %s", requestedType, project.GPUAccess)
+					}
+
+					// Check Quota
+					currentUsage, err := s.CountProjectGPUUsage(ctx, uint(pid))
+					if err != nil {
+						return err
+					}
+					
+					// Calculate requested quota units
+					requestedUnits := input.GPUCount
+					if requestedType == "dedicated" {
+						// Assuming 1 dedicated GPU = 10 shared units
+						requestedUnits = input.GPUCount * 10
+					}
+
+					if currentUsage+requestedUnits > project.GPUQuota {
+						return fmt.Errorf("GPU quota exceeded. Current: %d, Requested: %d, Quota: %d", currentUsage, requestedUnits, project.GPUQuota)
+					}
+
+					// Inject MPS Env Vars and Volumes if shared
+					if requestedType == "shared" {
+						if project.MPSLimit > 0 {
+							envVars["CUDA_MPS_ACTIVE_THREAD_PERCENTAGE"] = strconv.Itoa(project.MPSLimit)
+						}
+						if project.MPSMemory > 0 {
+							envVars["CUDA_MPS_PINNED_DEVICE_MEM_LIMIT"] = fmt.Sprintf("%dM", project.MPSMemory)
+						}
+						
+						// Set MPS Pipe Directory
+						envVars["CUDA_MPS_PIPE_DIRECTORY"] = "/tmp/nvidia-mps"
+
+						// Mount MPS Pipe and SHM
+						volumes = append(volumes, k8sclient.VolumeSpec{
+							Name:      "nvidia-mps",
+							HostPath:  "/run/nvidia/mps",
+							MountPath: "/tmp/nvidia-mps",
+						})
+						volumes = append(volumes, k8sclient.VolumeSpec{
+							Name:      "nvidia-mps-shm",
+							HostPath:  "/run/nvidia/mps/shm",
+							MountPath: "/dev/shm",
+						})
+					}
+
+					// Handle Dedicated on Shared Node (Emulation)
+					if requestedType == "dedicated" {
+						input.GPUType = "shared"
+						input.GPUCount = input.GPUCount * 10
+					}
+				}
+			}
+		}
+	}
+
+	// Determine PriorityClassName
+	priorityClassName := "low-priority"
+	// Force low priority for now as per requirement
+	// if input.Priority == "high" {
+	// 	priorityClassName = "high-priority"
+	// }
+
 	spec := k8sclient.JobSpec{
-		Name:        input.Name,
-		Namespace:   input.Namespace,
-		Image:       input.Image,
-		Command:     input.Command,
-		Parallelism: input.Parallelism,
-		Completions: input.Completions,
-		Volumes:     volumes,
+		Name:              input.Name,
+		Namespace:         input.Namespace,
+		Image:             input.Image,
+		Command:           input.Command,
+		PriorityClassName: priorityClassName,
+		Parallelism:       input.Parallelism,
+		Completions:       input.Completions,
+		Volumes:           volumes,
+		GPUCount:          input.GPUCount,
+		GPUType:           input.GPUType,
+		EnvVars:           envVars,
 	}
 
 	// Default values if not provided
@@ -59,6 +157,7 @@ func (s *K8sService) CreateJob(ctx context.Context, userID uint, input dto.Creat
 		Namespace:  input.Namespace,
 		Image:      input.Image,
 		K8sJobName: input.Name,
+		Priority:   "low", // Force low priority in DB record
 		Status:     "Pending",
 	}
 	if err := db.DB.Create(&jobRecord).Error; err != nil {
@@ -69,6 +168,38 @@ func (s *K8sService) CreateJob(ctx context.Context, userID uint, input dto.Creat
 
 	return nil
 }
+
+func (s *K8sService) CountProjectGPUUsage(ctx context.Context, projectID uint) (int, error) {
+	namespaces, err := k8sclient.GetFilteredNamespaces(fmt.Sprintf("%d-", projectID))
+	if err != nil {
+		return 0, err
+	}
+
+	totalGPU := 0
+	for _, ns := range namespaces {
+		pods, err := k8sclient.Clientset.CoreV1().Pods(ns.Name).List(ctx, metav1.ListOptions{})
+		if err != nil {
+			continue
+		}
+		for _, pod := range pods.Items {
+			// Check if pod is Running or Pending
+			if pod.Status.Phase == corev1.PodRunning || pod.Status.Phase == corev1.PodPending {
+				for _, container := range pod.Spec.Containers {
+					if qty, ok := container.Resources.Requests["nvidia.com/gpu"]; ok {
+						val, _ := qty.AsInt64()
+						totalGPU += int(val)
+					}
+					if qty, ok := container.Resources.Requests["nvidia.com/gpu.shared"]; ok {
+						val, _ := qty.AsInt64()
+						totalGPU += int(val)
+					}
+				}
+			}
+		}
+	}
+	return totalGPU, nil
+}
+
 
 func (s *K8sService) GetPVC(ns, name string) (*corev1.PersistentVolumeClaim, error) {
 	return utils.GetPVC(ns, name)
