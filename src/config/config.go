@@ -31,6 +31,7 @@ var (
 	DefaultStorageName      = "project"
 	DefaultStorageClassName = "longhorn"
 	DefaultStorageSize      = "3Gi"
+	UserPVSize              = "10Gi"
 )
 
 func LoadConfig() {

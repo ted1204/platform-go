@@ -11,7 +11,7 @@ type Services struct {
 	UserGroup  *UserGroupService
 	User       *UserService
 	K8s        *K8sService
-	Ticket     *TicketService
+	Form       *FormService
 	GPURequest *GPURequestService
 }
 
@@ -25,7 +25,7 @@ func New(repos *repositories.Repos) *Services {
 		UserGroup:  NewUserGroupService(repos),
 		User:       NewUserService(repos),
 		K8s:        NewK8sService(repos),
-		Ticket:     NewTicketService(repos.Ticket),
+		Form:       NewFormService(repos.Form),
 		GPURequest: NewGPURequestService(repos),
 	}
 }

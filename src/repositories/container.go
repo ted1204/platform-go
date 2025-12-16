@@ -9,7 +9,7 @@ type Repos struct {
 	User       UserRepo
 	View       ViewRepo
 	Audit      AuditRepo
-	Ticket     *TicketRepository
+	Form       *FormRepository
 	GPURequest GPURequestRepo
 }
 
@@ -23,7 +23,7 @@ func New() *Repos {
 		User:       &DBUserRepo{},
 		View:       &DBViewRepo{},
 		Audit:      &DBAuditRepo{},
-		Ticket:     NewTicketRepository(),
+		Form:       NewFormRepository(),
 		GPURequest: &DBGPURequestRepo{},
 	}
 }

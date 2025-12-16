@@ -315,6 +315,116 @@ func ListPVCs(ns string) ([]corev1.PersistentVolumeClaim, error) {
 	return pvcList.Items, nil
 }
 
+var CreatePV = func(name string, storageClassName string, size string, path string) error {
+	if k8sclient.Clientset == nil {
+		fmt.Printf("[MOCK] PV %s created with path %s\n", name, path)
+		return nil
+	}
+
+	quantity, err := parseResourceQuantity(size)
+	if err != nil {
+		return err
+	}
+
+	pv := &corev1.PersistentVolume{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: name,
+		},
+		Spec: corev1.PersistentVolumeSpec{
+			Capacity: corev1.ResourceList{
+				corev1.ResourceStorage: quantity,
+			},
+			AccessModes: []corev1.PersistentVolumeAccessMode{
+				corev1.ReadWriteMany,
+			},
+			StorageClassName: storageClassName,
+		},
+	}
+
+	// Check if using Longhorn (CSI) or HostPath
+	if storageClassName == "longhorn" {
+		// Use CSI for Longhorn
+		// path argument is treated as volumeHandle
+		pv.Spec.PersistentVolumeSource = corev1.PersistentVolumeSource{
+			CSI: &corev1.CSIPersistentVolumeSource{
+				Driver:       "driver.longhorn.io",
+				VolumeHandle: path, // Use the path as the volume handle name
+				FSType:       "ext4",
+			},
+		}
+	} else {
+		// Default to HostPath
+		hostPathType := corev1.HostPathDirectoryOrCreate
+		pv.Spec.PersistentVolumeSource = corev1.PersistentVolumeSource{
+			HostPath: &corev1.HostPathVolumeSource{
+				Path: path,
+				Type: &hostPathType,
+			},
+		}
+	}
+
+	_, err = k8sclient.Clientset.CoreV1().PersistentVolumes().Create(context.TODO(), pv, metav1.CreateOptions{})
+	if err != nil {
+		// If PV already exists, we might want to ignore or check if it matches.
+		// For now, just return error if it's not "AlreadyExists"
+		if apierrors.IsAlreadyExists(err) {
+			fmt.Printf("PV %s already exists\n", name)
+			return nil
+		}
+		return fmt.Errorf("failed to create PV: %w", err)
+	}
+	fmt.Printf("PV %s created\n", name)
+	return nil
+}
+
+var CreateBoundPVC = func(ns string, name string, storageClassName string, size string, volumeName string) error {
+	if k8sclient.Clientset == nil {
+		fmt.Printf("[MOCK] Bound PVC %s created in namespace %s bound to %s\n", name, ns, volumeName)
+		return nil
+	}
+	if ns == "" {
+		ns = "default"
+	}
+
+	quantity, err := parseResourceQuantity(size)
+	if err != nil {
+		return err
+	}
+	pvc := &corev1.PersistentVolumeClaim{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: name,
+		},
+		Spec: corev1.PersistentVolumeClaimSpec{
+			AccessModes: []corev1.PersistentVolumeAccessMode{
+				corev1.ReadWriteMany,
+			},
+			Resources: corev1.VolumeResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceStorage: quantity,
+				},
+			},
+			StorageClassName: &storageClassName,
+			VolumeName:       volumeName,
+		},
+	}
+
+	client := k8sclient.Clientset.CoreV1().PersistentVolumeClaims(ns)
+
+	_, err = client.Get(context.TODO(), name, metav1.GetOptions{})
+	if err == nil {
+		fmt.Printf("PVC %s already exists in namespace %s\n", name, ns)
+		return nil
+	}
+
+	result, err := client.Create(context.TODO(), pvc, metav1.CreateOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to create PVC: %w", err)
+	}
+
+	fmt.Printf("PVC %s created in namespace %s bound to %s\n", result.Name, ns, volumeName)
+	return nil
+}
+
 var FormatNamespaceName = func(projectID uint, userName string) string {
 	return fmt.Sprintf("proj-%d-%s", projectID, userName)
 }

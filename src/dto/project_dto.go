@@ -22,6 +22,11 @@ type UpdateProjectDTO struct {
 	MPSMemory   *int    `form:"mps_memory,omitempty"`
 }
 
+type CreateProjectPVCDTO struct {
+	Name string `json:"name" binding:"required"`
+	Size string `json:"size" binding:"required"`
+}
+
 type GIDGetter interface {
 	GetGID() uint
 }

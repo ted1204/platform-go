@@ -171,8 +171,46 @@ func (s *ProjectService) AllocateProjectResources(projectID uint) error {
 			return fmt.Errorf("failed to create namespace for %s: %w", user.Username, err)
 		}
 
-		if err := utils.CreatePVC(ns, config.DefaultStorageName, config.DefaultStorageClassName, config.DefaultStorageSize); err != nil {
+		// Create User PV (Static Provisioning pointing to shared volume)
+		// We use a consistent volume handle name based on username to ensure all projects share the same storage
+		pvName := fmt.Sprintf("pv-user-%s-proj-%d", user.Username, projectID)
+		volumeHandle := fmt.Sprintf("vol-user-%s", user.Username)
+
+		// If using HostPath (not longhorn), we need a path.
+		// If using Longhorn, we use volumeHandle.
+		// Since config.UserPVPath was removed, we assume Longhorn or use a default path for HostPath fallback.
+		path := volumeHandle
+		if config.DefaultStorageClassName != "longhorn" {
+			path = "/mnt/data/users/" + user.Username
+		}
+
+		if err := utils.CreatePV(pvName, config.DefaultStorageClassName, config.UserPVSize, path); err != nil {
+			return fmt.Errorf("failed to create PV for %s: %w", user.Username, err)
+		}
+
+		// Create PVC bound to the specific PV
+		if err := utils.CreateBoundPVC(ns, config.DefaultStorageName, config.DefaultStorageClassName, config.UserPVSize, pvName); err != nil {
 			return fmt.Errorf("failed to create PVC for %s: %w", user.Username, err)
+		}
+	}
+
+	return nil
+}
+
+func (s *ProjectService) CreateProjectPVC(projectID uint, input dto.CreateProjectPVCDTO) error {
+	// 3. List all users in the project
+	users, err := s.Repos.View.ListUsersByProjectID(projectID)
+	if err != nil {
+		return err
+	}
+
+	// 4. Create PVC in each user's namespace (Dynamic Provisioning)
+	// Note: Without a shared underlying volume (like NFS or pre-provisioned RWX volume),
+	// these PVCs will be independent volumes.
+	for _, user := range users {
+		ns := utils.FormatNamespaceName(projectID, user.Username)
+		if err := utils.CreatePVC(ns, input.Name, config.DefaultStorageClassName, input.Size); err != nil {
+			return fmt.Errorf("failed to create shared PVC for user %s: %w", user.Username, err)
 		}
 	}
 

@@ -22,7 +22,7 @@ import (
 
 func setupMocks(t *testing.T) (*services.ConfigFileService, *mock_repositories.MockConfigFileRepo,
 	*mock_repositories.MockResourceRepo, *mock_repositories.MockAuditRepo,
-	*mock_repositories.MockViewRepo, *gin.Context) {
+	*mock_repositories.MockViewRepo, *mock_repositories.MockProjectRepo, *mock_repositories.MockUserGroupRepo, *gin.Context) {
 
 	ctrl := gomock.NewController(t)
 	t.Cleanup(ctrl.Finish)
@@ -31,12 +31,16 @@ func setupMocks(t *testing.T) (*services.ConfigFileService, *mock_repositories.M
 	mockRes := mock_repositories.NewMockResourceRepo(ctrl)
 	mockAudit := mock_repositories.NewMockAuditRepo(ctrl)
 	mockView := mock_repositories.NewMockViewRepo(ctrl)
+	mockProject := mock_repositories.NewMockProjectRepo(ctrl)
+	mockUserGroup := mock_repositories.NewMockUserGroupRepo(ctrl)
 
 	repos := &repositories.Repos{
 		ConfigFile: mockCF,
 		Resource:   mockRes,
 		Audit:      mockAudit,
 		View:       mockView,
+		Project:    mockProject,
+		UserGroup:  mockUserGroup,
 	}
 	svc := services.NewConfigFileService(repos)
 
@@ -45,7 +49,7 @@ func setupMocks(t *testing.T) (*services.ConfigFileService, *mock_repositories.M
 	c, _ := gin.CreateTestContext(w)
 	req, _ := http.NewRequest("POST", "/", nil)
 	c.Request = req
-	c.Set("claims", &types.Claims{Username: "testuser"})
+	c.Set("claims", &types.Claims{Username: "testuser", UserID: 1})
 
 	// mock utils
 	utils.SplitYAMLDocuments = func(yamlStr string) []string { return []string{"doc1"} }
@@ -59,11 +63,11 @@ func setupMocks(t *testing.T) (*services.ConfigFileService, *mock_repositories.M
 	utils.DeleteByJson = func(yaml []byte, ns string) error { return nil }
 	utils.FormatNamespaceName = func(projectID uint, username string) string { return "ns-test" }
 
-	return svc, mockCF, mockRes, mockAudit, mockView, c
+	return svc, mockCF, mockRes, mockAudit, mockView, mockProject, mockUserGroup, c
 }
 
 func TestCreateConfigFile_Success(t *testing.T) {
-	svc, mockCF, mockRes, mockAudit, _, c := setupMocks(t)
+	svc, mockCF, mockRes, mockAudit, _, _, _, c := setupMocks(t)
 
 	mockCF.EXPECT().CreateConfigFile(gomock.Any()).Return(nil)
 	mockRes.EXPECT().CreateResource(gomock.Any()).Return(nil).AnyTimes()
@@ -85,7 +89,7 @@ func TestCreateConfigFile_Success(t *testing.T) {
 }
 
 func TestCreateConfigFile_NoYAMLDocuments(t *testing.T) {
-	svc, _, _, _, _, c := setupMocks(t)
+	svc, _, _, _, _, _, _, c := setupMocks(t)
 
 	utils.SplitYAMLDocuments = func(yamlStr string) []string { return []string{} }
 
@@ -102,7 +106,7 @@ func TestCreateConfigFile_NoYAMLDocuments(t *testing.T) {
 }
 
 func TestUpdateConfigFile_Success(t *testing.T) {
-	svc, mockCF, mockRes, mockAudit, mockView, c := setupMocks(t)
+	svc, mockCF, mockRes, mockAudit, mockView, _, _, c := setupMocks(t)
 
 	// Mock original ConfigFile
 	existingCF := &models.ConfigFile{
@@ -158,7 +162,7 @@ func TestUpdateConfigFile_Success(t *testing.T) {
 }
 
 func TestDeleteConfigFile_Success(t *testing.T) {
-	svc, mockCF, mockRes, mockAudit, mockView, c := setupMocks(t)
+	svc, mockCF, mockRes, mockAudit, mockView, _, _, c := setupMocks(t)
 
 	mockCF.EXPECT().GetConfigFileByID(uint(1)).Return(&models.ConfigFile{
 		CFID: 1, ProjectID: 1, Filename: "test.yaml",
@@ -187,10 +191,12 @@ func TestDeleteConfigFile_Success(t *testing.T) {
 }
 
 func TestCreateInstance_Success(t *testing.T) {
-	svc, mockCF, mockRes, _, _, c := setupMocks(t)
+	svc, mockCF, mockRes, _, _, mockProject, mockUserGroup, c := setupMocks(t)
 
 	mockRes.EXPECT().ListResourcesByConfigFileID(uint(1)).Return([]models.Resource{{RID: 1, ParsedYAML: datatypes.JSON([]byte("{}"))}}, nil)
 	mockCF.EXPECT().GetConfigFileByID(uint(1)).Return(&models.ConfigFile{CFID: 1, ProjectID: 1}, nil)
+	mockProject.EXPECT().GetProjectByID(uint(1)).Return(models.Project{PID: 1, GID: 10}, nil)
+	mockUserGroup.EXPECT().GetUserGroup(uint(1), uint(10)).Return(models.UserGroupView{Role: "admin"}, nil)
 
 	err := svc.CreateInstance(c, 1)
 	if err != nil {
@@ -199,7 +205,7 @@ func TestCreateInstance_Success(t *testing.T) {
 }
 
 func TestDeleteInstance_Success(t *testing.T) {
-	svc, mockCF, mockRes, _, _, c := setupMocks(t)
+	svc, mockCF, mockRes, _, _, _, _, c := setupMocks(t)
 
 	mockRes.EXPECT().ListResourcesByConfigFileID(uint(1)).Return([]models.Resource{{RID: 1, ParsedYAML: datatypes.JSON([]byte("{}"))}}, nil)
 	mockCF.EXPECT().GetConfigFileByID(uint(1)).Return(&models.ConfigFile{CFID: 1, ProjectID: 1}, nil)
@@ -211,7 +217,7 @@ func TestDeleteInstance_Success(t *testing.T) {
 }
 
 func TestDeleteConfigFileInstance_Success(t *testing.T) {
-	svc, mockCF, mockRes, _, mockView, _ := setupMocks(t)
+	svc, mockCF, mockRes, _, mockView, _, _, _ := setupMocks(t)
 
 	// Mock ConfigFile
 	mockCF.EXPECT().GetConfigFileByID(uint(1)).Return(&models.ConfigFile{
@@ -243,7 +249,7 @@ func TestDeleteConfigFileInstance_Success(t *testing.T) {
 }
 
 func TestConfigFileRead(t *testing.T) {
-	svc, mockCF, _, _, _, _ := setupMocks(t)
+	svc, mockCF, _, _, _, _, _, _ := setupMocks(t)
 
 	t.Run("ListConfigFiles", func(t *testing.T) {
 		cfs := []models.ConfigFile{{CFID: 1, Filename: "f1"}}

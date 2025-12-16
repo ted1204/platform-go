@@ -198,3 +198,36 @@ func (h *ProjectHandler) DeleteProject(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, response.MessageResponse{Message: "project deleted"})
 }
+
+// CreateProjectPVC godoc
+// @Summary Create a shared PVC for a project
+// @Tags projects
+// @Security BearerAuth
+// @Accept json
+// @Produce json
+// @Param id path uint true "Project ID"
+// @Param input body dto.CreateProjectPVCDTO true "PVC details"
+// @Success 201 {object} response.MessageResponse
+// @Failure 400 {object} response.ErrorResponse
+// @Failure 500 {object} response.ErrorResponse
+// @Router /projects/{id}/pvc [post]
+func (h *ProjectHandler) CreateProjectPVC(c *gin.Context) {
+	id, err := utils.ParseIDParam(c, "id")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, response.ErrorResponse{Error: "invalid project id"})
+		return
+	}
+
+	var input dto.CreateProjectPVCDTO
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, response.ErrorResponse{Error: err.Error()})
+		return
+	}
+
+	if err := h.svc.CreateProjectPVC(id, input); err != nil {
+		c.JSON(http.StatusInternalServerError, response.ErrorResponse{Error: err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusCreated, response.MessageResponse{Message: "PVC created successfully"})
+}

@@ -1,10 +1,12 @@
 package services
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 
 	"github.com/gin-gonic/gin"
+	"github.com/linskybing/platform-go/src/config"
 	"github.com/linskybing/platform-go/src/dto"
 	"github.com/linskybing/platform-go/src/models"
 	"github.com/linskybing/platform-go/src/repositories"
@@ -234,12 +236,117 @@ func (s *ConfigFileService) CreateInstance(c *gin.Context, id uint) error {
 	}
 	claims, _ := c.MustGet("claims").(*types.Claims)
 	ns := utils.FormatNamespaceName(configfile.ProjectID, claims.Username)
+
+	// Check permissions
+	project, err := s.Repos.Project.GetProjectByID(configfile.ProjectID)
+	if err != nil {
+		return err
+	}
+
+	shouldEnforceRO := false
+	if !claims.IsAdmin {
+		ug, err := s.Repos.UserGroup.GetUserGroup(claims.UserID, project.GID)
+		if err != nil {
+			return err
+		}
+		if ug.Role == "user" {
+			shouldEnforceRO = true
+		}
+	}
+
 	for _, val := range data {
-		if err := utils.CreateByJson(val.ParsedYAML, ns); err != nil {
+		jsonBytes := []byte(val.ParsedYAML)
+		if shouldEnforceRO {
+			jsonBytes, err = s.enforceReadOnly(jsonBytes)
+			if err != nil {
+				return err
+			}
+		}
+
+		if err := utils.CreateByJson(datatypes.JSON(jsonBytes), ns); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+func (s *ConfigFileService) enforceReadOnly(jsonBytes []byte) ([]byte, error) {
+	var obj map[string]interface{}
+	if err := json.Unmarshal(jsonBytes, &obj); err != nil {
+		return nil, err
+	}
+
+	kind, ok := obj["kind"].(string)
+	if !ok {
+		return jsonBytes, nil
+	}
+
+	var podSpec map[string]interface{}
+
+	if kind == "Pod" {
+		if spec, ok := obj["spec"].(map[string]interface{}); ok {
+			podSpec = spec
+		}
+	} else if kind == "Deployment" || kind == "StatefulSet" || kind == "DaemonSet" || kind == "Job" {
+		if spec, ok := obj["spec"].(map[string]interface{}); ok {
+			if template, ok := spec["template"].(map[string]interface{}); ok {
+				if tSpec, ok := template["spec"].(map[string]interface{}); ok {
+					podSpec = tSpec
+				}
+			}
+		}
+	}
+
+	if podSpec == nil {
+		return jsonBytes, nil
+	}
+
+	// Find volumes
+	volumes, ok := podSpec["volumes"].([]interface{})
+	if !ok {
+		return jsonBytes, nil
+	}
+
+	// Map volume name to PVC name
+	pvcVolumes := make(map[string]string)
+	for _, v := range volumes {
+		if vol, ok := v.(map[string]interface{}); ok {
+			if name, ok := vol["name"].(string); ok {
+				if pvc, ok := vol["persistentVolumeClaim"].(map[string]interface{}); ok {
+					if claimName, ok := pvc["claimName"].(string); ok {
+						pvcVolumes[name] = claimName
+					}
+				}
+			}
+		}
+	}
+
+	// Iterate containers and modify volumeMounts
+	containers, ok := podSpec["containers"].([]interface{})
+	if !ok {
+		return jsonBytes, nil
+	}
+
+	for _, c := range containers {
+		if container, ok := c.(map[string]interface{}); ok {
+			if mounts, ok := container["volumeMounts"].([]interface{}); ok {
+				for _, m := range mounts {
+					if mount, ok := m.(map[string]interface{}); ok {
+						if volName, ok := mount["name"].(string); ok {
+							if claimName, ok := pvcVolumes[volName]; ok {
+								// Check if it's the default project PVC
+								if claimName != config.DefaultStorageName {
+									mount["readOnly"] = true
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	return json.Marshal(obj)
 }
 
 func (s *ConfigFileService) DeleteInstance(c *gin.Context, id uint) error {

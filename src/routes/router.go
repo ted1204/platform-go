@@ -93,7 +93,7 @@ func RegisterRoutes(r *gin.Engine) {
 		k8s := auth.Group("/k8s")
 		{
 			k8s.POST("/jobs", authMiddleware.Admin(), handlers_instance.K8s.CreateJob)
-			
+
 			// PVC routes moved here
 			pvc := k8s.Group("/pvc")
 			{
@@ -101,10 +101,11 @@ func RegisterRoutes(r *gin.Engine) {
 				pvc.GET("/list/:namespace", authMiddleware.Admin(), handlers_instance.K8s.ListPVCs)
 				pvc.GET("/by-project/:id", authMiddleware.GroupMember(middleware.FromIDParam(repos_instance.Project.GetGroupIDByProjectID)), handlers_instance.K8s.ListPVCsByProject)
 				pvc.POST("", authMiddleware.Admin(), handlers_instance.K8s.CreatePVC)
+				pvc.POST("/project/:id", authMiddleware.GroupMember(middleware.FromIDParam(repos_instance.Project.GetGroupIDByProjectID)), handlers_instance.Project.CreateProjectPVC)
 				pvc.PUT("/expand", authMiddleware.Admin(), handlers_instance.K8s.ExpandPVC)
 				pvc.DELETE("/:namespace/:name", authMiddleware.Admin(), handlers_instance.K8s.DeletePVC)
 			}
-			
+
 			fb := k8s.Group("/filebrowser")
 			{
 				fb.POST("/start", authMiddleware.Admin(), handlers_instance.K8s.StartFileBrowser)
@@ -112,12 +113,12 @@ func RegisterRoutes(r *gin.Engine) {
 			}
 		}
 
-		tickets := auth.Group("/tickets")
+		forms := auth.Group("/forms")
 		{
-			tickets.POST("", handlers_instance.Ticket.CreateTicket)
-			tickets.GET("/my", handlers_instance.Ticket.GetMyTickets)
-			tickets.GET("", authMiddleware.Admin(), handlers_instance.Ticket.GetAllTickets)
-			tickets.PUT("/:id/status", authMiddleware.Admin(), handlers_instance.Ticket.UpdateTicketStatus)
+			forms.POST("", handlers_instance.Form.CreateForm)
+			forms.GET("/my", handlers_instance.Form.GetMyForms)
+			forms.GET("", authMiddleware.Admin(), handlers_instance.Form.GetAllForms)
+			forms.PUT("/:id/status", authMiddleware.Admin(), handlers_instance.Form.UpdateFormStatus)
 		}
 
 	}

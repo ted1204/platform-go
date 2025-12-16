@@ -11,16 +11,16 @@ import (
 	"github.com/linskybing/platform-go/src/utils"
 )
 
-type TicketHandler struct {
-	service *services.TicketService
+type FormHandler struct {
+	service *services.FormService
 }
 
-func NewTicketHandler(service *services.TicketService) *TicketHandler {
-	return &TicketHandler{service: service}
+func NewFormHandler(service *services.FormService) *FormHandler {
+	return &FormHandler{service: service}
 }
 
-func (h *TicketHandler) CreateTicket(c *gin.Context) {
-	var input dto.CreateTicketDTO
+func (h *FormHandler) CreateForm(c *gin.Context) {
+	var input dto.CreateFormDTO
 	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(http.StatusBadRequest, response.ErrorResponse{Error: err.Error()})
 		return
@@ -32,42 +32,42 @@ func (h *TicketHandler) CreateTicket(c *gin.Context) {
 		return
 	}
 
-	ticket, err := h.service.CreateTicket(userID, input)
+	form, err := h.service.CreateForm(userID, input)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, response.ErrorResponse{Error: err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusCreated, response.SuccessResponse{Data: ticket})
+	c.JSON(http.StatusCreated, response.SuccessResponse{Data: form})
 }
 
-func (h *TicketHandler) GetMyTickets(c *gin.Context) {
+func (h *FormHandler) GetMyForms(c *gin.Context) {
 	userID, err := utils.GetUserIDFromContext(c)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, response.ErrorResponse{Error: "Unauthorized"})
 		return
 	}
 
-	tickets, err := h.service.GetUserTickets(userID)
+	forms, err := h.service.GetUserForms(userID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, response.ErrorResponse{Error: err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, response.SuccessResponse{Data: tickets})
+	c.JSON(http.StatusOK, response.SuccessResponse{Data: forms})
 }
 
-func (h *TicketHandler) GetAllTickets(c *gin.Context) {
-	tickets, err := h.service.GetAllTickets()
+func (h *FormHandler) GetAllForms(c *gin.Context) {
+	forms, err := h.service.GetAllForms()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, response.ErrorResponse{Error: err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, response.SuccessResponse{Data: tickets})
+	c.JSON(http.StatusOK, response.SuccessResponse{Data: forms})
 }
 
-func (h *TicketHandler) UpdateTicketStatus(c *gin.Context) {
+func (h *FormHandler) UpdateFormStatus(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
 	if err != nil {
@@ -75,17 +75,17 @@ func (h *TicketHandler) UpdateTicketStatus(c *gin.Context) {
 		return
 	}
 
-	var input dto.UpdateTicketStatusDTO
+	var input dto.UpdateFormStatusDTO
 	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(http.StatusBadRequest, response.ErrorResponse{Error: err.Error()})
 		return
 	}
 
-	ticket, err := h.service.UpdateTicketStatus(uint(id), input.Status)
+	form, err := h.service.UpdateFormStatus(uint(id), input.Status)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, response.ErrorResponse{Error: err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, response.SuccessResponse{Data: ticket})
+	c.JSON(http.StatusOK, response.SuccessResponse{Data: form})
 }

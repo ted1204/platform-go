@@ -12,6 +12,21 @@ import (
 
 var DB *gorm.DB
 
+func createEnums() {
+	enums := []string{
+		`DO $$ BEGIN CREATE TYPE user_type AS ENUM ('origin', 'oauth2'); EXCEPTION WHEN duplicate_object THEN null; END $$;`,
+		`DO $$ BEGIN CREATE TYPE user_status AS ENUM ('online', 'offline', 'delete'); EXCEPTION WHEN duplicate_object THEN null; END $$;`,
+		`DO $$ BEGIN CREATE TYPE user_role AS ENUM ('admin', 'manager', 'user'); EXCEPTION WHEN duplicate_object THEN null; END $$;`,
+		`DO $$ BEGIN CREATE TYPE resource_type AS ENUM ('cpu', 'memory', 'gpu'); EXCEPTION WHEN duplicate_object THEN null; END $$;`,
+	}
+
+	for _, enum := range enums {
+		if err := DB.Exec(enum).Error; err != nil {
+			log.Printf("Failed to create enum: %s, error: %v", enum, err)
+		}
+	}
+}
+
 func Init() {
 	dsn := fmt.Sprintf(
 		"host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
@@ -30,6 +45,9 @@ func Init() {
 
 	dropViews()
 
+	// Create enums
+	createEnums()
+
 	if err := DB.AutoMigrate(
 		&models.User{},
 		&models.Group{},
@@ -38,7 +56,7 @@ func Init() {
 		&models.ConfigFile{},
 		&models.Resource{},
 		&models.AuditLog{},
-		&models.Ticket{},
+		&models.Form{},
 		&models.Job{},
 		&models.GPURequest{},
 	); err != nil {
