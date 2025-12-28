@@ -23,6 +23,9 @@ func CORSMiddleware() gin.HandlerFunc {
 			if strings.HasPrefix(origin, "http://127.0.0.1:") {
 				return true
 			}
+			if strings.HasPrefix(origin, "http://192.168.109.1:") {
+				return true
+			}
 			return false
 		},
 		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
