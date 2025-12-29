@@ -21,29 +21,29 @@ import (
 var schemaFS embed.FS
 
 func SetupPostgresForIntegration() (*sql.DB, func()) {
-	 // Check if an external DB DSN is provided
-    if dsn := os.Getenv("TEST_DB_DSN"); dsn != "" {
-        db, err := sql.Open("postgres", dsn)
-        if err != nil {
-            log.Fatal(err)
-        }
-        if err := db.Ping(); err != nil {
-            log.Fatal(err)
-        }
-        
-        // Apply schema
-        schemaBytes, err := schemaFS.ReadFile("schema.sql")
-        if err != nil {
-            log.Fatal(err)
-        }
-        if _, err := db.Exec(string(schemaBytes)); err != nil {
-            log.Fatal(err)
-        }
+	// Check if an external DB DSN is provided
+	if dsn := os.Getenv("TEST_DB_DSN"); dsn != "" {
+		db, err := sql.Open("postgres", dsn)
+		if err != nil {
+			log.Fatal(err)
+		}
+		if err := db.Ping(); err != nil {
+			log.Fatal(err)
+		}
 
-        return db, func() {
-            _ = db.Close()
-        }
-    }
+		// Apply schema
+		schemaBytes, err := schemaFS.ReadFile("schema.sql")
+		if err != nil {
+			log.Fatal(err)
+		}
+		if _, err := db.Exec(string(schemaBytes)); err != nil {
+			log.Fatal(err)
+		}
+
+		return db, func() {
+			_ = db.Close()
+		}
+	}
 
 	ctx := context.Background()
 

@@ -21,11 +21,11 @@ func NewGPURequestService(repos *repositories.Repos) *GPURequestService {
 
 func (s *GPURequestService) CreateRequest(projectID uint, userID uint, input dto.CreateGPURequestDTO) (models.GPURequest, error) {
 	req := models.GPURequest{
-		ProjectID:           projectID,
-		RequesterID:         userID,
-		Type:                models.GPURequestType(input.Type),
-		Reason:              input.Reason,
-		Status:              models.GPURequestStatusPending,
+		ProjectID:   projectID,
+		RequesterID: userID,
+		Type:        models.GPURequestType(input.Type),
+		Reason:      input.Reason,
+		Status:      models.GPURequestStatusPending,
 	}
 
 	if input.RequestedQuota != nil {

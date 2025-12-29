@@ -91,11 +91,7 @@ func (s *ProjectService) CreateProject(c *gin.Context, input dto.CreateProjectDT
 	if err == nil {
 		utils.LogAuditWithConsole(c, "create", "project", fmt.Sprintf("p_id=%d", project.PID), nil, project, "", s.Repos.Audit)
 	}
-
-	if err := s.AllocateProjectResources(project.PID); err != nil {
-		return project, err
-	}
-
+	// 不自動建立 PV/PVC，user 會自動連結到自己的 global PV
 	return project, err
 }
 

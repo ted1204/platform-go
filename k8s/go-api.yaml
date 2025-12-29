@@ -13,8 +13,6 @@ spec:
         app: go-api
     spec:
       serviceAccountName: admin-sa
-      imagePullSecrets:
-        - name: harbor-cred
       dnsPolicy: ClusterFirst
       dnsConfig:
         nameservers:
@@ -22,7 +20,7 @@ spec:
           - 1.1.1.1
       containers:
         - name: go-api
-          image: 192.168.109.1:30002/platform/platform-go-api:latest
+          image: linskybing/platform-go-api:latest
           imagePullPolicy: Always
           command: ["sleep", "infinity"]
           volumeMounts:
@@ -48,7 +46,7 @@ spec:
       volumes:
         - name: local-data
           hostPath:
-            path: /home/user/k8s/platform-go
+            path: /Users/sky/k8s/platform-go
             type: Directory
 ---
 apiVersion: v1

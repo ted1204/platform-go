@@ -41,3 +41,5 @@ echo "----------------------------------------------------------------"
 # Execute the Go run command directly inside the container
 # We use 'bash -c' to run the command chain
 kubectl exec -it $POD_NAME -- bash -c "cd /go/web-go && export GOTOOLCHAIN=local && export GOSUMDB=off && go run src/main.go"
+
+# kubectl apply -f https://raw.githubusercontent.com/rancher/local-path-provisioner/master/deploy/local-path-storage.yaml

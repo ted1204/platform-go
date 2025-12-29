@@ -1,2641 +1,2426 @@
 {
-    "swagger": "2.0",
-    "info": {
-        "contact": {}
-    },
-    "paths": {
-        "/audit/logs": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Retrieve audit logs filtered by optional parameters like user_id, resource_type, action, time range, with pagination support.",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "audit"
-                ],
-                "summary": "Query audit logs",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "example": 123,
-                        "description": "User ID to filter logs by user",
-                        "name": "user_id",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "example": "\"pod\"",
-                        "description": "Resource type to filter",
-                        "name": "resource_type",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "example": "\"create\"",
-                        "description": "Action type to filter",
-                        "name": "action",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "example": "\"2023-01-01T00:00:00Z\"",
-                        "description": "Start time in RFC3339 format, e.g. 2023-01-01T00:00:00Z",
-                        "name": "start_time",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "example": "\"2023-02-01T00:00:00Z\"",
-                        "description": "End time in RFC3339 format, e.g. 2023-02-01T00:00:00Z",
-                        "name": "end_time",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "example": 100,
-                        "description": "Max number of records to return (default 100, max 1000)",
-                        "name": "limit",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "example": 0,
-                        "description": "Offset for pagination (default 0)",
-                        "name": "offset",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "List of audit logs",
-                        "schema": {
-                            "type": "array",
-                            "items": {
-                                "type": "object"
-                            }
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid query parameters",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    }
-                }
+  "swagger": "2.0",
+  "info": {
+    "contact": {}
+  },
+  "paths": {
+    "/audit/logs": {
+      "get": {
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "description": "Retrieve audit logs filtered by optional parameters like user_id, resource_type, action, time range, with pagination support.",
+        "produces": ["application/json"],
+        "tags": ["audit"],
+        "summary": "Query audit logs",
+        "parameters": [
+          {
+            "type": "integer",
+            "example": 123,
+            "description": "User ID to filter logs by user",
+            "name": "user_id",
+            "in": "query"
+          },
+          {
+            "type": "string",
+            "example": "\"pod\"",
+            "description": "Resource type to filter",
+            "name": "resource_type",
+            "in": "query"
+          },
+          {
+            "type": "string",
+            "example": "\"create\"",
+            "description": "Action type to filter",
+            "name": "action",
+            "in": "query"
+          },
+          {
+            "type": "string",
+            "example": "\"2023-01-01T00:00:00Z\"",
+            "description": "Start time in RFC3339 format, e.g. 2023-01-01T00:00:00Z",
+            "name": "start_time",
+            "in": "query"
+          },
+          {
+            "type": "string",
+            "example": "\"2023-02-01T00:00:00Z\"",
+            "description": "End time in RFC3339 format, e.g. 2023-02-01T00:00:00Z",
+            "name": "end_time",
+            "in": "query"
+          },
+          {
+            "type": "integer",
+            "example": 100,
+            "description": "Max number of records to return (default 100, max 1000)",
+            "name": "limit",
+            "in": "query"
+          },
+          {
+            "type": "integer",
+            "example": 0,
+            "description": "Offset for pagination (default 0)",
+            "name": "offset",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of audit logs",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "object"
+              }
             }
-        },
-        "/config-files": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "config_files"
-                ],
-                "summary": "List all config files",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "array",
-                            "items": {
-                                "$ref": "#/definitions/models.ConfigFile"
-                            }
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    }
-                }
-            },
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "consumes": [
-                    "multipart/form-data"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "config_files"
-                ],
-                "summary": "Create a new config file",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Filename",
-                        "name": "filename",
-                        "in": "formData",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "Raw YAML content",
-                        "name": "raw_yaml",
-                        "in": "formData",
-                        "required": true
-                    },
-                    {
-                        "type": "integer",
-                        "description": "Project ID",
-                        "name": "project_id",
-                        "in": "formData",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "201": {
-                        "description": "Created",
-                        "schema": {
-                            "$ref": "#/definitions/models.ConfigFile"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad request",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    }
-                }
+          },
+          "400": {
+            "description": "Invalid query parameters",
+            "schema": {
+              "$ref": "#/definitions/response.ErrorResponse"
             }
-        },
-        "/config-files/{id}": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "config_files"
-                ],
-                "summary": "Get a config file by ID",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "Config File ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/models.ConfigFile"
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid ID",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    }
-                }
-            },
-            "put": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "consumes": [
-                    "multipart/form-data"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "config_files"
-                ],
-                "summary": "Update a config file by ID",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "Config File ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "Filename",
-                        "name": "filename",
-                        "in": "formData"
-                    },
-                    {
-                        "type": "string",
-                        "description": "Raw YAML content",
-                        "name": "raw_yaml",
-                        "in": "formData"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/models.ConfigFile"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    }
-                }
-            },
-            "delete": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "tags": [
-                    "config_files"
-                ],
-                "summary": "Delete a config file",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "ConfigFile ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "204": {
-                        "description": "No Content"
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    }
-                }
+          },
+          "500": {
+            "description": "Internal server error",
+            "schema": {
+              "$ref": "#/definitions/response.ErrorResponse"
             }
-        },
-        "/config-files/{id}/resources": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "resources"
-                ],
-                "summary": "List resources by config file ID",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "Config File ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "array",
-                            "items": {
-                                "$ref": "#/definitions/models.ResourceSwagger"
-                            }
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid config file ID",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/groups": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "groups"
-                ],
-                "summary": "List all groups",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "array",
-                            "items": {
-                                "$ref": "#/definitions/models.Group"
-                            }
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    }
-                }
-            },
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "consumes": [
-                    "multipart/form-data"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "groups"
-                ],
-                "summary": "Create a new group",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Group name",
-                        "name": "group_name",
-                        "in": "formData",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "Description",
-                        "name": "description",
-                        "in": "formData"
-                    }
-                ],
-                "responses": {
-                    "201": {
-                        "description": "Created",
-                        "schema": {
-                            "$ref": "#/definitions/models.Group"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad request",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "403": {
-                        "description": "Forbidden (reserved name)",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/groups/{id}": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "groups"
-                ],
-                "summary": "Get group by ID",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "Group ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/models.Group"
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid group id",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Group not found",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    }
-                }
-            },
-            "put": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "consumes": [
-                    "multipart/form-data"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "groups"
-                ],
-                "summary": "Update group by ID",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "Group ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "Group name",
-                        "name": "group_name",
-                        "in": "formData"
-                    },
-                    {
-                        "type": "string",
-                        "description": "Description",
-                        "name": "description",
-                        "in": "formData"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/models.Group"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad request",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Group not found",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    }
-                }
-            },
-            "delete": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "groups"
-                ],
-                "summary": "Delete group by ID",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "Group ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Group deleted",
-                        "schema": {
-                            "$ref": "#/definitions/response.MessageResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid group id",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "403": {
-                        "description": "Forbidden to delete 'super' group",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Group not found",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/instance/{id}": {
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Instance"
-                ],
-                "summary": "Instantiate a config file instance",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "Config File ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/response.MessageResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid ID",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    }
-                }
-            },
-            "delete": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Instance"
-                ],
-                "summary": "Destruct a config file instance",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "Config File ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "204": {
-                        "description": "No content"
-                    },
-                    "400": {
-                        "description": "Invalid ID",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/login": {
-            "post": {
-                "consumes": [
-                    "application/x-www-form-urlencoded"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "auth"
-                ],
-                "summary": "User login",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Username",
-                        "name": "username",
-                        "in": "formData",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "Password",
-                        "name": "password",
-                        "in": "formData",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "JWT token and user info",
-                        "schema": {
-                            "$ref": "#/definitions/response.TokenResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid input",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "401": {
-                        "description": "Invalid username or password",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Failed to generate token",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/projects": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "projects"
-                ],
-                "summary": "List all projects",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "array",
-                            "items": {
-                                "$ref": "#/definitions/models.Project"
-                            }
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    }
-                }
-            },
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "consumes": [
-                    "multipart/form-data"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "projects"
-                ],
-                "summary": "Create a new project",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Project name",
-                        "name": "project_name",
-                        "in": "formData",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "Description",
-                        "name": "description",
-                        "in": "formData"
-                    },
-                    {
-                        "type": "integer",
-                        "description": "Group ID",
-                        "name": "g_id",
-                        "in": "formData",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "201": {
-                        "description": "Created",
-                        "schema": {
-                            "$ref": "#/definitions/models.Project"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad request",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/projects/by-user": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "projects"
-                ],
-                "summary": "List projects by user",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "User ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "array",
-                            "items": {
-                                "type": "object",
-                                "additionalProperties": {
-                                    "$ref": "#/definitions/dto.GroupProjects"
-                                }
-                            }
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/projects/{id}": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "projects"
-                ],
-                "summary": "Get project by ID",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "Project ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/models.Project"
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid project id",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Project not found",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    }
-                }
-            },
-            "put": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "consumes": [
-                    "multipart/form-data"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "projects"
-                ],
-                "summary": "Update project by ID",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "Project ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "Project name",
-                        "name": "project_name",
-                        "in": "formData"
-                    },
-                    {
-                        "type": "string",
-                        "description": "Description",
-                        "name": "description",
-                        "in": "formData"
-                    },
-                    {
-                        "type": "integer",
-                        "description": "Group ID",
-                        "name": "g_id",
-                        "in": "formData"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/models.Project"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad request",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Project not found",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    }
-                }
-            },
-            "delete": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "projects"
-                ],
-                "summary": "Delete project by ID",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "Project ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Project deleted",
-                        "schema": {
-                            "$ref": "#/definitions/response.MessageResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid project id",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Project not found",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/projects/{id}/config-files": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "config_files"
-                ],
-                "summary": "List config files by project ID",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "Project ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "array",
-                            "items": {
-                                "$ref": "#/definitions/models.ConfigFile"
-                            }
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/projects/{id}/resources": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "resources"
-                ],
-                "summary": "List resources by project ID",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "Project ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "array",
-                            "items": {
-                                "$ref": "#/definitions/models.ResourceSwagger"
-                            }
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid project ID",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/pvc": {
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "consumes": [
-                    "application/x-www-form-urlencoded"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "PVC"
-                ],
-                "summary": "create PVC",
-                "parameters": [
-                    {
-                        "description": "PVC info",
-                        "name": "pvc",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/handlers.PVCRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "201": {
-                        "description": "Created",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/pvc/expand": {
-            "put": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "consumes": [
-                    "application/x-www-form-urlencoded"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "PVC"
-                ],
-                "summary": "Expand PVC",
-                "parameters": [
-                    {
-                        "description": "PVC expand info",
-                        "name": "pvc",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/handlers.PVCRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/pvc/list/{namespace}": {
-            "get": {
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "PVC"
-                ],
-                "summary": "List all PVC in Namespace",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "namespace",
-                        "name": "namespace",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/dto.PVC"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/pvc/{namespace}/{name}": {
-            "get": {
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "PVC"
-                ],
-                "summary": "query single PVC",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "namespace",
-                        "name": "namespace",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "PVC name",
-                        "name": "name",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/dto.PVC"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    }
-                }
-            },
-            "delete": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "PVC"
-                ],
-                "summary": "Delete PVC",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "namespace",
-                        "name": "namespace",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "PVC name",
-                        "name": "name",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/register": {
-            "post": {
-                "consumes": [
-                    "application/x-www-form-urlencoded"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "auth"
-                ],
-                "summary": "User registration",
-                "parameters": [
-                    {
-                        "description": "User registration info",
-                        "name": "input",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/dto.CreateUserInput"
-                        }
-                    }
-                ],
-                "responses": {
-                    "201": {
-                        "description": "User registered successfully",
-                        "schema": {
-                            "$ref": "#/definitions/response.MessageResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid input",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "409": {
-                        "description": "Username already taken",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Failed to create user",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/resources/{id}": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "resources"
-                ],
-                "summary": "Get resource by ID",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "Resource ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/models.ResourceSwagger"
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid ID",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Resource not found",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    }
-                }
-            },
-            "put": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "consumes": [
-                    "multipart/form-data"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "resources"
-                ],
-                "summary": "Update resource by ID",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "Resource ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "Resource name",
-                        "name": "name",
-                        "in": "formData"
-                    },
-                    {
-                        "type": "string",
-                        "description": "Resource type (e.g. pod, service, deployment)",
-                        "name": "type",
-                        "in": "formData"
-                    },
-                    {
-                        "type": "string",
-                        "description": "Parsed YAML content",
-                        "name": "parsed_yaml",
-                        "in": "formData"
-                    },
-                    {
-                        "type": "string",
-                        "description": "Description",
-                        "name": "description",
-                        "in": "formData"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/models.ResourceSwagger"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad request",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Resource not found",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    }
-                }
-            },
-            "delete": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "resources"
-                ],
-                "summary": "Delete resource by ID",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "Resource ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "204": {
-                        "description": "No Content"
-                    },
-                    "400": {
-                        "description": "Invalid ID",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Resource not found",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/user-group": {
-            "get": {
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "user_group"
-                ],
-                "summary": "Get a user-group relation by user ID and group ID",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "User ID",
-                        "name": "u_id",
-                        "in": "query",
-                        "required": true
-                    },
-                    {
-                        "type": "integer",
-                        "description": "Group ID",
-                        "name": "g_id",
-                        "in": "query",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.SuccessResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "$ref": "#/definitions/models.UserGroup"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    }
-                }
-            },
-            "put": {
-                "consumes": [
-                    "application/x-www-form-urlencoded"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "user_group"
-                ],
-                "summary": "Update role of a user-group relation",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "User ID",
-                        "name": "u_id",
-                        "in": "formData",
-                        "required": true
-                    },
-                    {
-                        "type": "integer",
-                        "description": "Group ID",
-                        "name": "g_id",
-                        "in": "formData",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "Role (admin, manager, user)",
-                        "name": "role",
-                        "in": "formData",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/models.UserGroup"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    }
-                }
-            },
-            "post": {
-                "consumes": [
-                    "application/x-www-form-urlencoded"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "user_group"
-                ],
-                "summary": "Create a user-group relation",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "User ID",
-                        "name": "u_id",
-                        "in": "formData",
-                        "required": true
-                    },
-                    {
-                        "type": "integer",
-                        "description": "Group ID",
-                        "name": "g_id",
-                        "in": "formData",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "Role (admin, manager, user)",
-                        "name": "role",
-                        "in": "formData",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "201": {
-                        "description": "Created",
-                        "schema": {
-                            "$ref": "#/definitions/models.UserGroup"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    }
-                }
-            },
-            "delete": {
-                "consumes": [
-                    "application/x-www-form-urlencoded"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "user_group"
-                ],
-                "summary": "Delete a user-group relation",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "User ID",
-                        "name": "u_id",
-                        "in": "formData",
-                        "required": true
-                    },
-                    {
-                        "type": "integer",
-                        "description": "Group ID",
-                        "name": "g_id",
-                        "in": "formData",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "204": {
-                        "description": "deleted",
-                        "schema": {
-                            "type": "string"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/user-group/by-group": {
-            "get": {
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "user_group"
-                ],
-                "summary": "Get all users in a group",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "Group ID",
-                        "name": "g_id",
-                        "in": "query",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.SuccessResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "type": "array",
-                                            "items": {
-                                                "$ref": "#/definitions/models.UserGroup"
-                                            }
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/user-group/by-user": {
-            "get": {
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "user_group"
-                ],
-                "summary": "Get all groups for a user",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "User ID",
-                        "name": "u_id",
-                        "in": "query",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.SuccessResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "type": "array",
-                                            "items": {
-                                                "$ref": "#/definitions/dto.UserGroups"
-                                            }
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/users": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "users"
-                ],
-                "summary": "List all users",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "array",
-                            "items": {
-                                "$ref": "#/definitions/models.UserWithSuperAdmin"
-                            }
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/users/paging": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "users"
-                ],
-                "summary": "List all users with pagination",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "Page number (default: 1)",
-                        "name": "page",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "description": "Items per page (default: 10, max: 100)",
-                        "name": "limit",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.SuccessResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "type": "array",
-                                            "items": {
-                                                "$ref": "#/definitions/models.UserWithSuperAdmin"
-                                            }
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/users/{id}": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "users"
-                ],
-                "summary": "Get user by ID",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "User ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/models.UserWithSuperAdmin"
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid user id",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "User not found",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    }
-                }
-            },
-            "put": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Partially update user's email, full name, type, status, or password.",
-                "consumes": [
-                    "multipart/form-data"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "users"
-                ],
-                "summary": "Update user",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "User ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "Old password (required if updating password)",
-                        "name": "old_password",
-                        "in": "formData"
-                    },
-                    {
-                        "type": "string",
-                        "description": "New password",
-                        "name": "password",
-                        "in": "formData"
-                    },
-                    {
-                        "type": "string",
-                        "description": "Email",
-                        "name": "email",
-                        "in": "formData"
-                    },
-                    {
-                        "type": "string",
-                        "description": "Full name",
-                        "name": "full_name",
-                        "in": "formData"
-                    },
-                    {
-                        "type": "string",
-                        "description": "User type: origin or oauth2",
-                        "name": "type",
-                        "in": "formData"
-                    },
-                    {
-                        "type": "string",
-                        "description": "User status: online, offline, delete",
-                        "name": "status",
-                        "in": "formData"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Updated user info",
-                        "schema": {
-                            "$ref": "#/definitions/dto.UserDTO"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad request error",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "User not found",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    }
-                }
-            },
-            "delete": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "users"
-                ],
-                "summary": "Delete user by ID",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "User ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "204": {
-                        "description": "No Content"
-                    },
-                    "400": {
-                        "description": "Invalid user id",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    }
-                }
-            }
+          }
         }
+      }
     },
-    "definitions": {
-        "dto.CreateUserInput": {
-            "type": "object",
-            "required": [
-                "password",
-                "username"
-            ],
-            "properties": {
-                "email": {
-                    "type": "string",
-                    "example": "user@example.com"
-                },
-                "full_name": {
-                    "type": "string",
-                    "example": "John Doe"
-                },
-                "password": {
-                    "type": "string",
-                    "example": "password123"
-                },
-                "status": {
-                    "type": "string",
-                    "enum": [
-                        "online",
-                        "offline",
-                        "delete"
-                    ],
-                    "example": "online"
-                },
-                "type": {
-                    "type": "string",
-                    "enum": [
-                        "origin",
-                        "oauth2"
-                    ],
-                    "example": "origin"
-                },
-                "username": {
-                    "type": "string",
-                    "example": "johndoe"
-                }
+    "/config-files": {
+      "get": {
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "produces": ["application/json"],
+        "tags": ["config_files"],
+        "summary": "List all config files",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/models.ConfigFile"
+              }
             }
-        },
-        "dto.GroupInfo": {
-            "type": "object",
-            "properties": {
-                "gid": {
-                    "type": "integer"
-                },
-                "groupName": {
-                    "type": "string"
-                },
-                "role": {
-                    "type": "string"
-                }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "schema": {
+              "$ref": "#/definitions/response.ErrorResponse"
             }
-        },
-        "dto.GroupProjects": {
-            "type": "object",
-            "properties": {
-                "group_name": {
-                    "type": "string"
-                },
-                "projects": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/dto.SimpleProjectInfo"
-                    }
-                }
-            }
-        },
-        "dto.PVC": {
-            "type": "object",
-            "properties": {
-                "name": {
-                    "type": "string",
-                    "example": "my-pvc"
-                },
-                "namespace": {
-                    "type": "string",
-                    "example": "default"
-                },
-                "size": {
-                    "type": "string",
-                    "example": "1Gi"
-                },
-                "status": {
-                    "type": "string",
-                    "example": "Bound"
-                }
-            }
-        },
-        "dto.SimpleProjectInfo": {
-            "type": "object",
-            "properties": {
-                "p_id": {
-                    "type": "integer"
-                },
-                "project_name": {
-                    "type": "string"
-                }
-            }
-        },
-        "dto.UserDTO": {
-            "type": "object",
-            "properties": {
-                "create_at": {
-                    "type": "string",
-                    "example": "2025-07-17 15:20:41"
-                },
-                "email": {
-                    "type": "string",
-                    "example": "user@example.com"
-                },
-                "full_name": {
-                    "type": "string",
-                    "example": "John Doe"
-                },
-                "is_admin": {
-                    "type": "boolean",
-                    "example": true
-                },
-                "status": {
-                    "type": "string",
-                    "example": "online"
-                },
-                "type": {
-                    "type": "string",
-                    "example": "origin"
-                },
-                "u_id": {
-                    "type": "integer",
-                    "example": 123
-                },
-                "update_at": {
-                    "type": "string",
-                    "example": "2025-07-17 15:20:41"
-                },
-                "username": {
-                    "type": "string",
-                    "example": "johndoe"
-                }
-            }
-        },
-        "dto.UserGroups": {
-            "type": "object",
-            "properties": {
-                "groups": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/dto.GroupInfo"
-                    }
-                },
-                "uid": {
-                    "type": "integer"
-                },
-                "username": {
-                    "type": "string"
-                }
-            }
-        },
-        "handlers.PVCRequest": {
-            "type": "object",
-            "required": [
-                "name",
-                "namespace",
-                "size",
-                "storageClassName"
-            ],
-            "properties": {
-                "name": {
-                    "type": "string"
-                },
-                "namespace": {
-                    "type": "string"
-                },
-                "size": {
-                    "type": "string"
-                },
-                "storageClassName": {
-                    "type": "string"
-                }
-            }
-        },
-        "models.ConfigFile": {
-            "type": "object",
-            "properties": {
-                "cfid": {
-                    "type": "integer"
-                },
-                "createdAt": {
-                    "type": "string"
-                },
-                "filename": {
-                    "type": "string"
-                },
-                "projectID": {
-                    "type": "integer"
-                }
-            }
-        },
-        "models.Group": {
-            "type": "object",
-            "properties": {
-                "createdAt": {
-                    "type": "string"
-                },
-                "description": {
-                    "type": "string"
-                },
-                "gid": {
-                    "type": "integer"
-                },
-                "groupName": {
-                    "type": "string"
-                },
-                "updatedAt": {
-                    "type": "string"
-                }
-            }
-        },
-        "models.Project": {
-            "type": "object",
-            "properties": {
-                "createdAt": {
-                    "type": "string"
-                },
-                "description": {
-                    "type": "string"
-                },
-                "gid": {
-                    "description": "foreign key: group_list.g_id",
-                    "type": "integer"
-                },
-                "pid": {
-                    "type": "integer"
-                },
-                "projectName": {
-                    "type": "string"
-                },
-                "updatedAt": {
-                    "type": "string"
-                }
-            }
-        },
-        "models.ResourceSwagger": {
-            "type": "object",
-            "properties": {
-                "cf_id": {
-                    "type": "integer"
-                },
-                "create_at": {
-                    "type": "string"
-                },
-                "description": {
-                    "type": "string"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "parsedYAML": {
-                    "type": "object"
-                },
-                "r_id": {
-                    "type": "integer"
-                },
-                "type": {
-                    "type": "string"
-                }
-            }
-        },
-        "models.UserGroup": {
-            "type": "object",
-            "properties": {
-                "createdAt": {
-                    "type": "string"
-                },
-                "gid": {
-                    "type": "integer"
-                },
-                "role": {
-                    "description": "ENUM",
-                    "type": "string"
-                },
-                "uid": {
-                    "type": "integer"
-                },
-                "updatedAt": {
-                    "type": "string"
-                }
-            }
-        },
-        "models.UserWithSuperAdmin": {
-            "type": "object",
-            "properties": {
-                "CreatedAt": {
-                    "type": "string"
-                },
-                "Email": {
-                    "type": "string"
-                },
-                "FullName": {
-                    "type": "string"
-                },
-                "IsSuperAdmin": {
-                    "type": "boolean"
-                },
-                "Status": {
-                    "type": "string"
-                },
-                "Type": {
-                    "type": "string"
-                },
-                "UID": {
-                    "type": "integer"
-                },
-                "UpdatedAt": {
-                    "type": "string"
-                },
-                "Username": {
-                    "type": "string"
-                }
-            }
-        },
-        "response.ErrorResponse": {
-            "type": "object",
-            "properties": {
-                "error": {
-                    "type": "string"
-                }
-            }
-        },
-        "response.MessageResponse": {
-            "type": "object",
-            "properties": {
-                "message": {
-                    "type": "string"
-                }
-            }
-        },
-        "response.SuccessResponse": {
-            "type": "object",
-            "properties": {
-                "code": {
-                    "type": "integer"
-                },
-                "data": {},
-                "message": {
-                    "type": "string"
-                }
-            }
-        },
-        "response.TokenResponse": {
-            "type": "object",
-            "properties": {
-                "is_super_admin": {
-                    "type": "boolean"
-                },
-                "token": {
-                    "type": "string"
-                },
-                "user_id": {
-                    "type": "integer"
-                },
-                "username": {
-                    "type": "string"
-                }
-            }
+          }
         }
+      },
+      "post": {
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "consumes": ["multipart/form-data"],
+        "produces": ["application/json"],
+        "tags": ["config_files"],
+        "summary": "Create a new config file",
+        "parameters": [
+          {
+            "type": "string",
+            "description": "Filename",
+            "name": "filename",
+            "in": "formData",
+            "required": true
+          },
+          {
+            "type": "string",
+            "description": "Raw YAML content",
+            "name": "raw_yaml",
+            "in": "formData",
+            "required": true
+          },
+          {
+            "type": "integer",
+            "description": "Project ID",
+            "name": "project_id",
+            "in": "formData",
+            "required": true
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Created",
+            "schema": {
+              "$ref": "#/definitions/models.ConfigFile"
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "schema": {
+              "$ref": "#/definitions/response.ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "schema": {
+              "$ref": "#/definitions/response.ErrorResponse"
+            }
+          }
+        }
+      }
     },
-    "securityDefinitions": {
-        "BearerAuth": {
-            "description": "JWT Authorization header using the Bearer scheme. Example: \"Bearer {token}\"",
-            "type": "apiKey",
-            "name": "Authorization",
-            "in": "header"
+    "/config-files/{id}": {
+      "get": {
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "produces": ["application/json"],
+        "tags": ["config_files"],
+        "summary": "Get a config file by ID",
+        "parameters": [
+          {
+            "type": "integer",
+            "description": "Config File ID",
+            "name": "id",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/models.ConfigFile"
+            }
+          },
+          "400": {
+            "description": "Invalid ID",
+            "schema": {
+              "$ref": "#/definitions/response.ErrorResponse"
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "schema": {
+              "$ref": "#/definitions/response.ErrorResponse"
+            }
+          }
         }
+      },
+      "put": {
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "consumes": ["multipart/form-data"],
+        "produces": ["application/json"],
+        "tags": ["config_files"],
+        "summary": "Update a config file by ID",
+        "parameters": [
+          {
+            "type": "integer",
+            "description": "Config File ID",
+            "name": "id",
+            "in": "path",
+            "required": true
+          },
+          {
+            "type": "string",
+            "description": "Filename",
+            "name": "filename",
+            "in": "formData"
+          },
+          {
+            "type": "string",
+            "description": "Raw YAML content",
+            "name": "raw_yaml",
+            "in": "formData"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/models.ConfigFile"
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "schema": {
+              "$ref": "#/definitions/response.ErrorResponse"
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "schema": {
+              "$ref": "#/definitions/response.ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "schema": {
+              "$ref": "#/definitions/response.ErrorResponse"
+            }
+          }
+        }
+      },
+      "delete": {
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "tags": ["config_files"],
+        "summary": "Delete a config file",
+        "parameters": [
+          {
+            "type": "integer",
+            "description": "ConfigFile ID",
+            "name": "id",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "schema": {
+              "$ref": "#/definitions/response.ErrorResponse"
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "schema": {
+              "$ref": "#/definitions/response.ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "schema": {
+              "$ref": "#/definitions/response.ErrorResponse"
+            }
+          }
+        }
+      }
+    },
+    "/config-files/{id}/resources": {
+      "get": {
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "produces": ["application/json"],
+        "tags": ["resources"],
+        "summary": "List resources by config file ID",
+        "parameters": [
+          {
+            "type": "integer",
+            "description": "Config File ID",
+            "name": "id",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/models.ResourceSwagger"
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid config file ID",
+            "schema": {
+              "$ref": "#/definitions/response.ErrorResponse"
+            }
+          }
+        }
+      }
+    },
+    "/groups": {
+      "get": {
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "produces": ["application/json"],
+        "tags": ["groups"],
+        "summary": "List all groups",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/models.Group"
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "schema": {
+              "$ref": "#/definitions/response.ErrorResponse"
+            }
+          }
+        }
+      },
+      "post": {
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "consumes": ["multipart/form-data"],
+        "produces": ["application/json"],
+        "tags": ["groups"],
+        "summary": "Create a new group",
+        "parameters": [
+          {
+            "type": "string",
+            "description": "Group name",
+            "name": "group_name",
+            "in": "formData",
+            "required": true
+          },
+          {
+            "type": "string",
+            "description": "Description",
+            "name": "description",
+            "in": "formData"
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Created",
+            "schema": {
+              "$ref": "#/definitions/models.Group"
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "schema": {
+              "$ref": "#/definitions/response.ErrorResponse"
+            }
+          },
+          "403": {
+            "description": "Forbidden (reserved name)",
+            "schema": {
+              "$ref": "#/definitions/response.ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "schema": {
+              "$ref": "#/definitions/response.ErrorResponse"
+            }
+          }
+        }
+      }
+    },
+    "/groups/{id}": {
+      "get": {
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "produces": ["application/json"],
+        "tags": ["groups"],
+        "summary": "Get group by ID",
+        "parameters": [
+          {
+            "type": "integer",
+            "description": "Group ID",
+            "name": "id",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/models.Group"
+            }
+          },
+          "400": {
+            "description": "Invalid group id",
+            "schema": {
+              "$ref": "#/definitions/response.ErrorResponse"
+            }
+          },
+          "404": {
+            "description": "Group not found",
+            "schema": {
+              "$ref": "#/definitions/response.ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "schema": {
+              "$ref": "#/definitions/response.ErrorResponse"
+            }
+          }
+        }
+      },
+      "put": {
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "consumes": ["multipart/form-data"],
+        "produces": ["application/json"],
+        "tags": ["groups"],
+        "summary": "Update group by ID",
+        "parameters": [
+          {
+            "type": "integer",
+            "description": "Group ID",
+            "name": "id",
+            "in": "path",
+            "required": true
+          },
+          {
+            "type": "string",
+            "description": "Group name",
+            "name": "group_name",
+            "in": "formData"
+          },
+          {
+            "type": "string",
+            "description": "Description",
+            "name": "description",
+            "in": "formData"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/models.Group"
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "schema": {
+              "$ref": "#/definitions/response.ErrorResponse"
+            }
+          },
+          "404": {
+            "description": "Group not found",
+            "schema": {
+              "$ref": "#/definitions/response.ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "schema": {
+              "$ref": "#/definitions/response.ErrorResponse"
+            }
+          }
+        }
+      },
+      "delete": {
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "produces": ["application/json"],
+        "tags": ["groups"],
+        "summary": "Delete group by ID",
+        "parameters": [
+          {
+            "type": "integer",
+            "description": "Group ID",
+            "name": "id",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Group deleted",
+            "schema": {
+              "$ref": "#/definitions/response.MessageResponse"
+            }
+          },
+          "400": {
+            "description": "Invalid group id",
+            "schema": {
+              "$ref": "#/definitions/response.ErrorResponse"
+            }
+          },
+          "403": {
+            "description": "Forbidden to delete 'super' group",
+            "schema": {
+              "$ref": "#/definitions/response.ErrorResponse"
+            }
+          },
+          "404": {
+            "description": "Group not found",
+            "schema": {
+              "$ref": "#/definitions/response.ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "schema": {
+              "$ref": "#/definitions/response.ErrorResponse"
+            }
+          }
+        }
+      }
+    },
+    "/instance/{id}": {
+      "post": {
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "produces": ["application/json"],
+        "tags": ["Instance"],
+        "summary": "Instantiate a config file instance",
+        "parameters": [
+          {
+            "type": "integer",
+            "description": "Config File ID",
+            "name": "id",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/response.MessageResponse"
+            }
+          },
+          "400": {
+            "description": "Invalid ID",
+            "schema": {
+              "$ref": "#/definitions/response.ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "schema": {
+              "$ref": "#/definitions/response.ErrorResponse"
+            }
+          }
+        }
+      },
+      "delete": {
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "produces": ["application/json"],
+        "tags": ["Instance"],
+        "summary": "Destruct a config file instance",
+        "parameters": [
+          {
+            "type": "integer",
+            "description": "Config File ID",
+            "name": "id",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No content"
+          },
+          "400": {
+            "description": "Invalid ID",
+            "schema": {
+              "$ref": "#/definitions/response.ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "schema": {
+              "$ref": "#/definitions/response.ErrorResponse"
+            }
+          }
+        }
+      }
+    },
+    "/login": {
+      "post": {
+        "consumes": ["application/x-www-form-urlencoded"],
+        "produces": ["application/json"],
+        "tags": ["auth"],
+        "summary": "User login",
+        "parameters": [
+          {
+            "type": "string",
+            "description": "Username",
+            "name": "username",
+            "in": "formData",
+            "required": true
+          },
+          {
+            "type": "string",
+            "description": "Password",
+            "name": "password",
+            "in": "formData",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "JWT token and user info",
+            "schema": {
+              "$ref": "#/definitions/response.TokenResponse"
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "schema": {
+              "$ref": "#/definitions/response.ErrorResponse"
+            }
+          },
+          "401": {
+            "description": "Invalid username or password",
+            "schema": {
+              "$ref": "#/definitions/response.ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Failed to generate token",
+            "schema": {
+              "$ref": "#/definitions/response.ErrorResponse"
+            }
+          }
+        }
+      }
+    },
+    "/projects": {
+      "get": {
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "produces": ["application/json"],
+        "tags": ["projects"],
+        "summary": "List all projects",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/models.Project"
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "schema": {
+              "$ref": "#/definitions/response.ErrorResponse"
+            }
+          }
+        }
+      },
+      "post": {
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "consumes": ["multipart/form-data"],
+        "produces": ["application/json"],
+        "tags": ["projects"],
+        "summary": "Create a new project",
+        "parameters": [
+          {
+            "type": "string",
+            "description": "Project name",
+            "name": "project_name",
+            "in": "formData",
+            "required": true
+          },
+          {
+            "type": "string",
+            "description": "Description",
+            "name": "description",
+            "in": "formData"
+          },
+          {
+            "type": "integer",
+            "description": "Group ID",
+            "name": "g_id",
+            "in": "formData",
+            "required": true
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Created",
+            "schema": {
+              "$ref": "#/definitions/models.Project"
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "schema": {
+              "$ref": "#/definitions/response.ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "schema": {
+              "$ref": "#/definitions/response.ErrorResponse"
+            }
+          }
+        }
+      }
+    },
+    "/projects/by-user": {
+      "get": {
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "produces": ["application/json"],
+        "tags": ["projects"],
+        "summary": "List projects by user",
+        "parameters": [
+          {
+            "type": "integer",
+            "description": "User ID",
+            "name": "id",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": {
+                  "$ref": "#/definitions/dto.GroupProjects"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "schema": {
+              "$ref": "#/definitions/response.ErrorResponse"
+            }
+          }
+        }
+      }
+    },
+    "/projects/{id}": {
+      "get": {
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "produces": ["application/json"],
+        "tags": ["projects"],
+        "summary": "Get project by ID",
+        "parameters": [
+          {
+            "type": "integer",
+            "description": "Project ID",
+            "name": "id",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/models.Project"
+            }
+          },
+          "400": {
+            "description": "Invalid project id",
+            "schema": {
+              "$ref": "#/definitions/response.ErrorResponse"
+            }
+          },
+          "404": {
+            "description": "Project not found",
+            "schema": {
+              "$ref": "#/definitions/response.ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "schema": {
+              "$ref": "#/definitions/response.ErrorResponse"
+            }
+          }
+        }
+      },
+      "put": {
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "consumes": ["multipart/form-data"],
+        "produces": ["application/json"],
+        "tags": ["projects"],
+        "summary": "Update project by ID",
+        "parameters": [
+          {
+            "type": "integer",
+            "description": "Project ID",
+            "name": "id",
+            "in": "path",
+            "required": true
+          },
+          {
+            "type": "string",
+            "description": "Project name",
+            "name": "project_name",
+            "in": "formData"
+          },
+          {
+            "type": "string",
+            "description": "Description",
+            "name": "description",
+            "in": "formData"
+          },
+          {
+            "type": "integer",
+            "description": "Group ID",
+            "name": "g_id",
+            "in": "formData"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/models.Project"
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "schema": {
+              "$ref": "#/definitions/response.ErrorResponse"
+            }
+          },
+          "404": {
+            "description": "Project not found",
+            "schema": {
+              "$ref": "#/definitions/response.ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "schema": {
+              "$ref": "#/definitions/response.ErrorResponse"
+            }
+          }
+        }
+      },
+      "delete": {
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "produces": ["application/json"],
+        "tags": ["projects"],
+        "summary": "Delete project by ID",
+        "parameters": [
+          {
+            "type": "integer",
+            "description": "Project ID",
+            "name": "id",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Project deleted",
+            "schema": {
+              "$ref": "#/definitions/response.MessageResponse"
+            }
+          },
+          "400": {
+            "description": "Invalid project id",
+            "schema": {
+              "$ref": "#/definitions/response.ErrorResponse"
+            }
+          },
+          "404": {
+            "description": "Project not found",
+            "schema": {
+              "$ref": "#/definitions/response.ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "schema": {
+              "$ref": "#/definitions/response.ErrorResponse"
+            }
+          }
+        }
+      }
+    },
+    "/projects/{id}/config-files": {
+      "get": {
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "produces": ["application/json"],
+        "tags": ["config_files"],
+        "summary": "List config files by project ID",
+        "parameters": [
+          {
+            "type": "integer",
+            "description": "Project ID",
+            "name": "id",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/models.ConfigFile"
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "schema": {
+              "$ref": "#/definitions/response.ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "schema": {
+              "$ref": "#/definitions/response.ErrorResponse"
+            }
+          }
+        }
+      }
+    },
+    "/projects/{id}/resources": {
+      "get": {
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "produces": ["application/json"],
+        "tags": ["resources"],
+        "summary": "List resources by project ID",
+        "parameters": [
+          {
+            "type": "integer",
+            "description": "Project ID",
+            "name": "id",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/models.ResourceSwagger"
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid project ID",
+            "schema": {
+              "$ref": "#/definitions/response.ErrorResponse"
+            }
+          }
+        }
+      }
+    },
+    "/pvc": {
+      "post": {
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "consumes": ["application/x-www-form-urlencoded"],
+        "produces": ["application/json"],
+        "tags": ["PVC"],
+        "summary": "create PVC",
+        "parameters": [
+          {
+            "description": "PVC info",
+            "name": "pvc",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/handlers.PVCRequest"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Created",
+            "schema": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "schema": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "schema": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/pvc/expand": {
+      "put": {
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "consumes": ["application/x-www-form-urlencoded"],
+        "produces": ["application/json"],
+        "tags": ["PVC"],
+        "summary": "Expand PVC",
+        "parameters": [
+          {
+            "description": "PVC expand info",
+            "name": "pvc",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/handlers.PVCRequest"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "schema": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "schema": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/pvc/list/{namespace}": {
+      "get": {
+        "produces": ["application/json"],
+        "tags": ["PVC"],
+        "summary": "List all PVC in Namespace",
+        "parameters": [
+          {
+            "type": "string",
+            "description": "namespace",
+            "name": "namespace",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/dto.PVC"
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "schema": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/pvc/{namespace}/{name}": {
+      "get": {
+        "produces": ["application/json"],
+        "tags": ["PVC"],
+        "summary": "query single PVC",
+        "parameters": [
+          {
+            "type": "string",
+            "description": "namespace",
+            "name": "namespace",
+            "in": "path",
+            "required": true
+          },
+          {
+            "type": "string",
+            "description": "PVC name",
+            "name": "name",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/dto.PVC"
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "schema": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "produces": ["application/json"],
+        "tags": ["PVC"],
+        "summary": "Delete PVC",
+        "parameters": [
+          {
+            "type": "string",
+            "description": "namespace",
+            "name": "namespace",
+            "in": "path",
+            "required": true
+          },
+          {
+            "type": "string",
+            "description": "PVC name",
+            "name": "name",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "schema": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/register": {
+      "post": {
+        "consumes": ["application/x-www-form-urlencoded"],
+        "produces": ["application/json"],
+        "tags": ["auth"],
+        "summary": "User registration",
+        "parameters": [
+          {
+            "description": "User registration info",
+            "name": "input",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/dto.CreateUserInput"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "User registered successfully",
+            "schema": {
+              "$ref": "#/definitions/response.MessageResponse"
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "schema": {
+              "$ref": "#/definitions/response.ErrorResponse"
+            }
+          },
+          "409": {
+            "description": "Username already taken",
+            "schema": {
+              "$ref": "#/definitions/response.ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Failed to create user",
+            "schema": {
+              "$ref": "#/definitions/response.ErrorResponse"
+            }
+          }
+        }
+      }
+    },
+    "/resources/{id}": {
+      "get": {
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "produces": ["application/json"],
+        "tags": ["resources"],
+        "summary": "Get resource by ID",
+        "parameters": [
+          {
+            "type": "integer",
+            "description": "Resource ID",
+            "name": "id",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/models.ResourceSwagger"
+            }
+          },
+          "400": {
+            "description": "Invalid ID",
+            "schema": {
+              "$ref": "#/definitions/response.ErrorResponse"
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "schema": {
+              "$ref": "#/definitions/response.ErrorResponse"
+            }
+          }
+        }
+      },
+      "put": {
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "consumes": ["multipart/form-data"],
+        "produces": ["application/json"],
+        "tags": ["resources"],
+        "summary": "Update resource by ID",
+        "parameters": [
+          {
+            "type": "integer",
+            "description": "Resource ID",
+            "name": "id",
+            "in": "path",
+            "required": true
+          },
+          {
+            "type": "string",
+            "description": "Resource name",
+            "name": "name",
+            "in": "formData"
+          },
+          {
+            "type": "string",
+            "description": "Resource type (e.g. pod, service, deployment)",
+            "name": "type",
+            "in": "formData"
+          },
+          {
+            "type": "string",
+            "description": "Parsed YAML content",
+            "name": "parsed_yaml",
+            "in": "formData"
+          },
+          {
+            "type": "string",
+            "description": "Description",
+            "name": "description",
+            "in": "formData"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/models.ResourceSwagger"
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "schema": {
+              "$ref": "#/definitions/response.ErrorResponse"
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "schema": {
+              "$ref": "#/definitions/response.ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "schema": {
+              "$ref": "#/definitions/response.ErrorResponse"
+            }
+          }
+        }
+      },
+      "delete": {
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "produces": ["application/json"],
+        "tags": ["resources"],
+        "summary": "Delete resource by ID",
+        "parameters": [
+          {
+            "type": "integer",
+            "description": "Resource ID",
+            "name": "id",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Invalid ID",
+            "schema": {
+              "$ref": "#/definitions/response.ErrorResponse"
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "schema": {
+              "$ref": "#/definitions/response.ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "schema": {
+              "$ref": "#/definitions/response.ErrorResponse"
+            }
+          }
+        }
+      }
+    },
+    "/user-group": {
+      "get": {
+        "produces": ["application/json"],
+        "tags": ["user_group"],
+        "summary": "Get a user-group relation by user ID and group ID",
+        "parameters": [
+          {
+            "type": "integer",
+            "description": "User ID",
+            "name": "u_id",
+            "in": "query",
+            "required": true
+          },
+          {
+            "type": "integer",
+            "description": "Group ID",
+            "name": "g_id",
+            "in": "query",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "allOf": [
+                {
+                  "$ref": "#/definitions/response.SuccessResponse"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/definitions/models.UserGroup"
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "schema": {
+              "$ref": "#/definitions/response.ErrorResponse"
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "schema": {
+              "$ref": "#/definitions/response.ErrorResponse"
+            }
+          }
+        }
+      },
+      "put": {
+        "consumes": ["application/x-www-form-urlencoded"],
+        "produces": ["application/json"],
+        "tags": ["user_group"],
+        "summary": "Update role of a user-group relation",
+        "parameters": [
+          {
+            "type": "integer",
+            "description": "User ID",
+            "name": "u_id",
+            "in": "formData",
+            "required": true
+          },
+          {
+            "type": "integer",
+            "description": "Group ID",
+            "name": "g_id",
+            "in": "formData",
+            "required": true
+          },
+          {
+            "type": "string",
+            "description": "Role (admin, manager, user)",
+            "name": "role",
+            "in": "formData",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/models.UserGroup"
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "schema": {
+              "$ref": "#/definitions/response.ErrorResponse"
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "schema": {
+              "$ref": "#/definitions/response.ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "schema": {
+              "$ref": "#/definitions/response.ErrorResponse"
+            }
+          }
+        }
+      },
+      "post": {
+        "consumes": ["application/x-www-form-urlencoded"],
+        "produces": ["application/json"],
+        "tags": ["user_group"],
+        "summary": "Create a user-group relation",
+        "parameters": [
+          {
+            "type": "integer",
+            "description": "User ID",
+            "name": "u_id",
+            "in": "formData",
+            "required": true
+          },
+          {
+            "type": "integer",
+            "description": "Group ID",
+            "name": "g_id",
+            "in": "formData",
+            "required": true
+          },
+          {
+            "type": "string",
+            "description": "Role (admin, manager, user)",
+            "name": "role",
+            "in": "formData",
+            "required": true
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Created",
+            "schema": {
+              "$ref": "#/definitions/models.UserGroup"
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "schema": {
+              "$ref": "#/definitions/response.ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "schema": {
+              "$ref": "#/definitions/response.ErrorResponse"
+            }
+          }
+        }
+      },
+      "delete": {
+        "consumes": ["application/x-www-form-urlencoded"],
+        "produces": ["application/json"],
+        "tags": ["user_group"],
+        "summary": "Delete a user-group relation",
+        "parameters": [
+          {
+            "type": "integer",
+            "description": "User ID",
+            "name": "u_id",
+            "in": "formData",
+            "required": true
+          },
+          {
+            "type": "integer",
+            "description": "Group ID",
+            "name": "g_id",
+            "in": "formData",
+            "required": true
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "deleted",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "schema": {
+              "$ref": "#/definitions/response.ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "schema": {
+              "$ref": "#/definitions/response.ErrorResponse"
+            }
+          }
+        }
+      }
+    },
+    "/user-group/by-group": {
+      "get": {
+        "produces": ["application/json"],
+        "tags": ["user_group"],
+        "summary": "Get all users in a group",
+        "parameters": [
+          {
+            "type": "integer",
+            "description": "Group ID",
+            "name": "g_id",
+            "in": "query",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "allOf": [
+                {
+                  "$ref": "#/definitions/response.SuccessResponse"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/definitions/models.UserGroup"
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "schema": {
+              "$ref": "#/definitions/response.ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "schema": {
+              "$ref": "#/definitions/response.ErrorResponse"
+            }
+          }
+        }
+      }
+    },
+    "/user-group/by-user": {
+      "get": {
+        "produces": ["application/json"],
+        "tags": ["user_group"],
+        "summary": "Get all groups for a user",
+        "parameters": [
+          {
+            "type": "integer",
+            "description": "User ID",
+            "name": "u_id",
+            "in": "query",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "allOf": [
+                {
+                  "$ref": "#/definitions/response.SuccessResponse"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/definitions/dto.UserGroups"
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "schema": {
+              "$ref": "#/definitions/response.ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "schema": {
+              "$ref": "#/definitions/response.ErrorResponse"
+            }
+          }
+        }
+      }
+    },
+    "/users": {
+      "get": {
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "produces": ["application/json"],
+        "tags": ["users"],
+        "summary": "List all users",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/models.UserWithSuperAdmin"
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "schema": {
+              "$ref": "#/definitions/response.ErrorResponse"
+            }
+          }
+        }
+      }
+    },
+    "/users/paging": {
+      "get": {
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "produces": ["application/json"],
+        "tags": ["users"],
+        "summary": "List all users with pagination",
+        "parameters": [
+          {
+            "type": "integer",
+            "description": "Page number (default: 1)",
+            "name": "page",
+            "in": "query"
+          },
+          {
+            "type": "integer",
+            "description": "Items per page (default: 10, max: 100)",
+            "name": "limit",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "allOf": [
+                {
+                  "$ref": "#/definitions/response.SuccessResponse"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/definitions/models.UserWithSuperAdmin"
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "schema": {
+              "$ref": "#/definitions/response.ErrorResponse"
+            }
+          }
+        }
+      }
+    },
+    "/users/{id}": {
+      "get": {
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "produces": ["application/json"],
+        "tags": ["users"],
+        "summary": "Get user by ID",
+        "parameters": [
+          {
+            "type": "integer",
+            "description": "User ID",
+            "name": "id",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/models.UserWithSuperAdmin"
+            }
+          },
+          "400": {
+            "description": "Invalid user id",
+            "schema": {
+              "$ref": "#/definitions/response.ErrorResponse"
+            }
+          },
+          "404": {
+            "description": "User not found",
+            "schema": {
+              "$ref": "#/definitions/response.ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "schema": {
+              "$ref": "#/definitions/response.ErrorResponse"
+            }
+          }
+        }
+      },
+      "put": {
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "description": "Partially update user's email, full name, type, status, or password.",
+        "consumes": ["multipart/form-data"],
+        "produces": ["application/json"],
+        "tags": ["users"],
+        "summary": "Update user",
+        "parameters": [
+          {
+            "type": "integer",
+            "description": "User ID",
+            "name": "id",
+            "in": "path",
+            "required": true
+          },
+          {
+            "type": "string",
+            "description": "Old password (required if updating password)",
+            "name": "old_password",
+            "in": "formData"
+          },
+          {
+            "type": "string",
+            "description": "New password",
+            "name": "password",
+            "in": "formData"
+          },
+          {
+            "type": "string",
+            "description": "Email",
+            "name": "email",
+            "in": "formData"
+          },
+          {
+            "type": "string",
+            "description": "Full name",
+            "name": "full_name",
+            "in": "formData"
+          },
+          {
+            "type": "string",
+            "description": "User type: origin or oauth2",
+            "name": "type",
+            "in": "formData"
+          },
+          {
+            "type": "string",
+            "description": "User status: online, offline, delete",
+            "name": "status",
+            "in": "formData"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Updated user info",
+            "schema": {
+              "$ref": "#/definitions/dto.UserDTO"
+            }
+          },
+          "400": {
+            "description": "Bad request error",
+            "schema": {
+              "$ref": "#/definitions/response.ErrorResponse"
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "schema": {
+              "$ref": "#/definitions/response.ErrorResponse"
+            }
+          },
+          "404": {
+            "description": "User not found",
+            "schema": {
+              "$ref": "#/definitions/response.ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "schema": {
+              "$ref": "#/definitions/response.ErrorResponse"
+            }
+          }
+        }
+      },
+      "delete": {
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "produces": ["application/json"],
+        "tags": ["users"],
+        "summary": "Delete user by ID",
+        "parameters": [
+          {
+            "type": "integer",
+            "description": "User ID",
+            "name": "id",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Invalid user id",
+            "schema": {
+              "$ref": "#/definitions/response.ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "schema": {
+              "$ref": "#/definitions/response.ErrorResponse"
+            }
+          }
+        }
+      }
     }
+  },
+  "definitions": {
+    "dto.CreateUserInput": {
+      "type": "object",
+      "required": ["password", "username"],
+      "properties": {
+        "email": {
+          "type": "string",
+          "example": "user@example.com"
+        },
+        "full_name": {
+          "type": "string",
+          "example": "John Doe"
+        },
+        "password": {
+          "type": "string",
+          "example": "password123"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["online", "offline", "delete"],
+          "example": "online"
+        },
+        "type": {
+          "type": "string",
+          "enum": ["origin", "oauth2"],
+          "example": "origin"
+        },
+        "username": {
+          "type": "string",
+          "example": "johndoe"
+        }
+      }
+    },
+    "dto.GroupInfo": {
+      "type": "object",
+      "properties": {
+        "gid": {
+          "type": "integer"
+        },
+        "groupName": {
+          "type": "string"
+        },
+        "role": {
+          "type": "string"
+        }
+      }
+    },
+    "dto.GroupProjects": {
+      "type": "object",
+      "properties": {
+        "group_name": {
+          "type": "string"
+        },
+        "projects": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/dto.SimpleProjectInfo"
+          }
+        }
+      }
+    },
+    "dto.PVC": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "example": "my-pvc"
+        },
+        "namespace": {
+          "type": "string",
+          "example": "default"
+        },
+        "size": {
+          "type": "string",
+          "example": "1Gi"
+        },
+        "status": {
+          "type": "string",
+          "example": "Bound"
+        }
+      }
+    },
+    "dto.SimpleProjectInfo": {
+      "type": "object",
+      "properties": {
+        "p_id": {
+          "type": "integer"
+        },
+        "project_name": {
+          "type": "string"
+        }
+      }
+    },
+    "dto.UserDTO": {
+      "type": "object",
+      "properties": {
+        "create_at": {
+          "type": "string",
+          "example": "2025-07-17 15:20:41"
+        },
+        "email": {
+          "type": "string",
+          "example": "user@example.com"
+        },
+        "full_name": {
+          "type": "string",
+          "example": "John Doe"
+        },
+        "is_admin": {
+          "type": "boolean",
+          "example": true
+        },
+        "status": {
+          "type": "string",
+          "example": "online"
+        },
+        "type": {
+          "type": "string",
+          "example": "origin"
+        },
+        "u_id": {
+          "type": "integer",
+          "example": 123
+        },
+        "update_at": {
+          "type": "string",
+          "example": "2025-07-17 15:20:41"
+        },
+        "username": {
+          "type": "string",
+          "example": "johndoe"
+        }
+      }
+    },
+    "dto.UserGroups": {
+      "type": "object",
+      "properties": {
+        "groups": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/dto.GroupInfo"
+          }
+        },
+        "uid": {
+          "type": "integer"
+        },
+        "username": {
+          "type": "string"
+        }
+      }
+    },
+    "handlers.PVCRequest": {
+      "type": "object",
+      "required": ["name", "namespace", "size", "storageClassName"],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "namespace": {
+          "type": "string"
+        },
+        "size": {
+          "type": "string"
+        },
+        "storageClassName": {
+          "type": "string"
+        }
+      }
+    },
+    "models.ConfigFile": {
+      "type": "object",
+      "properties": {
+        "cfid": {
+          "type": "integer"
+        },
+        "createdAt": {
+          "type": "string"
+        },
+        "filename": {
+          "type": "string"
+        },
+        "projectID": {
+          "type": "integer"
+        }
+      }
+    },
+    "models.Group": {
+      "type": "object",
+      "properties": {
+        "createdAt": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "gid": {
+          "type": "integer"
+        },
+        "groupName": {
+          "type": "string"
+        },
+        "updatedAt": {
+          "type": "string"
+        }
+      }
+    },
+    "models.Project": {
+      "type": "object",
+      "properties": {
+        "createdAt": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "gid": {
+          "description": "foreign key: group_list.g_id",
+          "type": "integer"
+        },
+        "pid": {
+          "type": "integer"
+        },
+        "projectName": {
+          "type": "string"
+        },
+        "updatedAt": {
+          "type": "string"
+        }
+      }
+    },
+    "models.ResourceSwagger": {
+      "type": "object",
+      "properties": {
+        "cf_id": {
+          "type": "integer"
+        },
+        "create_at": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "parsedYAML": {
+          "type": "object"
+        },
+        "r_id": {
+          "type": "integer"
+        },
+        "type": {
+          "type": "string"
+        }
+      }
+    },
+    "models.UserGroup": {
+      "type": "object",
+      "properties": {
+        "createdAt": {
+          "type": "string"
+        },
+        "gid": {
+          "type": "integer"
+        },
+        "role": {
+          "description": "ENUM",
+          "type": "string"
+        },
+        "uid": {
+          "type": "integer"
+        },
+        "updatedAt": {
+          "type": "string"
+        }
+      }
+    },
+    "models.UserWithSuperAdmin": {
+      "type": "object",
+      "properties": {
+        "CreatedAt": {
+          "type": "string"
+        },
+        "Email": {
+          "type": "string"
+        },
+        "FullName": {
+          "type": "string"
+        },
+        "IsSuperAdmin": {
+          "type": "boolean"
+        },
+        "Status": {
+          "type": "string"
+        },
+        "Type": {
+          "type": "string"
+        },
+        "UID": {
+          "type": "integer"
+        },
+        "UpdatedAt": {
+          "type": "string"
+        },
+        "Username": {
+          "type": "string"
+        }
+      }
+    },
+    "response.ErrorResponse": {
+      "type": "object",
+      "properties": {
+        "error": {
+          "type": "string"
+        }
+      }
+    },
+    "response.MessageResponse": {
+      "type": "object",
+      "properties": {
+        "message": {
+          "type": "string"
+        }
+      }
+    },
+    "response.SuccessResponse": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "integer"
+        },
+        "data": {},
+        "message": {
+          "type": "string"
+        }
+      }
+    },
+    "response.TokenResponse": {
+      "type": "object",
+      "properties": {
+        "is_super_admin": {
+          "type": "boolean"
+        },
+        "token": {
+          "type": "string"
+        },
+        "user_id": {
+          "type": "integer"
+        },
+        "username": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  "securityDefinitions": {
+    "BearerAuth": {
+      "description": "JWT Authorization header using the Bearer scheme. Example: \"Bearer {token}\"",
+      "type": "apiKey",
+      "name": "Authorization",
+      "in": "header"
+    }
+  }
 }

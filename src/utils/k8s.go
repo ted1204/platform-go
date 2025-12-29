@@ -7,6 +7,7 @@ import (
 
 	"github.com/linskybing/platform-go/src/config"
 	"github.com/linskybing/platform-go/src/k8sclient"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -14,7 +15,13 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer/json"
+	"k8s.io/apimachinery/pkg/util/intstr"
 )
+
+// FormatProjectNamespace returns the namespace name for a project (shared PV/PVC, no user suffix)
+func FormatProjectNamespace(projectID uint) string {
+	return fmt.Sprintf("proj-%d", projectID)
+}
 
 var ValidateK8sJSON = func(jsonStr string) (*schema.GroupVersionKind, string, error) {
 	decoder := json.NewSerializerWithOptions(
@@ -164,6 +171,20 @@ var DeleteNamespace = func(name string) error {
 
 	fmt.Printf("Deleted namespace: %s\n", name)
 	return nil
+}
+
+var CheckNamespaceExists = func(name string) (bool, error) {
+	if k8sclient.Clientset == nil {
+		return false, nil // Mock
+	}
+	_, err := k8sclient.Clientset.CoreV1().Namespaces().Get(context.TODO(), name, metav1.GetOptions{})
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			return false, nil
+		}
+		return false, err
+	}
+	return true, nil
 }
 
 func parseResourceQuantity(size string) (resource.Quantity, error) {
@@ -422,6 +443,187 @@ var CreateBoundPVC = func(ns string, name string, storageClassName string, size 
 	}
 
 	fmt.Printf("PVC %s created in namespace %s bound to %s\n", result.Name, ns, volumeName)
+	return nil
+}
+
+// CreateHubPVC creates the underlying Longhorn volume for the user's storage hub.
+// It enforces ReadWriteOnce (RWO) mode, which is optimal for Longhorn block storage performance.
+// This volume will be mounted by the NFS server pod.
+var CreateHubPVC = func(ns string, name string, storageClassName string, size string) error {
+	if k8sclient.Clientset == nil {
+		fmt.Printf("[MOCK] Hub PVC %s created in %s\n", name, ns)
+		return nil
+	}
+
+	quantity, err := parseResourceQuantity(size)
+	if err != nil {
+		return err
+	}
+
+	pvc := &corev1.PersistentVolumeClaim{
+		ObjectMeta: metav1.ObjectMeta{Name: name},
+		Spec: corev1.PersistentVolumeClaimSpec{
+			// Use ReadWriteOnce for the backing storage to ensure data consistency and performance
+			// when accessed by the single NFS server instance.
+			AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
+			Resources: corev1.VolumeResourceRequirements{
+				Requests: corev1.ResourceList{corev1.ResourceStorage: quantity},
+			},
+			StorageClassName: &storageClassName,
+		},
+	}
+
+	_, err = k8sclient.Clientset.CoreV1().PersistentVolumeClaims(ns).Create(context.TODO(), pvc, metav1.CreateOptions{})
+	if err != nil && !apierrors.IsAlreadyExists(err) {
+		return fmt.Errorf("failed to create Hub PVC: %w", err)
+	}
+	fmt.Printf("Hub PVC %s created in namespace %s\n", name, ns)
+	return nil
+}
+
+// CreateNFSDeployment deploys a lightweight NFS server pod.
+// This pod mounts the Longhorn RWO volume and exposes it as an NFS share.
+// Privileged mode is required for the NFS server to operate correctly.
+var CreateNFSDeployment = func(ns string, pvcName string) error {
+	if k8sclient.Clientset == nil {
+		fmt.Printf("[MOCK] NFS Deployment created in %s mounting %s\n", ns, pvcName)
+		return nil
+	}
+
+	name := "storage-gateway"
+	replicas := int32(1) // Must be 1 since the backing PVC is RWO
+	privileged := true   // NFS server requires privileged security context
+
+	deploy := &appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{Name: name},
+		Spec: appsv1.DeploymentSpec{
+			Replicas: &replicas,
+			Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": "nfs-gateway"}},
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app": "nfs-gateway"}},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{
+						{
+							Name:  "nfs",
+							Image: "itsthenetwork/nfs-server-alpine:12",
+
+							// [FIX] This specific image requires an environment variable to know which folder to export.
+							Env: []corev1.EnvVar{
+								{
+									Name:  "SHARED_DIRECTORY",
+									Value: "/exports",
+								},
+							},
+
+							Ports: []corev1.ContainerPort{
+								{Name: "nfs", ContainerPort: 2049},
+								{Name: "mountd", ContainerPort: 20048},
+								{Name: "rpcbind", ContainerPort: 111},
+							},
+							SecurityContext: &corev1.SecurityContext{
+								Privileged: &privileged,
+							},
+							VolumeMounts: []corev1.VolumeMount{
+								{Name: "hub-storage", MountPath: "/exports"},
+							},
+						},
+					},
+					Volumes: []corev1.Volume{
+						{
+							Name: "hub-storage",
+							VolumeSource: corev1.VolumeSource{
+								PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+									ClaimName: pvcName,
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	_, err := k8sclient.Clientset.AppsV1().Deployments(ns).Create(context.TODO(), deploy, metav1.CreateOptions{})
+	if err != nil && !apierrors.IsAlreadyExists(err) {
+		return fmt.Errorf("failed to create NFS deployment: %w", err)
+	}
+	fmt.Printf("NFS Deployment created in %s\n", ns)
+	return nil
+}
+
+// CreateNFSService creates a ClusterIP service to expose the NFS server.
+// This service acts as the stable endpoint (Gateway) for project namespaces to mount storage.
+var CreateNFSService = func(ns string) error {
+	if k8sclient.Clientset == nil {
+		fmt.Printf("[MOCK] NFS Service created in %s\n", ns)
+		return nil
+	}
+
+	name := "storage-svc"
+	svc := &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{Name: name},
+		Spec: corev1.ServiceSpec{
+			Selector: map[string]string{"app": "nfs-gateway"},
+			Ports: []corev1.ServicePort{
+				{Name: "nfs", Port: 2049, TargetPort: intstr.FromInt(2049)},
+				{Name: "mountd", Port: 20048, TargetPort: intstr.FromInt(20048)},
+				{Name: "rpcbind", Port: 111, TargetPort: intstr.FromInt(111)},
+			},
+			Type: corev1.ServiceTypeClusterIP,
+		},
+	}
+
+	_, err := k8sclient.Clientset.CoreV1().Services(ns).Create(context.TODO(), svc, metav1.CreateOptions{})
+	if err != nil && !apierrors.IsAlreadyExists(err) {
+		return fmt.Errorf("failed to create NFS service: %w", err)
+	}
+	fmt.Printf("NFS Service created in %s\n", ns)
+	return nil
+}
+
+// CreateNFSPV creates a PersistentVolume backed by an NFS server.
+// This is used by "Spoke" projects to connect to the User's "Hub" storage.
+// The server address should be the DNS name of the user's storage service
+// (e.g., storage-svc.user-sky-storage.svc.cluster.local).
+var CreateNFSPV = func(name string, server string, path string, size string) error {
+	if k8sclient.Clientset == nil {
+		fmt.Printf("[MOCK] NFS PV %s created pointing to %s:%s\n", name, server, path)
+		return nil
+	}
+
+	quantity, err := parseResourceQuantity(size)
+	if err != nil {
+		return err
+	}
+
+	pv := &corev1.PersistentVolume{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: name, // Must be unique cluster-wide
+		},
+		Spec: corev1.PersistentVolumeSpec{
+			Capacity: corev1.ResourceList{
+				corev1.ResourceStorage: quantity,
+			},
+			AccessModes: []corev1.PersistentVolumeAccessMode{
+				corev1.ReadWriteMany, // NFS supports RWX
+			},
+			// Use NFS source instead of HostPath or CSI
+			PersistentVolumeSource: corev1.PersistentVolumeSource{
+				NFS: &corev1.NFSVolumeSource{
+					Server: server,
+					Path:   path,
+				},
+			},
+			// Empty StorageClass prevents dynamic provisioners from interfering
+			StorageClassName: "",
+		},
+	}
+
+	_, err = k8sclient.Clientset.CoreV1().PersistentVolumes().Create(context.TODO(), pv, metav1.CreateOptions{})
+	if err != nil && !apierrors.IsAlreadyExists(err) {
+		return fmt.Errorf("failed to create NFS PV: %w", err)
+	}
+	fmt.Printf("NFS PV %s created\n", name)
 	return nil
 }
 

@@ -3,9 +3,12 @@ package services
 import (
 	"context"
 	"fmt"
+	"log"
+	"regexp"
 	"strconv"
 	"strings"
 
+	"github.com/linskybing/platform-go/src/config"
 	"github.com/linskybing/platform-go/src/dto"
 	"github.com/linskybing/platform-go/src/k8sclient"
 	"github.com/linskybing/platform-go/src/models"
@@ -240,4 +243,112 @@ func (s *K8sService) StartFileBrowser(ctx context.Context, ns, pvcName string) (
 
 func (s *K8sService) StopFileBrowser(ctx context.Context, ns, pvcName string) error {
 	return k8sclient.DeleteFileBrowserResources(ctx, ns, pvcName)
+}
+
+func (s *K8sService) CheckUserStorageExists(ctx context.Context, username string) (bool, error) {
+	safeUser := strings.ToLower(username)
+	nsName := fmt.Sprintf("user-%s-storage", safeUser)
+
+	return utils.CheckNamespaceExists(nsName)
+}
+
+// InitializeUserStorageHub orchestrates the creation of a per-user storage hub.
+// Architecture: Hub-and-Spoke
+// 1. Namespace: Dedicated namespace for the user's storage infrastructure.
+// 2. PVC: A "Real" Longhorn RWO volume (Thin Provisioned).
+// 3. Deployment: An NFS Server pod mounting the Longhorn volume.
+// 4. Service: A stable ClusterIP to act as the gateway for future projects.
+func (s *K8sService) InitializeUserStorageHub(username string) error {
+	// 1. Sanitize Username for K8s compliance
+	// K8s resources must consist of lowercase alphanumeric characters or '-'.
+	// We replace underscores with hyphens and remove other special chars.
+	safeUser := strings.ToLower(username)
+	reg, err := regexp.Compile("[^a-z0-9-]+")
+	if err == nil {
+		safeUser = reg.ReplaceAllString(safeUser, "-")
+	}
+
+	// Define resource names
+	nsName := fmt.Sprintf("user-%s-storage", safeUser)
+	pvcName := fmt.Sprintf("user-%s-disk", safeUser)
+
+	log.Printf("[StorageHub] Initializing storage hub for user: %s (ns: %s)", username, nsName)
+
+	// 2. Create Namespace
+	// We ignore the error if it implies "AlreadyExists" inside the utils,
+	// but here we just check if it failed critically.
+	if err := utils.CreateNamespace(nsName); err != nil {
+		// In a real scenario, you might want to check if err is "AlreadyExists" and proceed.
+		// Assuming utils handles logging, we just log and continue or return based on policy.
+		log.Printf("[StorageHub] Namespace creation warning: %v", err)
+	}
+
+	// 3. Create the Hub PVC (The "Real" Volume)
+	// StorageClass: "longhorn" (Must match your cluster's SC name)
+	// Size: "50Gi" (This is a thin-provisioned limit, actual usage grows on demand)
+	// Mode: ReadWriteOnce (Handled inside utils.CreateHubPVC)
+	if err := utils.CreateHubPVC(nsName, pvcName, config.DefaultStorageClassName, config.UserPVSize); err != nil {
+		return fmt.Errorf("failed to create hub pvc: %w", err)
+	}
+
+	// 4. Deploy NFS Server
+	// This pod mounts the pvcName created above.
+	if err := utils.CreateNFSDeployment(nsName, pvcName); err != nil {
+		return fmt.Errorf("failed to create nfs deployment: %w", err)
+	}
+
+	// 5. Expose NFS Service (Gateway)
+	// This creates the DNS entry: storage-svc.user-<safeUser>-storage.svc.cluster.local
+	if err := utils.CreateNFSService(nsName); err != nil {
+		return fmt.Errorf("failed to create nfs service: %w", err)
+	}
+
+	log.Printf("[StorageHub] Successfully initialized storage hub for %s", username)
+	return nil
+}
+
+func (s *K8sService) ExpandUserStorageHub(username, newSize string) error {
+	safeUser := strings.ToLower(username)
+	nsName := fmt.Sprintf("user-%s-storage", safeUser)
+	pvcName := fmt.Sprintf("user-%s-disk", safeUser)
+
+	return utils.ExpandPVC(nsName, pvcName, newSize)
+}
+
+// DeleteUserStorageHub completely removes a user's storage infrastructure.
+// It deletes the dedicated namespace, which automatically cleans up the PVC, NFS Server, and Services inside it.
+func (s *K8sService) DeleteUserStorageHub(ctx context.Context, username string) error {
+	// 1. Sanitize username to match the naming convention used during initialization.
+	// Ensure this matches the logic in InitializeUserStorageHub.
+	safeUser := strings.ToLower(username)
+	// safeUser = regexp.MustCompile("[^a-z0-9-]").ReplaceAllString(safeUser, "-")
+
+	// 2. Define the namespace name.
+	nsName := fmt.Sprintf("user-%s-storage", safeUser)
+
+	// 3. Delete the entire namespace.
+	// This is the cleanest way to decommission a user's storage hub.
+	// It ensures no orphaned resources (like PVCs or Pods) are left behind.
+	if err := utils.DeleteNamespace(nsName); err != nil {
+		return fmt.Errorf("failed to delete user storage namespace '%s': %w", nsName, err)
+	}
+
+	return nil
+}
+
+func (s *K8sService) OpenUserGlobalFileBrowser(ctx context.Context, username string) (string, error) {
+
+	safeUser := strings.ToLower(username)
+	port, err := utils.StartUserHubBrowser(ctx, safeUser)
+	if err != nil {
+		return "", err
+	}
+
+	return port, nil
+}
+
+func (s *K8sService) StopUserGlobalFileBrowser(ctx context.Context, username string) error {
+	safeUser := strings.ToLower(username)
+	// safeUser = regexp.MustCompile("[^a-z0-9-]").ReplaceAllString(safeUser, "-")
+	return utils.StopUserHubBrowser(ctx, safeUser)
 }

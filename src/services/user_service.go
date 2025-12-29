@@ -137,3 +137,8 @@ func (s *UserService) UpdateUser(id uint, input dto.UpdateUserInput) (models.Use
 func (s *UserService) RemoveUser(id uint) error {
 	return s.Repos.User.DeleteUser(id)
 }
+
+func (s *UserService) EnsureAllUserPV() (int, error) {
+	adminSvc := NewAdminService(s.Repos)
+	return adminSvc.EnsureAllUserPV()
+}

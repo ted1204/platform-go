@@ -31,3 +31,7 @@ type ExpandPVCDTO struct {
 	Name      string `form:"name" binding:"required"`
 	Size      string `form:"size" binding:"required"`
 }
+
+type ExpandStorageInput struct {
+	NewSize string `json:"new_size" binding:"required" example:"1Ti"`
+}

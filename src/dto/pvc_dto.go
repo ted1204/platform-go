@@ -5,4 +5,5 @@ type PVC struct {
 	Namespace string `json:"namespace" example:"default"`
 	Status    string `json:"status" example:"Bound"`
 	Size      string `json:"size" example:"1Gi"`
+	IsGlobal  bool   `json:"isGlobal" example:"false"`
 }

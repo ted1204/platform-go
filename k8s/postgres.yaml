@@ -24,11 +24,9 @@ spec:
       labels:
         app: postgres
     spec:
-      imagePullSecrets:
-        - name: harbor-cred
       containers:
         - name: postgres
-          image: 192.168.109.1:30002/platform/postgres-with-pg_cron:latest
+          image: linskybing/postgres-with-pg_cron:latest
           imagePullPolicy: Always
           ports:
             - containerPort: 5432
@@ -50,8 +48,9 @@ spec:
               name: pgdata
       volumes:
         - name: pgdata
-          persistentVolumeClaim:
-            claimName: pg-pvc
+          hostPath:
+            path: /Users/sky/tmp
+            type: Directory
 ---
 apiVersion: v1
 kind: Service

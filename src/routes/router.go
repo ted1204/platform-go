@@ -10,11 +10,13 @@ import (
 )
 
 func RegisterRoutes(r *gin.Engine) {
-
+	// --- JWT-protected routes ---
+	// Token status check endpoint (no group, but with JWT middleware)
+	r.GET("/auth/status", middleware.JWTAuthMiddleware(), handlers.AuthStatusHandler)
 	// init
 	repos_instance := repositories.New()
 	services_instance := services.New(repos_instance)
-	handlers_instance := handlers.New(services_instance)
+	handlers_instance := handlers.New(services_instance, r)
 	authMiddleware := middleware.NewAuth(repos_instance)
 
 	// setup
@@ -112,6 +114,16 @@ func RegisterRoutes(r *gin.Engine) {
 			{
 				fb.POST("/start", authMiddleware.Admin(), handlers_instance.K8s.StartFileBrowser)
 				fb.POST("/stop", authMiddleware.Admin(), handlers_instance.K8s.StopFileBrowser)
+			}
+
+			userStorageGroup := k8s.Group("/users")
+			{
+				userStorageGroup.GET("/:username/storage/status", authMiddleware.Admin(), handlers_instance.K8s.GetUserStorageStatus)
+				userStorageGroup.POST("/:username/storage/init", authMiddleware.Admin(), handlers_instance.K8s.InitializeUserStorage)
+				userStorageGroup.PUT("/:username/storage/expand", authMiddleware.Admin(), handlers_instance.K8s.ExpandUserStorage)
+				userStorageGroup.DELETE("/:username/storage", authMiddleware.Admin(), handlers_instance.K8s.DeleteUserStorage)
+				userStorageGroup.POST("/browse", handlers_instance.K8s.OpenMyDrive)
+				userStorageGroup.DELETE("/browse", handlers_instance.K8s.StopMyDrive)
 			}
 		}
 
