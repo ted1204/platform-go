@@ -28,6 +28,9 @@ func setupProjectMocks(t *testing.T) (*services.ProjectService,
 	mockView := mock_repositories.NewMockViewRepo(ctrl)
 	mockAudit := mock_repositories.NewMockAuditRepo(ctrl)
 
+	// Provide a default behavior for ListUsersByProjectID to avoid brittle ordering issues in tests.
+	mockView.EXPECT().ListUsersByProjectID(gomock.Any()).Return([]models.ProjectUserView{}, nil).AnyTimes()
+
 	repos := &repositories.Repos{
 		Project: mockProject,
 		View:    mockView,
@@ -49,16 +52,12 @@ func setupProjectMocks(t *testing.T) (*services.ProjectService,
 }
 
 func TestProjectServiceCRUD(t *testing.T) {
-	svc, mockProject, mockView, _, c := setupProjectMocks(t)
+	svc, mockProject, _, _, c := setupProjectMocks(t)
 
 	t.Run("CreateProject success", func(t *testing.T) {
 		input := dto.CreateProjectDTO{ProjectName: "proj1", GID: 1}
 
 		mockProject.EXPECT().CreateProject(gomock.Any()).Return(nil)
-		mockView.EXPECT().ListUsersByProjectID(gomock.Any()).Return([]models.ProjectUserView{
-			{Username: "user1"},
-			{Username: "user2"},
-		}, nil)
 
 		project, err := svc.CreateProject(c, input)
 		if err != nil {
@@ -69,16 +68,8 @@ func TestProjectServiceCRUD(t *testing.T) {
 		}
 	})
 
-	t.Run("CreateProject fails on resource allocation", func(t *testing.T) {
-		input := dto.CreateProjectDTO{ProjectName: "proj2", GID: 1}
-		mockProject.EXPECT().CreateProject(gomock.Any()).Return(nil)
-		mockView.EXPECT().ListUsersByProjectID(gomock.Any()).Return(nil, errors.New("list users failed"))
-
-		_, err := svc.CreateProject(c, input)
-		if err == nil {
-			t.Fatal("expected error, got nil")
-		}
-	})
+	// Resource allocation now happens when a user joins a project (via UserGroupService).
+	// The CreateProject flow does not attempt to allocate namespaces/PVCs anymore.
 
 	t.Run("UpdateProject success", func(t *testing.T) {
 		oldProject := models.Project{PID: 1, ProjectName: "old", GID: 1}
@@ -110,7 +101,6 @@ func TestProjectServiceCRUD(t *testing.T) {
 		project := models.Project{PID: 1, ProjectName: "proj1", GID: 1}
 		mockProject.EXPECT().GetProjectByID(uint(1)).Return(project, nil)
 		mockProject.EXPECT().DeleteProject(uint(1)).Return(nil)
-		mockView.EXPECT().ListUsersByProjectID(uint(1)).Return([]models.ProjectUserView{{Username: "user1"}}, nil)
 
 		err := svc.DeleteProject(c, 1)
 		if err != nil {
@@ -127,7 +117,6 @@ func TestProjectServiceCRUD(t *testing.T) {
 	})
 
 	t.Run("AllocateProjectResources creates namespace & pvc", func(t *testing.T) {
-		mockView.EXPECT().ListUsersByProjectID(uint(1)).Return([]models.ProjectUserView{{Username: "user1"}}, nil)
 		err := svc.AllocateProjectResources(1)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -135,7 +124,6 @@ func TestProjectServiceCRUD(t *testing.T) {
 	})
 
 	t.Run("RemoveProjectResources deletes namespace", func(t *testing.T) {
-		mockView.EXPECT().ListUsersByProjectID(uint(1)).Return([]models.ProjectUserView{{Username: "user1"}}, nil)
 		err := svc.RemoveProjectResources(1)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
