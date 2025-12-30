@@ -762,8 +762,8 @@ func CreateJob(ctx context.Context, spec JobSpec) error {
 	return err
 }
 
-// CreateFileBrowserPod creates a pod running filebrowser
-func CreateFileBrowserPod(ctx context.Context, ns, pvcName string) (string, error) {
+// CreateFileBrowserPod creates a pod running filebrowser with optional read-only access
+func CreateFileBrowserPod(ctx context.Context, ns, pvcName string, readOnly bool, baseURL string) (string, error) {
 	podName := fmt.Sprintf("filebrowser-%s", pvcName)
 
 	// Check if pod already exists
@@ -786,7 +786,15 @@ func CreateFileBrowserPod(ctx context.Context, ns, pvcName string) (string, erro
 				{
 					Name:  "filebrowser",
 					Image: "filebrowser/filebrowser:latest",
-					Args:  []string{"--noauth", "--root", "/srv", "--port", "8080", "--address", "0.0.0.0"},
+					// Use --baseurl if needed for reverse proxy compatibility
+					Args: []string{
+						"--noauth",
+						"--database", "/tmp/filebrowser.db",
+						"--root", "/srv",
+						"--port", "80",
+						"--address", "0.0.0.0",
+						"--baseURL", baseURL,
+					},
 					Ports: []corev1.ContainerPort{
 						{ContainerPort: 8080},
 					},
@@ -794,6 +802,7 @@ func CreateFileBrowserPod(ctx context.Context, ns, pvcName string) (string, erro
 						{
 							Name:      "data",
 							MountPath: "/srv",
+							ReadOnly:  readOnly, // Set based on user role
 						},
 					},
 				},
@@ -846,7 +855,7 @@ func CreateFileBrowserService(ctx context.Context, ns, pvcName string) (string, 
 			Ports: []corev1.ServicePort{
 				{
 					Port:       80,
-					TargetPort: intstr.FromInt(8080),
+					TargetPort: intstr.FromInt(80),
 					Protocol:   corev1.ProtocolTCP,
 				},
 			},

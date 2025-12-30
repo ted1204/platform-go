@@ -17,6 +17,7 @@ type ViewRepo interface {
 	IsSuperAdmin(uid uint) (bool, error)
 	ListUsersByProjectID(projectID uint) ([]models.ProjectUserView, error)
 	ListProjectsByUserID(userID uint) ([]models.ProjectUserView, error)
+	GetUserRoleInGroup(uid uint, gid uint) (string, error)
 }
 
 type DBViewRepo struct{}
@@ -110,4 +111,20 @@ func (r *DBViewRepo) ListProjectsByUserID(userID uint) ([]models.ProjectUserView
 		return nil, err
 	}
 	return projects, nil
+}
+
+// GetUserRoleInGroup fetches the role of a user in a specific group from the UserGroupView model.
+// This avoids hardcoding table names and relies on the model definition.
+func (r *DBViewRepo) GetUserRoleInGroup(uid uint, gid uint) (string, error) {
+	var view models.UserGroupView
+	// Use the model struct instead of a hardcoded string table name
+	err := db.DB.Model(&models.UserGroupView{}).
+		Select("role").
+		Where("u_id = ? AND g_id = ?", uid, gid).
+		First(&view).Error
+
+	if err != nil {
+		return "", err
+	}
+	return view.Role, nil
 }

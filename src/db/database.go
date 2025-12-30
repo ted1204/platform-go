@@ -168,7 +168,8 @@ func createViews() {
 		g.g_id,
 		g.group_name,
 		u.u_id,
-		u.username
+		u.username,
+		ug.role
 		FROM projects p
 		JOIN group_list g ON p.g_id = g.g_id
 		JOIN user_group ug ON ug.g_id = g.g_id

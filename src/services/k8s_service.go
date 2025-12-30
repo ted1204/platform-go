@@ -225,9 +225,11 @@ func (s *K8sService) DeletePVC(ns, name string) error {
 	return utils.DeletePVC(ns, name)
 }
 
-func (s *K8sService) StartFileBrowser(ctx context.Context, ns, pvcName string) (string, error) {
-	// 1. Create Pod
-	_, err := k8sclient.CreateFileBrowserPod(ctx, ns, pvcName)
+// StartFileBrowser provisions a FileBrowser instance with specific access permissions.
+func (s *K8sService) StartFileBrowser(ctx context.Context, ns, pvcName string, readOnly bool, baseURL string) (string, error) {
+	// 1. Create Pod with dynamic read-only configuration
+	// Note: You need to update CreateFileBrowserPod to accept the readOnly boolean.
+	_, err := k8sclient.CreateFileBrowserPod(ctx, ns, pvcName, readOnly, baseURL)
 	if err != nil {
 		return "", err
 	}
@@ -238,7 +240,6 @@ func (s *K8sService) StartFileBrowser(ctx context.Context, ns, pvcName string) (
 		return "", err
 	}
 
-	// Return access URL (assuming node IP is known or handled by frontend)
 	return nodePort, nil
 }
 
@@ -366,7 +367,7 @@ func (s *K8sService) CreateProjectPVC(ctx context.Context, req dto.CreateProject
 	// 2. Prepare Labels
 	// 準備 Namespace 標籤
 	nsLabels := map[string]string{
-		"managed-by":   "tailadmin",
+		"managed-by":   "nthucscc",
 		"type":         "project-space",
 		"project-id":   fmt.Sprintf("%d", req.ProjectID),
 		"project-name": req.ProjectName,

@@ -12,14 +12,14 @@ type CreateProjectStorageRequest struct {
 }
 
 // ProjectPVCOutput defines the response structure for listing storages.
-// 定義回傳給前端的 PVC 列表資料結構
 type ProjectPVCOutput struct {
-	ID          string    `json:"id"`          // The Project ID
+	ID          string    `json:"id"`          // The Project ID (string format to prevent frontend conversion issues)
 	PVCName     string    `json:"pvcName"`     // The K8s PVC Name
 	ProjectName string    `json:"projectName"` // Human readable name
-	Namespace   string    `json:"namespace"`
-	Capacity    string    `json:"capacity"`
-	Status      string    `json:"status"`
-	AccessMode  string    `json:"accessMode"`
-	CreatedAt   time.Time `json:"createdAt"`
+	Namespace   string    `json:"namespace"`   // K8s Namespace
+	Capacity    string    `json:"capacity"`    // e.g., "10Gi"
+	Status      string    `json:"status"`      // e.g., "Bound"
+	Role        string    `json:"role"`        // [NEW] User's role in the group (admin/manager/member)
+	AccessMode  string    `json:"accessmode"`
+	CreatedAt   time.Time `json:"createdAt"` // Creation timestamp
 }

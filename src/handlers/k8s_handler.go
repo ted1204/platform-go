@@ -330,60 +330,6 @@ func (h *K8sHandler) DeletePVC(c *gin.Context) {
 	})
 }
 
-// @Summary Start File Browser
-// @Tags k8s
-// @Accept json
-// @Produce json
-// @Param body body dto.StartFileBrowserDTO true "Start Info"
-// @Success 200 {object} response.SuccessResponse
-// @Failure 500 {object} response.ErrorResponse
-// @Router /k8s/filebrowser/start [post]
-func (h *K8sHandler) StartFileBrowser(c *gin.Context) {
-	var input dto.StartFileBrowserDTO
-	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, response.ErrorResponse{Error: err.Error()})
-		return
-	}
-
-	nodePort, err := h.K8sService.StartFileBrowser(c.Request.Context(), input.Namespace, input.PVCName)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, response.ErrorResponse{Error: err.Error()})
-		return
-	}
-
-	c.JSON(http.StatusOK, response.SuccessResponse{
-		Code:    0,
-		Message: "File Browser Started",
-		Data:    gin.H{"nodePort": nodePort},
-	})
-}
-
-// @Summary Stop File Browser
-// @Tags k8s
-// @Accept json
-// @Produce json
-// @Param body body dto.StopFileBrowserDTO true "Stop Info"
-// @Success 200 {object} response.SuccessResponse
-// @Failure 500 {object} response.ErrorResponse
-// @Router /k8s/filebrowser/stop [post]
-func (h *K8sHandler) StopFileBrowser(c *gin.Context) {
-	var input dto.StopFileBrowserDTO
-	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, response.ErrorResponse{Error: err.Error()})
-		return
-	}
-
-	if err := h.K8sService.StopFileBrowser(c.Request.Context(), input.Namespace, input.PVCName); err != nil {
-		c.JSON(http.StatusInternalServerError, response.ErrorResponse{Error: err.Error()})
-		return
-	}
-
-	c.JSON(http.StatusOK, response.SuccessResponse{
-		Code:    0,
-		Message: "File Browser Stopped",
-	})
-}
-
 // GetUserStorageStatus godoc
 // @Summary Check if user storage exists
 // @Tags k8s
@@ -646,6 +592,69 @@ func (h *K8sHandler) ListProjectStorages(c *gin.Context) {
 	c.JSON(http.StatusOK, list)
 }
 
+// GetUserProjectStorages godoc
+// @Summary List storages for projects the user belongs to
+// @Description Fetches all PVCs for projects where the current user is a member.
+// @Tags k8s
+// @Produce json
+// @Success 200 {array} dto.ProjectPVCOutput
+// @Failure 401 {object} response.ErrorResponse
+// @Failure 500 {object} response.ErrorResponse
+// @Router /k8s/projects/my-storages [get]
+func (h *K8sHandler) GetUserProjectStorages(c *gin.Context) {
+	// 1. Get UserID from Context
+	uid, err := utils.GetUserIDFromContext(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, response.ErrorResponse{Error: "Unauthorized"})
+		return
+	}
+
+	// 2. Fetch projects with Roles using the updated View
+	projects, err := h.ProjectService.GetProjectsByUser(uid)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, response.ErrorResponse{Error: "Failed to fetch user projects: " + err.Error()})
+		return
+	}
+
+	// 3. Create a map to store ProjectID -> Role for quick lookup
+	userProjectRoles := make(map[uint]string)
+	for _, p := range projects {
+		userProjectRoles[p.PID] = p.Role
+	}
+
+	// 4. Setup Context for K8s operations
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 15*time.Second)
+	defer cancel()
+
+	// 5. Get all storage info from K8s
+	allStorages, err := h.K8sService.ListAllProjectStorages(ctx)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, response.ErrorResponse{Error: "Failed to fetch storage status"})
+		return
+	}
+
+	// 6. Filter and Inject Roles
+	var userStorages []dto.ProjectPVCOutput
+	for _, s := range allStorages {
+		idUint, err := strconv.ParseUint(s.ID, 10, 64)
+		if err != nil {
+			continue
+		}
+
+		// Check if the project ID exists in our role map
+		if role, exists := userProjectRoles[uint(idUint)]; exists {
+			s.Role = role // English: Inject the role (admin/manager/member) into the output DTO
+			userStorages = append(userStorages, s)
+		}
+	}
+
+	c.JSON(http.StatusOK, response.SuccessResponse{
+		Code:    0,
+		Message: "success",
+		Data:    userStorages,
+	})
+}
+
 // CreateProjectStorage provisions a new shared storage (PVC) for a project.
 // @Summary Create project storage
 // @Description Provisions a Namespace and PVC for the specified project. Auto-generates labels for management.
@@ -730,15 +739,18 @@ func (h *K8sHandler) ProjectStorageProxy(c *gin.Context) {
 		return
 	}
 
-	// 3. Reconstruct K8s DNS Name
-	// Use the utility to get the exact namespace name used during creation.
+	// 1. Reconstruct Namespace (Matches your previous logic)
 	targetNamespace := utils.GenerateSafeResourceName("project", project.ProjectName, project.PID)
 
-	// Assuming the Service name inside the namespace follows a convention.
-	// E.g., "fb-service". Adjust this if your deployment logic uses a different name.
-	serviceName := "fb-service"
+	// 2. Reconstruct Service Name
+	// English Comment: Based on your kubectl output, the service name follows the pattern:
+	// "filebrowser-" + pvcName + "-svc"
+	// Assuming your PVC name follows: "pvc-" + targetNamespace
+	pvcName := fmt.Sprintf("pvc-%s", targetNamespace)
+	serviceName := fmt.Sprintf("filebrowser-%s-svc", pvcName)
 
-	// Construct the internal K8s Cluster DNS URL
+	// 3. Construct the internal K8s Cluster DNS URL
+	// targetURL will now be: http://filebrowser-pvc-project-test-b1f7f5-svc.project-test-b1f7f5.svc.cluster.local:80
 	targetURL := fmt.Sprintf("http://%s.%s.svc.cluster.local:80", serviceName, targetNamespace)
 
 	remote, err := url.Parse(targetURL)
@@ -756,16 +768,10 @@ func (h *K8sHandler) ProjectStorageProxy(c *gin.Context) {
 	proxy.Director = func(req *http.Request) {
 		originalDirector(req)
 
-		// Incoming Path: /k8s/storage/projects/123/proxy/files/example.txt
-		// Target Path:   /files/example.txt
-		// Note: The FileBrowser container must be started with --baseurl or matching prefix handling if needed,
-		// but usually stripping the prefix here is sufficient for the backend.
-		prefix := fmt.Sprintf("/k8s/storage/projects/%d/proxy", projectID)
-		req.URL.Path = strings.TrimPrefix(req.URL.Path, prefix)
-
-		// Set headers for proper forwarding so the upstream knows the original host
+		// English Comment: Set headers so FileBrowser understands its location
 		req.Header.Set("X-Forwarded-Host", req.Header.Get("Host"))
-		req.Header.Set("X-Forwarded-Proto", "http") // Change to https if behind SSL ingress
+		req.Header.Set("X-Forwarded-Prefix", fmt.Sprintf("/k8s/storage/projects/%d/proxy", projectID))
+		req.Header.Set("X-Forwarded-Proto", "http")
 	}
 
 	// 6. Error Handler for Proxy
@@ -780,4 +786,78 @@ func (h *K8sHandler) ProjectStorageProxy(c *gin.Context) {
 
 	// 7. Serve Content
 	proxy.ServeHTTP(c.Writer, c.Request)
+}
+
+// StartProjectFileBrowser godoc
+// @Summary Start project file browser with Group Role RBAC
+// @Description Users with 'admin' or 'manager' roles in the project's owning group get RW access.
+// @Tags k8s
+// @Router /k8s/storage/projects/{id}/start [post]
+func (h *K8sHandler) StartProjectFileBrowser(c *gin.Context) {
+	pIDStr := c.Param("id")
+	pID, _ := strconv.ParseUint(pIDStr, 10, 64)
+	uID, _ := utils.GetUserIDFromContext(c)
+
+	// 1. Determine user's role based on Group ownership of the project
+	role, err := h.ProjectService.GetUserRoleInProjectGroup(uID, uint(pID))
+	if err != nil {
+		c.JSON(http.StatusForbidden, response.ErrorResponse{Error: "Access denied: role not found"})
+		return
+	}
+
+	// 2. Permission Logic: Only higher roles get Write access
+	isReadOnly := !(role == "admin" || role == "manager")
+
+	// 3. Metadata for K8s
+	project, _ := h.ProjectService.GetProject(uint(pID))
+	targetNamespace := utils.GenerateSafeResourceName("project", project.ProjectName, project.PID)
+	pvcName := fmt.Sprintf("pvc-%s", targetNamespace)
+
+	baseURL := fmt.Sprintf("/k8s/storage/projects/%d/proxy", pID)
+	// 4. Start FileBrowser with the calculated readOnly flag
+	_, err = h.K8sService.StartFileBrowser(c.Request.Context(), targetNamespace, pvcName, isReadOnly, baseURL)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, response.ErrorResponse{Error: err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, response.SuccessResponse{
+		Code:    0,
+		Message: "success",
+		Data: gin.H{
+			"role":     role,
+			"readOnly": isReadOnly,
+		},
+	})
+}
+
+// StopProjectFileBrowser godoc
+// @Summary Stop File Browser for a specific project
+// @Description Terminates the FileBrowser pod associated with the project.
+// @Tags k8s
+// @Produce json
+// @Param id path int true "Project ID"
+// @Success 200 {object} response.SuccessResponse
+// @Router /k8s/storage/projects/{id}/stop [delete]
+func (h *K8sHandler) StopProjectFileBrowser(c *gin.Context) {
+	projectID, _ := strconv.ParseUint(c.Param("id"), 10, 64)
+	project, err := h.ProjectService.GetProject(uint(projectID))
+	if err != nil {
+		c.JSON(http.StatusNotFound, response.ErrorResponse{Error: "Project not found"})
+		return
+	}
+
+	targetNamespace := utils.GenerateSafeResourceName("project", project.ProjectName, project.PID)
+	pvcName := fmt.Sprintf("pvc-%s", targetNamespace)
+
+	err = h.K8sService.StopFileBrowser(c.Request.Context(), targetNamespace, pvcName)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, response.ErrorResponse{Error: err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, response.SuccessResponse{
+		Code:    0,
+		Message: "Project File Browser stopped",
+	})
 }

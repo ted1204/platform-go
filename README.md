@@ -1,45 +1,59 @@
-# Platform API Project Documentation
 
-## Introduction
-This project is a RESTful API built with Go using the Gin framework. It integrates PostgreSQL for database management, supports user authentication and management, group and project resource control, JWT-based security, and MinIO for YAML storage.
+# Platform API (Go)
 
-## Tech Stack
+This project is a RESTful API written in Go. It uses Gin as the HTTP framework and integrates with PostgreSQL and MinIO. The repository includes Dockerfile, Kubernetes manifests under `k8s/`, and helper scripts in `scripts/`.
+
+Prerequisites
 - Go 1.21+
-- Gin Web Framework
-- PostgreSQL 15+
-- GORM ORM
-- JWT (JSON Web Tokens)
-- MinIO (S3-compatible object storage)
-- Swagger (Auto-generated API documentation)
+- PostgreSQL (or a running DB instance)
+- (Optional) MinIO or S3-compatible storage for YAML/object storage
 
-## Project Structure
+Quick start (local)
 
-```
-.
-├── main.go
-├── go.mod / go.sum
-├── config/           # Configuration loader
-├── models/           # Database models
-├── dto/              # Request/Response data structures
-├── handlers/         # Route handlers
-├── middleware/       # JWT and other middlewares
-├── routes/           # Route registration
-└── docs/             # Swagger docs
-```
-
-## Installation & Execution
-
-### Install dependencies
 ```bash
+# fetch dependencies
 go mod download
+
+# run locally
+go run src/main.go
 ```
 
-### Run the service
+Build Docker image
+
 ```bash
-go run main.go
+docker build -t platform-go:latest .
 ```
 
-### REST API doc
+Helper scripts (in `scripts/`)
+- `dev.sh` — start local development environment (check script for exact behavior)
+- `build_images.sh` — build Docker images used by deployment
+- `setup_fakek8s.sh` — helper to set up a fake/local k8s environment (read before use)
+- `create_gpu_pod.py` — test GPU pod creation helper
+- `reset-cluster.sh` not present here; use caution with scripts that modify cluster state
+
+Kubernetes and infra
+- `k8s/` contains example manifests for deploying the service
+- `infra/` and `yamls/` contain environment-specific templates (volume claims, configs)
+
+Project layout (important dirs)
+- `src/` — application code (config, handlers, routes, services, models)
+- `scripts/` — helper automation scripts
+- `k8s/` & `k8s-project/` — manifests for cluster deployments
+- `Dockerfile` — container build
+
+Configuration
+- Application reads configuration from environment variables or config files (check `src/config/` for keys).
+
+Testing
+
 ```bash
-http://localhost:8080/swagger.html
+cd src
+go test ./...   # run unit tests
 ```
+
+API docs
+- Swagger/docs are generated under `src/docs` — run the server and open `/swagger.html`.
+
+Notes
+- Read each script before running; some scripts modify cluster or host configuration.
+- If you want, I can add a short `dev.md` showing typical environment variables and a sample `docker-compose` for local development.

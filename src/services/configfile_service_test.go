@@ -31,6 +31,7 @@ func setupMocks(t *testing.T) (*services.ConfigFileService, *mock_repositories.M
 	mockRes := mock_repositories.NewMockResourceRepo(ctrl)
 	mockAudit := mock_repositories.NewMockAuditRepo(ctrl)
 	mockView := mock_repositories.NewMockViewRepo(ctrl)
+
 	mockProject := mock_repositories.NewMockProjectRepo(ctrl)
 	mockUserGroup := mock_repositories.NewMockUserGroupRepo(ctrl)
 

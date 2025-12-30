@@ -61,6 +61,7 @@ type ProjectUserView struct {
 	ProjectName string `gorm:"column:project_name" json:"ProjectName"`
 	GID         uint   `gorm:"column:g_id" json:"GID"`
 	GroupName   string `gorm:"column:group_name" json:"GroupName"`
+	Role        string `gorm:"column:role" json:"Role"`
 	UID         uint   `gorm:"column:u_id" json:"UID"`
 	Username    string `gorm:"column:username" json:"Username"`
 }

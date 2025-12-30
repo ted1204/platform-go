@@ -102,7 +102,7 @@ func TestCreateUserGroup_Fail_GetUser(t *testing.T) {
 func TestUpdateUserGroup_Success(t *testing.T) {
 	svc, ugRepo, _, _, _, ctx := setupUserGroupMocks(t)
 
-	oldUG := models.UserGroupView{UID: 1, GID: 1, Role: "member"}
+	oldUG := models.UserGroupView{UID: 1, GID: 1, Role: "user"}
 	newUG := &models.UserGroup{UID: 1, GID: 1, Role: "admin"}
 
 	ugRepo.EXPECT().UpdateUserGroup(newUG).Return(nil)
@@ -190,9 +190,9 @@ func TestFormatByUID(t *testing.T) {
 	svc, _, _, _, _, _ := setupUserGroupMocks(t)
 
 	records := []models.UserGroupView{
-		{UID: 1, Username: "alice", GID: 10, GroupName: "g10", Role: "member"},
+		{UID: 1, Username: "alice", GID: 10, GroupName: "g10", Role: "user"},
 		{UID: 1, Username: "alice", GID: 11, GroupName: "g11", Role: "admin"},
-		{UID: 2, Username: "bob", GID: 10, GroupName: "g10", Role: "member"},
+		{UID: 2, Username: "bob", GID: 10, GroupName: "g10", Role: "user"},
 	}
 
 	res := svc.FormatByUID(records)
@@ -207,7 +207,7 @@ func TestFormatByGID(t *testing.T) {
 	svc, _, _, _, _, _ := setupUserGroupMocks(t)
 
 	records := []models.UserGroupView{
-		{UID: 1, Username: "alice", GID: 10, GroupName: "g10", Role: "member"},
+		{UID: 1, Username: "alice", GID: 10, GroupName: "g10", Role: "user"},
 		{UID: 2, Username: "bob", GID: 10, GroupName: "g10", Role: "admin"},
 	}
 

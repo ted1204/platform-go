@@ -153,3 +153,18 @@ func (mr *MockViewRepoMockRecorder) ListUsersByProjectID(projectID interface{}) 
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListUsersByProjectID", reflect.TypeOf((*MockViewRepo)(nil).ListUsersByProjectID), projectID)
 }
+
+// GetUserRoleInGroup mocks base method.
+func (m *MockViewRepo) GetUserRoleInGroup(uid uint, gid uint) (string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetUserRoleInGroup", uid, gid)
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetUserRoleInGroup indicates an expected call of GetUserRoleInGroup.
+func (mr *MockViewRepoMockRecorder) GetUserRoleInGroup(uid interface{}, gid interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetUserRoleInGroup", reflect.TypeOf((*MockViewRepo)(nil).GetUserRoleInGroup), uid, gid)
+}

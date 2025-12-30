@@ -117,10 +117,16 @@ func RegisterRoutes(r *gin.Engine) {
 				// 1. Admin Management (List & Create)
 				// GET /k8s/storage/projects -> List all project storages
 				projectStorage.GET("", authMiddleware.Admin(), handlers_instance.K8s.ListProjectStorages)
-
+				projectStorage.GET("/my-storages", handlers_instance.K8s.GetUserProjectStorages)
 				// POST /k8s/storage/projects -> Create new project storage (with labels)
 				projectStorage.POST("", authMiddleware.Admin(), handlers_instance.K8s.CreateProjectStorage)
+				projectStorage.POST("/:id/start",
+					authMiddleware.GroupMember(middleware.FromIDParam(repos_instance.Project.GetGroupIDByProjectID)),
+					handlers_instance.K8s.StartProjectFileBrowser)
 
+				projectStorage.DELETE("/:id/stop",
+					authMiddleware.GroupMember(middleware.FromIDParam(repos_instance.Project.GetGroupIDByProjectID)),
+					handlers_instance.K8s.StopProjectFileBrowser)
 				// 2. FileBrowser Proxy (Access)
 				// Use "id" (projectID) to verify membership via middleware
 				// URL: /k8s/storage/projects/:id/proxy/*path
