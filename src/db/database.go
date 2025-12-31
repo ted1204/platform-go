@@ -17,7 +17,7 @@ func createEnums() {
 		`DO $$ BEGIN CREATE TYPE user_type AS ENUM ('origin', 'oauth2'); EXCEPTION WHEN duplicate_object THEN null; END $$;`,
 		`DO $$ BEGIN CREATE TYPE user_status AS ENUM ('online', 'offline', 'delete'); EXCEPTION WHEN duplicate_object THEN null; END $$;`,
 		`DO $$ BEGIN CREATE TYPE user_role AS ENUM ('admin', 'manager', 'user'); EXCEPTION WHEN duplicate_object THEN null; END $$;`,
-		`DO $$ BEGIN CREATE TYPE resource_type AS ENUM ('cpu', 'memory', 'gpu'); EXCEPTION WHEN duplicate_object THEN null; END $$;`,
+		`DO $$ BEGIN CREATE TYPE resource_type AS ENUM ('Pod', 'Service', 'Deployment', 'ConfigMap', 'Ingress'); EXCEPTION WHEN duplicate_object THEN null; END $$;`,
 	}
 
 	for _, enum := range enums {

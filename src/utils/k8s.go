@@ -488,43 +488,60 @@ var CreateHubPVC = func(ns string, name string, storageClassName string, size st
 // This pod mounts the Longhorn RWO volume and exposes it as an NFS share.
 // Privileged mode is required for the NFS server to operate correctly.
 var CreateNFSDeployment = func(ns string, pvcName string) error {
+	// Mock implementation for testing when K8s client is missing
 	if k8sclient.Clientset == nil {
 		fmt.Printf("[MOCK] NFS Deployment created in %s mounting %s\n", ns, pvcName)
 		return nil
 	}
 
 	name := "storage-gateway"
-	replicas := int32(1) // Must be 1 since the backing PVC is RWO
-	privileged := true   // NFS server requires privileged security context
+	replicas := int32(1) // Must be 1 since the backing PVC is ReadWriteOnce (RWO)
+	privileged := true   // NFS server requires privileged security context to access kernel modules
 
 	deploy := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{Name: name},
 		Spec: appsv1.DeploymentSpec{
 			Replicas: &replicas,
+
+			// [CRITICAL FIX] Use "Recreate" strategy instead of default "RollingUpdate".
+			// Since the PVC is RWO (ReadWriteOnce), the old pod must be fully terminated
+			// and release the volume before the new pod can attach it.
+			// Without this, the deployment will hang in a deadlock.
+			Strategy: appsv1.DeploymentStrategy{
+				Type: appsv1.RecreateDeploymentStrategyType,
+			},
+
 			Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": "nfs-gateway"}},
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app": "nfs-gateway"}},
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{
 						{
-							Name:  "nfs",
-							Image: "itsthenetwork/nfs-server-alpine:12",
+							Name: "nfs",
+							// [CRITICAL FIX] Replaced "itsthenetwork/nfs-server-alpine".
+							// The previous Alpine-based image causes "assertion failed" errors
+							// due to compatibility issues with file locking (fcntl) on modern kernels.
+							// "erichough/nfs-server" is more stable and widely used.
+							Image: "erichough/nfs-server:latest",
 
-							// [FIX] This specific image requires an environment variable to know which folder to export.
+							// Configuration for erichough/nfs-server
 							Env: []corev1.EnvVar{
 								{
-									Name:  "SHARED_DIRECTORY",
-									Value: "/exports",
+									Name:  "NFS_EXPORT_0",
+									Value: "/exports *(rw,fsid=0,async,no_subtree_check,no_auth_nlm,insecure,no_root_squash)",
 								},
 							},
 
 							Ports: []corev1.ContainerPort{
-								{Name: "nfs", ContainerPort: 2049},
-								{Name: "mountd", ContainerPort: 20048},
-								{Name: "rpcbind", ContainerPort: 111},
+								{Name: "nfs", ContainerPort: 2049, Protocol: corev1.ProtocolTCP},
+								{Name: "mountd", ContainerPort: 20048, Protocol: corev1.ProtocolTCP},
+								{Name: "rpcbind", ContainerPort: 111, Protocol: corev1.ProtocolTCP},
+								// [FIX] Add UDP protocol for rpcbind.
+								// Some NFS clients prioritize UDP for discovery; missing this can cause mount delays.
+								{Name: "rpcbind-udp", ContainerPort: 111, Protocol: corev1.ProtocolUDP},
 							},
 							SecurityContext: &corev1.SecurityContext{
-								Privileged: &privileged,
+								Privileged: &privileged, // Required for NFS kernel capabilities
 							},
 							VolumeMounts: []corev1.VolumeMount{
 								{Name: "hub-storage", MountPath: "/exports"},

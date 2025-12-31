@@ -88,10 +88,11 @@ func (s *ProjectService) CreateProject(c *gin.Context, input dto.CreateProjectDT
 		project.MPSMemory = *input.MPSMemory
 	}
 	err := s.Repos.Project.CreateProject(&project)
+	err = s.AllocateProjectResources(project.PID)
 	if err == nil {
-		utils.LogAuditWithConsole(c, "create", "project", fmt.Sprintf("p_id=%d", project.PID), nil, project, "", s.Repos.Audit)
+		go utils.LogAuditWithConsole(c, "create", "project", fmt.Sprintf("p_id=%d", project.PID), nil, project, "", s.Repos.Audit)
 	}
-	// 不自動建立 PV/PVC，user 會自動連結到自己的 global PV
+
 	return project, err
 }
 
@@ -127,7 +128,7 @@ func (s *ProjectService) UpdateProject(c *gin.Context, id uint, input dto.Update
 
 	err = s.Repos.Project.UpdateProject(&project)
 	if err == nil {
-		utils.LogAuditWithConsole(c, "update", "project", fmt.Sprintf("p_id=%d", project.PID), oldProject, project, "", s.Repos.Audit)
+		go utils.LogAuditWithConsole(c, "update", "project", fmt.Sprintf("p_id=%d", project.PID), oldProject, project, "", s.Repos.Audit)
 	}
 
 	return project, err
@@ -139,13 +140,11 @@ func (s *ProjectService) DeleteProject(c *gin.Context, id uint) error {
 		return ErrProjectNotFound
 	}
 
-	if err := s.RemoveProjectResources(id); err != nil {
-		return err
-	}
+	_ = s.RemoveProjectResources(id)
 
 	err = s.Repos.Project.DeleteProject(id)
 	if err == nil {
-		utils.LogAuditWithConsole(c, "delete", "project", fmt.Sprintf("p_id=%d", project.PID), project, nil, "", s.Repos.Audit)
+		go utils.LogAuditWithConsole(c, "delete", "project", fmt.Sprintf("p_id=%d", project.PID), project, nil, "", s.Repos.Audit)
 	}
 	return err
 }
@@ -167,27 +166,27 @@ func (s *ProjectService) AllocateProjectResources(projectID uint) error {
 			return fmt.Errorf("failed to create namespace for %s: %w", user.Username, err)
 		}
 
-		// Create User PV (Static Provisioning pointing to shared volume)
-		// We use a consistent volume handle name based on username to ensure all projects share the same storage
-		pvName := fmt.Sprintf("pv-user-%s-proj-%d", user.Username, projectID)
-		volumeHandle := fmt.Sprintf("vol-user-%s", user.Username)
+		// // Create User PV (Static Provisioning pointing to shared volume)
+		// // We use a consistent volume handle name based on username to ensure all projects share the same storage
+		// pvName := fmt.Sprintf("pv-user-%s-proj-%d", user.Username, projectID)
+		// volumeHandle := fmt.Sprintf("vol-user-%s", user.Username)
 
-		// If using HostPath (not longhorn), we need a path.
-		// If using Longhorn, we use volumeHandle.
-		// Since config.UserPVPath was removed, we assume Longhorn or use a default path for HostPath fallback.
-		path := volumeHandle
-		if config.DefaultStorageClassName != "longhorn" {
-			path = "/mnt/data/users/" + user.Username
-		}
+		// // If using HostPath (not longhorn), we need a path.
+		// // If using Longhorn, we use volumeHandle.
+		// // Since config.UserPVPath was removed, we assume Longhorn or use a default path for HostPath fallback.
+		// path := volumeHandle
+		// if config.DefaultStorageClassName != "longhorn" {
+		// 	path = "/mnt/data/users/" + user.Username
+		// }
 
-		if err := utils.CreatePV(pvName, config.DefaultStorageClassName, config.UserPVSize, path); err != nil {
-			return fmt.Errorf("failed to create PV for %s: %w", user.Username, err)
-		}
+		// if err := utils.CreatePV(pvName, config.DefaultStorageClassName, config.UserPVSize, path); err != nil {
+		// 	return fmt.Errorf("failed to create PV for %s: %w", user.Username, err)
+		// }
 
-		// Create PVC bound to the specific PV
-		if err := utils.CreateBoundPVC(ns, config.DefaultStorageName, config.DefaultStorageClassName, config.UserPVSize, pvName); err != nil {
-			return fmt.Errorf("failed to create PVC for %s: %w", user.Username, err)
-		}
+		// // Create PVC bound to the specific PV
+		// if err := utils.CreateBoundPVC(ns, config.DefaultStorageName, config.DefaultStorageClassName, config.UserPVSize, pvName); err != nil {
+		// 	return fmt.Errorf("failed to create PVC for %s: %w", user.Username, err)
+		// }
 	}
 
 	return nil

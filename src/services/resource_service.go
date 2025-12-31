@@ -41,7 +41,7 @@ func (s *ResourceService) CreateResource(c *gin.Context, resource *models.Resour
 		return nil, err
 	}
 
-	utils.LogAuditWithConsole(c, "create", "resource", fmt.Sprintf("r_id=%d", resource.RID), nil, *resource, "", s.Repos.Audit)
+	go utils.LogAuditWithConsole(c, "create", "resource", fmt.Sprintf("r_id=%d", resource.RID), nil, *resource, "", s.Repos.Audit)
 	return resource, nil
 }
 
@@ -70,7 +70,7 @@ func (s *ResourceService) UpdateResource(c *gin.Context, rid uint, input dto.Res
 	if err != nil {
 		return nil, err
 	}
-	utils.LogAuditWithConsole(c, "update", "resource", fmt.Sprintf("r_id=%d", existing.RID), oldResource, *existing, "", s.Repos.Audit)
+	go utils.LogAuditWithConsole(c, "update", "resource", fmt.Sprintf("r_id=%d", existing.RID), oldResource, *existing, "", s.Repos.Audit)
 
 	return existing, nil
 }
@@ -86,7 +86,7 @@ func (s *ResourceService) DeleteResource(c *gin.Context, rid uint) error {
 		return err
 	}
 
-	utils.LogAuditWithConsole(c, "delete", "resource", fmt.Sprintf("r_id=%d", resource.RID), *resource, nil, "", s.Repos.Audit)
+	go utils.LogAuditWithConsole(c, "delete", "resource", fmt.Sprintf("r_id=%d", resource.RID), *resource, nil, "", s.Repos.Audit)
 
 	return nil
 }

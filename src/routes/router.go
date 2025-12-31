@@ -24,11 +24,10 @@ func RegisterRoutes(r *gin.Engine) {
 	r.POST("/login", handlers_instance.User.Login)
 	r.POST("/logout", handlers_instance.User.Logout)
 	r.GET("/ws/exec", handlers.ExecWebSocketHandler)
-	r.GET("/ws/monitoring/:namespace", handlers.WatchNamespaceHandler)
 	auth := r.Group("/")
 	auth.Use(middleware.JWTAuthMiddleware())
 	{
-		auth.GET("/ws/monitoring", handlers.WatchUserNamespaceHandler)
+		auth.GET("/ws/monitoring/:namespace", handlers.WatchNamespaceHandler)
 		userGroup := auth.Group("/user-group")
 		{
 			userGroup.GET("", authMiddleware.Admin(), handlers_instance.UserGroup.GetUserGroup)

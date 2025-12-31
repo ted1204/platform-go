@@ -35,12 +35,14 @@ import (
 	"k8s.io/client-go/util/homedir"
 )
 
+// WebSocketIO handles the conversion between WebSocket and io.Reader/Writer
 type WebSocketIO struct {
 	conn        *websocket.Conn
-	stdinPipe   *io.PipeReader // Data from websocket -> stdin
+	stdinPipe   *io.PipeReader
 	stdinWriter *io.PipeWriter
 	sizeChan    chan remotecommand.TerminalSize
 	once        sync.Once
+	mu          sync.Mutex // [Added] Mutex to protect concurrent writes (Ping vs Stdout)
 }
 
 type TerminalMessage struct {
@@ -129,13 +131,15 @@ func Init() {
 		log.Fatalf("failed to get api group resources: %v", err)
 	}
 	Mapper = restmapper.NewDiscoveryRESTMapper(Resources)
+	Config.QPS = 50
+	Config.Burst = 100
 	DynamicClient, err = dynamic.NewForConfig(Config)
 	if err != nil {
 		log.Fatalf("failed to create dynamic client: %v", err)
 	}
 }
 
-// NewWebSocketIO creates a new WebSocketIO handler
+// NewWebSocketIO creates a new WebSocketIO handler and starts loops
 func NewWebSocketIO(conn *websocket.Conn) *WebSocketIO {
 	pr, pw := io.Pipe()
 	handler := &WebSocketIO{
@@ -144,9 +148,38 @@ func NewWebSocketIO(conn *websocket.Conn) *WebSocketIO {
 		stdinWriter: pw,
 		sizeChan:    make(chan remotecommand.TerminalSize),
 	}
-	// Unchanged here, still start readLoop
+
+	// Start the main read loop (Standard Input from user)
 	go handler.readLoop()
+	// [Added] Start the ping loop (Heartbeat to client)
+	go handler.pingLoop()
+
 	return handler
+}
+
+// [Added] pingLoop sends periodic pings to keep the connection alive
+func (h *WebSocketIO) pingLoop() {
+	// Define heartbeat intervals
+	pingPeriod := 54 * time.Second
+	ticker := time.NewTicker(pingPeriod)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			// Lock before writing to prevent race condition with stdout
+			h.mu.Lock()
+			h.conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+			err := h.conn.WriteMessage(websocket.PingMessage, nil)
+			h.mu.Unlock()
+
+			if err != nil {
+				// If ping fails, close connection. This will cause readLoop to exit too.
+				h.Close()
+				return
+			}
+		}
+	}
 }
 
 // Read reads data from the pipe receiving stdin data (implements io.Reader)
@@ -154,7 +187,7 @@ func (h *WebSocketIO) Read(p []byte) (n int, err error) {
 	return h.stdinPipe.Read(p)
 }
 
-// Write writes data to WebSocket (implements io.Writer)
+// Write writes data to WebSocket (stdout from Pod)
 func (h *WebSocketIO) Write(p []byte) (n int, err error) {
 	msg, err := json.Marshal(TerminalMessage{
 		Type: "stdout",
@@ -163,6 +196,11 @@ func (h *WebSocketIO) Write(p []byte) (n int, err error) {
 	if err != nil {
 		return 0, err
 	}
+
+	// [Added] Critical: Lock mutex to ensure thread safety
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
 	if err := h.conn.WriteMessage(websocket.TextMessage, msg); err != nil {
 		return 0, err
 	}
@@ -186,20 +224,41 @@ func (h *WebSocketIO) Close() {
 	})
 }
 
-// readLoop is the core logic, continuously reading WebSocket messages in the background and dispatching them
+// readLoop is the core logic, continuously reading WebSocket messages in the background
 func (h *WebSocketIO) readLoop() {
-	// Core fix: readLoop is responsible for cleanup
-	// When this goroutine exits (whether normally or due to error),
-	// defer ensures Close() is called, safely closing channels.
+	// 當此函數退出時，關閉所有相關資源 (Pipes, Channels)
 	defer h.Close()
 
+	// 定義超時時間 (例如 60 秒)
+	// 必須配合 pingLoop 的發送頻率 (例如 54 秒)
+	const pongWait = 60 * time.Second
+
+	// 1. 設定讀取限制與初始 DeadLine
+	h.conn.SetReadLimit(512 * 1024) // 限制最大訊息大小，防止攻擊
+	h.conn.SetReadDeadline(time.Now().Add(pongWait))
+
+	// 2. 設定 Pong 處理器
+	// 當收到瀏覽器回傳的 Pong 時，重置死亡倒數
+	h.conn.SetPongHandler(func(string) error {
+		h.conn.SetReadDeadline(time.Now().Add(pongWait))
+		return nil
+	})
+
 	for {
+		// 這裡會阻塞，直到收到訊息 或 超時(Client斷線)
 		_, message, err := h.conn.ReadMessage()
 		if err != nil {
-			// When a read error occurs (e.g., WebSocket closed),
-			// the for loop terminates, and the defer h.Close() above executes.
+			// 如果是異常斷線，可以記錄 Log
+			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
+				log.Printf("WebSocket error: %v", err)
+			}
+			// 退出迴圈 -> 觸發 defer h.Close()
 			return
 		}
+
+		// 3. 關鍵：收到任何訊息（使用者打字或 Resize）都視為「活著」
+		// 重置讀取超時時間
+		h.conn.SetReadDeadline(time.Now().Add(pongWait))
 
 		var msg TerminalMessage
 		if err := json.Unmarshal(message, &msg); err != nil {
@@ -209,14 +268,19 @@ func (h *WebSocketIO) readLoop() {
 		switch msg.Type {
 		case "stdin":
 			if msg.Data != "" {
-				// Here, since the loop is continuing, the channel is definitely open.
+				// 寫入數據到 Pod 的 stdin
 				_, _ = h.stdinWriter.Write([]byte(msg.Data))
 			}
 		case "resize":
-			// Same as above, the channel is definitely open.
-			h.sizeChan <- remotecommand.TerminalSize{
+			// 發送 Resize 事件
+			// 使用 select 防止阻塞：如果沒有人聽 sizeChan，就不卡在這裡
+			select {
+			case h.sizeChan <- remotecommand.TerminalSize{
 				Width:  uint16(msg.Cols),
 				Height: uint16(msg.Rows),
+			}:
+			default:
+				// 如果沒人接收 Resize 事件，則忽略，避免卡死 readLoop
 			}
 		}
 	}
@@ -287,6 +351,11 @@ func WatchNamespaceResources(ctx context.Context, writeChan chan<- []byte, names
 	var wg sync.WaitGroup
 	for _, gvr := range gvrs {
 		wg.Add(1)
+
+		// [新增] 錯峰啟動：每個資源之間間隔 50ms
+		// 這能解決 "client rate limiter Wait returned an error"
+		time.Sleep(50 * time.Millisecond)
+
 		go func(gvr schema.GroupVersionResource) {
 			defer wg.Done()
 			watchAndSend(ctx, DynamicClient, gvr, namespace, writeChan)
@@ -337,8 +406,11 @@ func watchUserAndSend(ctx context.Context, namespace string, gvr schema.GroupVer
 			return nil
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-time.After(time.Second * 10): // Add timeout to avoid deadlock
-			return fmt.Errorf("timeout sending message")
+		// Changed timeout from 10s to non-blocking (or very short timeout)
+		// If the channel is full, the client is likely slow or disconnected.
+		// Dropping the message prevents the server from hanging.
+		default:
+			return fmt.Errorf("client buffer full, dropping message for %s", obj.GetName())
 		}
 	}
 
@@ -417,10 +489,18 @@ func watchAndSend(
 	if err == nil {
 		for _, item := range list.Items {
 			if err := sendObject("ADDED", &item); err != nil {
-				fmt.Printf("Failed to send list item: %v\n", err)
+				// 如果是 context canceled 就不印錯誤
+				if ctx.Err() != context.Canceled {
+					fmt.Printf("Failed to send list item: %v\n", err)
+				}
 			}
 		}
 	} else {
+		// [修改] 關鍵修改：如果是因為 Context Cancel 導致的錯誤，直接忽略
+		if ctx.Err() == context.Canceled {
+			return
+		}
+		// 只有真正的錯誤才印出來
 		fmt.Printf("List error for %s.%s: %v\n", gvr.Resource, gvr.Group, err)
 	}
 
@@ -434,32 +514,41 @@ func watchAndSend(
 
 		watcher, err := dynClient.Resource(gvr).Namespace(ns).Watch(ctx, metav1.ListOptions{})
 		if err != nil {
+			// 同樣過濾 watch 的錯誤
+			if ctx.Err() == context.Canceled {
+				return
+			}
 			time.Sleep(5 * time.Second)
 			continue
 		}
 
-		for {
-			select {
-			case <-ctx.Done():
-				watcher.Stop()
-				return
-			case event, ok := <-watcher.ResultChan():
-				if !ok {
+		func() {
+			defer watcher.Stop()
+			for {
+				select {
+				case <-ctx.Done():
 					return
-				}
+				case event, ok := <-watcher.ResultChan():
+					if !ok {
+						return
+					}
 
-				obj, ok := event.Object.(*unstructured.Unstructured)
-				if !ok {
-					continue
-				}
+					obj, ok := event.Object.(*unstructured.Unstructured)
+					if !ok {
+						continue
+					}
 
-				if err := sendObject(string(event.Type), obj); err != nil {
-					fmt.Printf("Failed to send watch event: %v\n", err)
+					if err := sendObject(string(event.Type), obj); err != nil {
+						if ctx.Err() != context.Canceled {
+							fmt.Printf("Failed to send watch event: %v\n", err)
+						}
+					}
 				}
 			}
-		}
+		}()
 	}
 }
+
 func buildDataMap(eventType string, obj *unstructured.Unstructured) map[string]interface{} {
 	data := map[string]interface{}{
 		"type": eventType,

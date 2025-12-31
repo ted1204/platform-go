@@ -49,7 +49,7 @@ func (h *ProjectHandler) GetProjects(c *gin.Context) {
 func (h *ProjectHandler) GetProjectsByUser(c *gin.Context) {
 	id, err := utils.GetUserIDFromContext(c)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, response.ErrorResponse{Error: "invalid project id"})
+		c.JSON(http.StatusBadRequest, response.ErrorResponse{Error: "invalid id"})
 		return
 	}
 	records, err := h.svc.GetProjectsByUser(id)

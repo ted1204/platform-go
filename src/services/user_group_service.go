@@ -6,7 +6,6 @@ import (
 	"log"
 
 	"github.com/gin-gonic/gin"
-	"github.com/linskybing/platform-go/src/config"
 	"github.com/linskybing/platform-go/src/dto"
 	"github.com/linskybing/platform-go/src/models"
 	"github.com/linskybing/platform-go/src/repositories"
@@ -37,9 +36,9 @@ func (s *UserGroupService) AllocateGroupResource(gid uint, userName string) erro
 		if err := utils.CreateNamespace(ns); err != nil {
 			return err
 		}
-		if err := utils.CreatePVC(ns, config.DefaultStorageName, config.DefaultStorageClassName, config.DefaultStorageSize); err != nil {
-			return err
-		}
+		// if err := utils.CreatePVC(ns, config.DefaultStorageName, config.DefaultStorageClassName, config.DefaultStorageSize); err != nil {
+		// 	return err
+		// }
 	}
 
 	return nil
@@ -77,7 +76,7 @@ func (s *UserGroupService) CreateUserGroup(c *gin.Context, userGroup *models.Use
 		return nil, err
 	}
 
-	utils.LogAuditWithConsole(c, "create", "user_group",
+	go utils.LogAuditWithConsole(c, "create", "user_group",
 		fmt.Sprintf("u_id=%d,g_id=%d", userGroup.UID, userGroup.GID),
 		nil, *userGroup, "", s.Repos.Audit)
 
@@ -89,7 +88,7 @@ func (s *UserGroupService) UpdateUserGroup(c *gin.Context, userGroup *models.Use
 		return nil, err
 	}
 
-	utils.LogAuditWithConsole(c, "update", "user_group",
+	go utils.LogAuditWithConsole(c, "update", "user_group",
 		fmt.Sprintf("u_id=%d,g_id=%d", userGroup.UID, userGroup.GID),
 		existing, *userGroup, "", s.Repos.Audit)
 
@@ -119,7 +118,7 @@ func (s *UserGroupService) DeleteUserGroup(c *gin.Context, uid, gid uint) error 
 		return err
 	}
 
-	utils.LogAuditWithConsole(c, "delete", "user_group",
+	go utils.LogAuditWithConsole(c, "delete", "user_group",
 		fmt.Sprintf("u_id=%d,g_id=%d", uid, gid),
 		oldUserGroup, nil, "", s.Repos.Audit)
 
