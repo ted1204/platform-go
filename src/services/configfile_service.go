@@ -1,19 +1,21 @@
 package services
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"regexp"
 	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/linskybing/platform-go/src/config"
 	"github.com/linskybing/platform-go/src/dto"
+	"github.com/linskybing/platform-go/src/k8sclient"
 	"github.com/linskybing/platform-go/src/models"
 	"github.com/linskybing/platform-go/src/repositories"
 	"github.com/linskybing/platform-go/src/types"
 	"github.com/linskybing/platform-go/src/utils"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"gorm.io/datatypes"
 )
@@ -248,6 +250,7 @@ func (s *ConfigFileService) ListConfigFilesByProjectID(projectID uint) ([]models
 }
 
 func (s *ConfigFileService) CreateInstance(c *gin.Context, id uint) error {
+	// 1. Retrieve config file data and raw YAML resources
 	data, err := s.Repos.Resource.ListResourcesByConfigFileID(id)
 	if err != nil {
 		return err
@@ -256,10 +259,51 @@ func (s *ConfigFileService) CreateInstance(c *gin.Context, id uint) error {
 	if err != nil {
 		return err
 	}
-	claims, _ := c.MustGet("claims").(*types.Claims)
-	ns := utils.FormatNamespaceName(configfile.ProjectID, claims.Username)
 
-	// Check permissions
+	// 2. Get user claims from context
+	claims, _ := c.MustGet("claims").(*types.Claims)
+
+	// -------------------------------------------------------------------------
+	// CORE FIX 1: Sanitize Username for Kubernetes
+	// -------------------------------------------------------------------------
+	// Convert the raw username (e.g., "John_Doe") to a valid Kubernetes resource name
+	// (e.g., "john-doe") to comply with RFC 1123 standards.
+	// This prevents errors when creating Namespaces or Services.
+	safeUsername := utils.ToSafeK8sName(claims.Username)
+
+	// Generate the target project namespace using the sanitized username.
+	// Example: "proj-1-john-doe"
+	ns := utils.FormatNamespaceName(configfile.ProjectID, safeUsername)
+
+	// Calculate the user's storage namespace where the NFS service resides.
+	// Example: "user-john-doe-storage"
+	userStorageNamespace := fmt.Sprintf("user-%s-storage", safeUsername)
+
+	// -------------------------------------------------------------------------
+	// CORE FIX 2: Resolve NFS Service IP (Bypassing DNS)
+	// -------------------------------------------------------------------------
+	// Default to the internal DNS name. This acts as a fallback if the lookup fails
+	// or if the service is in a different cluster.
+	nfsServerAddress := fmt.Sprintf("storage-svc.%s.svc.cluster.local", userStorageNamespace)
+
+	// Attempt to resolve the ClusterIP of the NFS service directly.
+	// This is critical for environments like Docker Desktop where internal K8s DNS
+	// resolution might be flaky or unsupported from the host/node level.
+	if k8sclient.Clientset != nil {
+		// We use context.TODO() here, or you can inherit context from gin if available.
+		svc, err := k8sclient.Clientset.CoreV1().Services(userStorageNamespace).Get(
+			context.TODO(),
+			"storage-svc", // The fixed name of your NFS service
+			metav1.GetOptions{},
+		)
+
+		// If the service is found and has a valid ClusterIP, use it.
+		if err == nil && svc.Spec.ClusterIP != "" {
+			nfsServerAddress = svc.Spec.ClusterIP
+		}
+	}
+
+	// 3. Check Project Permissions & ReadOnly Enforcement
 	project, err := s.Repos.Project.GetProjectByID(configfile.ProjectID)
 	if err != nil {
 		return err
@@ -276,30 +320,48 @@ func (s *ConfigFileService) CreateInstance(c *gin.Context, id uint) error {
 		}
 	}
 
-	// Prepare template values for replacement
-	safeUsername := strings.ToLower(claims.Username)
-	reg, err := regexp.Compile("[^a-z0-9-]+")
-	if err == nil {
-		safeUsername = reg.ReplaceAllString(safeUsername, "-")
-	}
-	userStorageNamespace := fmt.Sprintf("user-%s-storage", safeUsername)
-
+	// -------------------------------------------------------------------------
+	// Prepare Template Variables
+	// -------------------------------------------------------------------------
+	// Inject the resolved variables into the map. These will replace placeholders
+	// like {{username}} or {{nfsServer}} in the YAML files.
 	templateValues := map[string]string{
-		"username":             claims.Username,
-		"namespace":            ns,
+		// "username" is now the safe version to ensure resource names in YAML are valid.
+		"username": safeUsername,
+
+		// Provide the original username in case it's needed for labels/annotations.
+		"originalUsername": claims.Username,
+
+		// Explicit safe username variable.
+		"safeUsername": safeUsername,
+
+		// The target namespace for deployment.
+		"namespace": ns,
+
+		// The resolved NFS server address (IP or DNS).
+		"nfsServer": nfsServerAddress,
+
+		// The namespace where user storage is located.
 		"userStorageNamespace": userStorageNamespace,
-		"projectId":            fmt.Sprintf("%d", configfile.ProjectID),
+
+		// Project ID as a string.
+		"projectId": fmt.Sprintf("%d", configfile.ProjectID),
 	}
 
+	// 4. Iterate and Create Resources
 	for _, val := range data {
-		// Replace placeholders in JSON before processing
+		// Convert YAML content to string
 		jsonStr := string(val.ParsedYAML)
+
+		// Perform variable replacement
 		replacedJSON, err := utils.ReplacePlaceholdersInJSON(jsonStr, templateValues)
 		if err != nil {
 			return fmt.Errorf("failed to replace placeholders: %w", err)
 		}
 
 		jsonBytes := []byte(replacedJSON)
+
+		// Apply ReadOnly restrictions if necessary
 		if shouldEnforceRO {
 			jsonBytes, err = s.enforceReadOnly(jsonBytes)
 			if err != nil {
@@ -307,12 +369,13 @@ func (s *ConfigFileService) CreateInstance(c *gin.Context, id uint) error {
 			}
 		}
 
-		// Inject GPU Annotations
+		// Inject GPU configurations based on project quota
 		jsonBytes, err = s.InjectGPUAnnotations(jsonBytes, project)
 		if err != nil {
 			return err
 		}
 
+		// Finally, apply the resource to the Kubernetes cluster
 		if err := utils.CreateByJson(datatypes.JSON(jsonBytes), ns); err != nil {
 			return err
 		}

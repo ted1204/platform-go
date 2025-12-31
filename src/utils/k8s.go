@@ -683,3 +683,26 @@ func GenerateSafeResourceName(prefix string, name string, id uint) string {
 
 	return baseName + suffix
 }
+
+func ToSafeK8sName(rawName string) string {
+	safeName := strings.ToLower(rawName)
+
+	reg := regexp.MustCompile(`[^a-z0-9]+`)
+	safeName = reg.ReplaceAllString(safeName, "-")
+
+	safeName = strings.Trim(safeName, "-")
+
+	multiHyphenReg := regexp.MustCompile(`-+`)
+	safeName = multiHyphenReg.ReplaceAllString(safeName, "-")
+
+	if len(safeName) > 63 {
+		safeName = safeName[:63]
+		safeName = strings.TrimRight(safeName, "-")
+	}
+
+	if safeName == "" {
+		safeName = "unnamed"
+	}
+
+	return safeName
+}

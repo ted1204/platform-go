@@ -549,6 +549,9 @@ func watchAndSend(
 	}
 }
 
+// ... imports unchanged ...
+
+// buildDataMap extracts comprehensive details from K8s resources for the frontend
 func buildDataMap(eventType string, obj *unstructured.Unstructured) map[string]interface{} {
 	data := map[string]interface{}{
 		"type": eventType,
@@ -557,26 +560,64 @@ func buildDataMap(eventType string, obj *unstructured.Unstructured) map[string]i
 		"ns":   obj.GetNamespace(),
 	}
 
+	// [New] Extract Metadata (CreationTimestamp, Labels, DeletionTimestamp)
+	metadata := map[string]interface{}{}
+	if ts, found, _ := unstructured.NestedString(obj.Object, "metadata", "creationTimestamp"); found {
+		metadata["creationTimestamp"] = ts
+	}
+	if labels, found, _ := unstructured.NestedStringMap(obj.Object, "metadata", "labels"); found {
+		metadata["labels"] = labels
+	}
+	if dts, found, _ := unstructured.NestedString(obj.Object, "metadata", "deletionTimestamp"); found {
+		metadata["deletionTimestamp"] = dts
+	}
+	data["metadata"] = metadata
+
+	// [New] Extract Status fields (Phase, IPs, etc.)
 	for k, v := range extractStatusFields(obj) {
 		data[k] = v
 	}
 
+	// [New] Extract Pod specific details (Images, Container Names, Restart Counts)
 	if obj.GetKind() == "Pod" {
+		// 1. Get Containers and Images
 		if containers, found, _ := unstructured.NestedSlice(obj.Object, "spec", "containers"); found {
 			var containerNames []string
+			var images []string
 			for _, c := range containers {
 				if m, ok := c.(map[string]interface{}); ok {
 					if name, ok := m["name"].(string); ok {
 						containerNames = append(containerNames, name)
+					}
+					if image, ok := m["image"].(string); ok {
+						images = append(images, image)
 					}
 				}
 			}
 			if len(containerNames) > 0 {
 				data["containers"] = containerNames
 			}
+			if len(images) > 0 {
+				data["images"] = images
+			}
+		}
+
+		// 2. Get Total Restart Count from all containers
+		if containerStatuses, found, _ := unstructured.NestedSlice(obj.Object, "status", "containerStatuses"); found {
+			var totalRestarts int64 = 0
+			for _, cs := range containerStatuses {
+				if m, ok := cs.(map[string]interface{}); ok {
+					if rc, ok := m["restartCount"].(int64); ok {
+						totalRestarts += rc
+					}
+				}
+			}
+			data["restartCount"] = totalRestarts
 		}
 	}
 
+	// Service logic remains the same (extracting NodePorts/IPs)
+	// Service logic
 	if isService(obj) {
 		if ips := extractServiceExternalIPs(obj); len(ips) > 0 {
 			data["externalIPs"] = ips
@@ -584,9 +625,36 @@ func buildDataMap(eventType string, obj *unstructured.Unstructured) map[string]i
 		if ports := extractServiceNodePorts(obj); len(ports) > 0 {
 			data["nodePorts"] = ports
 		}
+		if ports := extractServicePorts(obj); len(ports) > 0 {
+			data["ports"] = ports
+		}
 	}
 
 	return data
+}
+
+func extractServicePorts(obj *unstructured.Unstructured) []string {
+	var servicePorts []string
+	ports, found, err := unstructured.NestedSlice(obj.Object, "spec", "ports")
+	if !found || err != nil {
+		return servicePorts
+	}
+
+	for _, port := range ports {
+		if m, ok := port.(map[string]interface{}); ok {
+			p, okPort := m["port"].(int64)           // port number
+			proto, okProto := m["protocol"].(string) // TCP/UDP
+
+			if okPort {
+				portStr := fmt.Sprintf("%d", p)
+				if okProto {
+					portStr = fmt.Sprintf("%d/%s", p, proto)
+				}
+				servicePorts = append(servicePorts, portStr)
+			}
+		}
+	}
+	return servicePorts
 }
 
 func isService(obj *unstructured.Unstructured) bool {
