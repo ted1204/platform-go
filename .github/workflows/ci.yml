@@ -3,12 +3,6 @@ name: CI - Lint & Build
 on:
   push:
     branches: [ "main" ]
-    paths:
-      - '**/*.go'
-      - 'go.mod'
-      - 'go.sum'
-      - 'Dockerfile'
-      - '.github/workflows/ci.yml'
   pull_request:
     branches: [ "main" ]
   workflow_dispatch:
@@ -18,8 +12,36 @@ permissions:
   security-events: write
 
 jobs:
+  detect-changes:
+    name: Detect Changed Files
+    runs-on: ubuntu-latest
+    outputs:
+      go-code: ${{ steps.filter.outputs.go-code }}
+      dockerfile: ${{ steps.filter.outputs.dockerfile }}
+      workflows: ${{ steps.filter.outputs.workflows }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Detect file changes
+        uses: dorny/paths-filter@v2
+        id: filter
+        with:
+          filters: |
+            go-code:
+              - '**/*.go'
+              - 'go.mod'
+              - 'go.sum'
+            dockerfile:
+              - 'Dockerfile'
+              - 'cmd/**'
+            workflows:
+              - '.github/workflows/**'
+
   lint:
     name: Lint Code
+    needs: detect-changes
+    if: needs.detect-changes.outputs.go-code == 'true' || needs.detect-changes.outputs.workflows == 'true'
     runs-on: ubuntu-latest
 
     steps:
@@ -39,6 +61,8 @@ jobs:
 
   fmt:
     name: Format Check
+    needs: detect-changes
+    if: needs.detect-changes.outputs.go-code == 'true' || needs.detect-changes.outputs.workflows == 'true'
     runs-on: ubuntu-latest
 
     steps:
@@ -53,15 +77,17 @@ jobs:
       - name: Check code format
         run: |
           if ! gofmt -l . | grep -q .; then
-            echo " Code is properly formatted"
+            echo "✓ Code is properly formatted"
           else
-            echo "� Code formatting issues found:"
+            echo "✗ Code formatting issues found:"
             gofmt -l .
             exit 1
           fi
 
   vet:
     name: Run go vet
+    needs: detect-changes
+    if: needs.detect-changes.outputs.go-code == 'true' || needs.detect-changes.outputs.workflows == 'true'
     runs-on: ubuntu-latest
 
     steps:
@@ -82,7 +108,13 @@ jobs:
   build:
     name: Build Binary
     runs-on: ubuntu-latest
-    needs: [lint, fmt, vet]
+    needs: [detect-changes, lint, fmt, vet]
+    if: |
+      always() &&
+      (needs.detect-changes.outputs.go-code == 'true' || needs.detect-changes.outputs.dockerfile == 'true' || needs.detect-changes.outputs.workflows == 'true') &&
+      (needs.lint.result == 'success' || needs.lint.result == 'skipped') &&
+      (needs.fmt.result == 'success' || needs.fmt.result == 'skipped') &&
+      (needs.vet.result == 'success' || needs.vet.result == 'skipped')
 
     steps:
       - name: Checkout code
@@ -110,7 +142,7 @@ jobs:
         run: |
           test -f platform-api || exit 1
           test -f platform-scheduler || exit 1
-          echo " Both binaries built successfully"
+          echo "✓ Both binaries built successfully"
 
       - name: Store build artifacts
         uses: actions/upload-artifact@v4
@@ -124,6 +156,8 @@ jobs:
   security:
     name: Security Scan
     runs-on: ubuntu-latest
+    needs: detect-changes
+    if: needs.detect-changes.outputs.go-code == 'true' || needs.detect-changes.outputs.dockerfile == 'true' || needs.detect-changes.outputs.workflows == 'true'
 
     steps:
       - name: Checkout code

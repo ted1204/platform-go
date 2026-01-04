@@ -46,15 +46,15 @@ func (h *GPURequestHandler) CreateRequest(c *gin.Context) {
 		return
 	}
 
-	// Check permission: User must be project admin (group admin)
+	// Check permission: User must be project member (group member)
 	project, err := h.projectSvc.GetProject(projectID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, response.ErrorResponse{Error: "project not found"})
 		return
 	}
 
-	// Check if user is admin of the group the project belongs to
-	hasPermission, err := utils.CheckGroupAdminPermission(userID, project.GID, h.svc.Repos.View)
+	// Check if user is member of the group the project belongs to
+	hasPermission, err := utils.CheckGroupPermission(userID, project.GID, h.svc.Repos.View)
 	if err != nil || !hasPermission {
 		c.JSON(http.StatusForbidden, response.ErrorResponse{Error: "permission denied"})
 		return
@@ -99,32 +99,15 @@ func (h *GPURequestHandler) ListRequestsByProject(c *gin.Context) {
 		return
 	}
 
-	// Check permission: User must be member of the group or super admin
+	// Check permission: User must be member of the group
 	project, err := h.projectSvc.GetProject(projectID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, response.ErrorResponse{Error: "project not found"})
 		return
 	}
 
-	// Check if user is in the group (any role)
-	// We can use CheckGroupPermission which checks for manager, but we want any member.
-	// Or just check if user is in group.
-	// Let's assume CheckGroupPermission is enough for now, or we can implement a simpler check.
-	// Actually, let's just allow if they are in the group.
-	// For now, let's use CheckGroupPermission (which checks for manager or super admin).
-	// Wait, normal users should be able to see requests? Maybe not.
-	// Requirement: "Project Admin cannot modify only submit request".
-	// "User can submit request electronic form" -> Wait, "User can submit request"?
-	// The prompt says: "Project Admin cannot modify only submit request form. Also user can submit request electronic form".
-	// This implies users can also submit requests? Or maybe "User" here refers to the Project Admin as a user of the system.
-	// "Project Admin cannot modify only submit request form" AND "Also user can submit request electronic form".
-	// This might mean ANY user in the project can submit a request?
-	// Let's assume Project Admin for now as per "Project Admin cannot modify only submit request".
-	// If "User" means any user, then I should relax the permission.
-	// Let's stick to Project Admin (Group Admin) for submission.
-	// For listing, let's allow Project Admin.
-
-	hasPermission, err := utils.CheckGroupAdminPermission(userID, project.GID, h.svc.Repos.View)
+	// Check if user is member of the group (any role including regular user)
+	hasPermission, err := utils.CheckGroupPermission(userID, project.GID, h.svc.Repos.View)
 	if err != nil || !hasPermission {
 		c.JSON(http.StatusForbidden, response.ErrorResponse{Error: "permission denied"})
 		return

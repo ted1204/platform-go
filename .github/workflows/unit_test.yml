@@ -3,43 +3,148 @@ name: Unit Tests
 on:
   push:
     branches: [ "main" ]
-    paths:
-      - '**/*.go'
-      - 'go.mod'
-      - 'go.sum'
-      - '.github/workflows/unit_test.yml'
   pull_request:
     branches: [ "main" ]
   workflow_dispatch:
 
 jobs:
-  unit-test:
+  detect-changes:
+    name: Detect Changed Files
     runs-on: ubuntu-latest
-
+    outputs:
+      application: ${{ steps.filter.outputs.application }}
+      domain: ${{ steps.filter.outputs.domain }}
+      pkg: ${{ steps.filter.outputs.pkg }}
+      repository: ${{ steps.filter.outputs.repository }}
+      all: ${{ steps.filter.outputs.all }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        
+      - name: Detect file changes
+        uses: dorny/paths-filter@v2
+        id: filter
+        with:
+          filters: |
+            application:
+              - 'internal/application/**'
+            domain:
+              - 'internal/domain/**'
+            pkg:
+              - 'pkg/**'
+            repository:
+              - 'internal/repository/**'
+            all:
+              - 'go.mod'
+              - 'go.sum'
+              - '.github/workflows/unit_test.yml'
+              - 'internal/config/**'
 
+  test-application:
+    name: Application Layer Tests
+    needs: detect-changes
+    if: needs.detect-changes.outputs.application == 'true' || needs.detect-changes.outputs.all == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
           go-version: '1.22'
-
       - name: Download dependencies
         run: go mod download
-
-      - name: Run unit tests with verbose output
-        run: go test ./... -v -race
-
-      - name: Run unit tests with coverage
-        run: go test ./... -v -coverprofile=coverage.out -covermode=atomic
-
-      - name: Upload coverage to Codecov
+      - name: Run application layer tests
+        run: go test -v -race -coverprofile=coverage-app.out ./internal/application/...
+      - name: Upload coverage
         uses: codecov/codecov-action@v3
         with:
-          files: ./coverage.out
-          flags: unittests
-          name: codecov-umbrella
+          files: ./coverage-app.out
+          flags: application
+          name: application-coverage
 
-      - name: Display coverage summary
-        run: go tool cover -func=coverage.out | tail -1
+  test-domain:
+    name: Domain Layer Tests
+    needs: detect-changes
+    if: needs.detect-changes.outputs.domain == 'true' || needs.detect-changes.outputs.all == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+      - name: Download dependencies
+        run: go mod download
+      - name: Run domain layer tests
+        run: go test -v -race -coverprofile=coverage-domain.out ./internal/domain/...
+      - name: Upload coverage
+        uses: codecov/codecov-action@v3
+        with:
+          files: ./coverage-domain.out
+          flags: domain
+          name: domain-coverage
+
+  test-pkg:
+    name: Package Tests
+    needs: detect-changes
+    if: needs.detect-changes.outputs.pkg == 'true' || needs.detect-changes.outputs.all == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+      - name: Download dependencies
+        run: go mod download
+      - name: Run package tests
+        run: go test -v -race -coverprofile=coverage-pkg.out ./pkg/...
+      - name: Upload coverage
+        uses: codecov/codecov-action@v3
+        with:
+          files: ./coverage-pkg.out
+          flags: pkg
+          name: pkg-coverage
+
+  test-repository:
+    name: Repository Layer Tests
+    needs: detect-changes
+    if: needs.detect-changes.outputs.repository == 'true' || needs.detect-changes.outputs.all == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+      - name: Download dependencies
+        run: go mod download
+      - name: Run repository layer tests
+        run: go test -v -race -coverprofile=coverage-repo.out ./internal/repository/...
+      - name: Upload coverage
+        uses: codecov/codecov-action@v3
+        with:
+          files: ./coverage-repo.out
+          flags: repository
+          name: repository-coverage
+
+  test-summary:
+    name: Unit Test Summary
+    needs: [detect-changes, test-application, test-domain, test-pkg, test-repository]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check test results
+        run: |
+          echo "## Unit Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Test Suite | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|------------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Application | ${{ needs.test-application.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Domain | ${{ needs.test-domain.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Package | ${{ needs.test-pkg.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Repository | ${{ needs.test-repository.result }} |" >> $GITHUB_STEP_SUMMARY

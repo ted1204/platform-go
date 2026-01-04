@@ -29,8 +29,9 @@ help:
 	@echo "  make k8s-logs-scheduler - Stream scheduler logs"
 	@echo "  make ci                - Run CI pipeline (format check, lint, vet, test, build)"
 	@echo "  make local-test        - Run local tests with coverage report"
-	@echo "  make all               - Run full pipeline (CI + K8s deploy)"
-
+	@echo "  make all               - Run full pipeline (CI + K8s deploy)"  make test-integration  - Run integration tests
+  make test-integration-quick - Run quick integration tests
+  make test-clean        - Clean test environment
 ## Testing targets
 test:
 	@echo "$(YELLOW)Running all tests...$(NC)"
@@ -58,6 +59,32 @@ coverage-html: test-coverage
 test-race:
 	@echo "$(YELLOW)Running tests with race detector...$(NC)"
 	@go test ./... -v -race
+
+test-integration:
+	@echo "$(YELLOW)Running integration tests...$(NC)"
+	@echo "$(YELLOW)Note: Requires PostgreSQL and Kubernetes cluster$(NC)"
+	@cd test/integration && cp .env.test ../../.env || true
+	@go test -v -timeout 30m ./test/integration/...
+	@echo "$(GREEN)Integration tests complete$(NC)"
+
+test-integration-quick:
+	@echo "$(YELLOW)Running quick integration tests (skipping slow tests)...$(NC)"
+	@cd test/integration && cp .env.test ../../.env || true
+	@go test -v -timeout 15m -short ./test/integration/...
+	@echo "$(GREEN)Quick integration tests complete$(NC)"
+
+test-integration-k8s:
+	@echo "$(YELLOW)Running K8s integration tests only...$(NC)"
+	@cd test/integration && cp .env.test ../../.env || true
+	@go test -v -timeout 20m ./test/integration/ -run K8s
+	@echo "$(GREEN)K8s integration tests complete$(NC)"
+
+test-clean:
+	@echo "$(YELLOW)Cleaning test environment...$(NC)"
+	@kubectl get ns | grep test-integration | awk '{print $$1}' | xargs -r kubectl delete ns || true
+	@dropdb platform_test 2>/dev/null || true
+	@createdb platform_test 2>/dev/null || true
+	@echo "$(GREEN)Test environment cleaned$(NC)"
 
 ## Code quality targets
 fmt:

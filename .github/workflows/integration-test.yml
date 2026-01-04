@@ -3,28 +3,95 @@ name: Integration Tests
 on:
   push:
     branches: [ "main" ]
-    paths:
-      - '**/*.go'
-      - 'go.mod'
-      - 'go.sum'
-      - 'deploy/**'
-      - 'k8s/**'
-      - '.github/workflows/integration-test.yml'
   pull_request:
     branches: [ "main" ]
   workflow_dispatch:
 
 jobs:
-  integration-test:
+  detect-changes:
+    name: Detect Changed Files
     runs-on: ubuntu-latest
+    outputs:
+      user: ${{ steps.filter.outputs.user }}
+      group: ${{ steps.filter.outputs.group }}
+      project: ${{ steps.filter.outputs.project }}
+      configfile: ${{ steps.filter.outputs.configfile }}
+      gpu: ${{ steps.filter.outputs.gpu }}
+      k8s: ${{ steps.filter.outputs.k8s }}
+      audit: ${{ steps.filter.outputs.audit }}
+      core: ${{ steps.filter.outputs.core }}
+      all: ${{ steps.filter.outputs.all }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Detect file changes
+        uses: dorny/paths-filter@v2
+        id: filter
+        with:
+          filters: |
+            user:
+              - 'internal/domain/user/**'
+              - 'internal/application/*user*.go'
+              - 'internal/api/handlers/*user*.go'
+              - 'test/integration/*user*.go'
+            group:
+              - 'internal/domain/group/**'
+              - 'internal/application/*group*.go'
+              - 'internal/api/handlers/*group*.go'
+              - 'test/integration/*group*.go'
+            project:
+              - 'internal/domain/project/**'
+              - 'internal/application/*project*.go'
+              - 'internal/api/handlers/*project*.go'
+              - 'test/integration/*project*.go'
+            configfile:
+              - 'internal/domain/configfile/**'
+              - 'internal/domain/resource/**'
+              - 'internal/application/*configfile*.go'
+              - 'internal/api/handlers/*configfile*.go'
+              - 'test/integration/*configfile*.go'
+            gpu:
+              - 'internal/domain/gpu/**'
+              - 'internal/application/*gpu*.go'
+              - 'internal/api/handlers/*gpu*.go'
+              - 'test/integration/*gpu*.go'
+            k8s:
+              - 'pkg/k8s/**'
+              - 'internal/api/handlers/*k8s*.go'
+              - 'test/integration/*k8s*.go'
+              - 'k8s/**'
+            audit:
+              - 'internal/domain/audit/**'
+              - 'internal/application/*audit*.go'
+              - 'test/integration/*audit*.go'
+            core:
+              - 'go.mod'
+              - 'go.sum'
+              - 'internal/config/**'
+              - 'internal/repository/**'
+              - 'pkg/utils/**'
+              - 'pkg/logger/**'
+              - 'internal/api/middleware/**'
+              - 'test/integration/setup_test.go'
+              - 'test/integration/helpers.go'
+            all:
+              - '.github/workflows/integration-test.yml'
+              - 'cmd/**'
+              - 'Dockerfile'
 
+  test-user:
+    name: User Integration Tests
+    needs: detect-changes
+    if: needs.detect-changes.outputs.user == 'true' || needs.detect-changes.outputs.core == 'true' || needs.detect-changes.outputs.all == 'true'
+    runs-on: ubuntu-latest
     services:
       postgres:
         image: postgres:15
         env:
           POSTGRES_USER: test
           POSTGRES_PASSWORD: test
-          POSTGRES_DB: platform
+          POSTGRES_DB: platform_test
         ports:
           - 5432:5432
         options: >-
@@ -32,54 +99,273 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
           go-version: '1.22'
-
       - name: Download dependencies
         run: go mod download
+      - name: Wait for Postgres
+        run: |
+          for i in {1..20}; do
+            pg_isready -h localhost -p 5432 -U test && break
+            sleep 2
+          done
+      - name: Run User tests
+        run: go test -v -count=1 -timeout 5m ./test/integration -run TestUser
+        env:
+          TEST_DB_HOST: localhost
+          TEST_DB_PORT: 5432
+          TEST_DB_USER: test
+          TEST_DB_PASSWORD: test
+          TEST_DB_NAME: platform_test
 
+  test-group:
+    name: Group Integration Tests
+    needs: detect-changes
+    if: needs.detect-changes.outputs.group == 'true' || needs.detect-changes.outputs.core == 'true' || needs.detect-changes.outputs.all == 'true'
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: platform_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+      - name: Download dependencies
+        run: go mod download
+      - name: Wait for Postgres
+        run: |
+          for i in {1..20}; do
+            pg_isready -h localhost -p 5432 -U test && break
+            sleep 2
+          done
+      - name: Run Group tests
+        run: go test -v -count=1 -timeout 5m ./test/integration -run TestGroup
+        env:
+          TEST_DB_HOST: localhost
+          TEST_DB_PORT: 5432
+          TEST_DB_USER: test
+          TEST_DB_PASSWORD: test
+          TEST_DB_NAME: platform_test
+
+  test-project:
+    name: Project Integration Tests
+    needs: detect-changes
+    if: needs.detect-changes.outputs.project == 'true' || needs.detect-changes.outputs.core == 'true' || needs.detect-changes.outputs.all == 'true'
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: platform_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+      - name: Download dependencies
+        run: go mod download
+      - name: Wait for Postgres
+        run: |
+          for i in {1..20}; do
+            pg_isready -h localhost -p 5432 -U test && break
+            sleep 2
+          done
+      - name: Run Project tests
+        run: go test -v -count=1 -timeout 5m ./test/integration -run TestProject
+        env:
+          TEST_DB_HOST: localhost
+          TEST_DB_PORT: 5432
+          TEST_DB_USER: test
+          TEST_DB_PASSWORD: test
+          TEST_DB_NAME: platform_test
+
+  test-configfile:
+    name: ConfigFile Integration Tests
+    needs: detect-changes
+    if: needs.detect-changes.outputs.configfile == 'true' || needs.detect-changes.outputs.core == 'true' || needs.detect-changes.outputs.all == 'true'
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: platform_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+      - name: Download dependencies
+        run: go mod download
+      - name: Wait for Postgres
+        run: |
+          for i in {1..20}; do
+            pg_isready -h localhost -p 5432 -U test && break
+            sleep 2
+          done
+      - name: Run ConfigFile tests
+        run: go test -v -count=1 -timeout 5m ./test/integration -run TestConfigFile
+        env:
+          TEST_DB_HOST: localhost
+          TEST_DB_PORT: 5432
+          TEST_DB_USER: test
+          TEST_DB_PASSWORD: test
+          TEST_DB_NAME: platform_test
+
+  test-gpu:
+    name: GPU Request Integration Tests
+    needs: detect-changes
+    if: needs.detect-changes.outputs.gpu == 'true' || needs.detect-changes.outputs.core == 'true' || needs.detect-changes.outputs.all == 'true'
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: platform_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+      - name: Download dependencies
+        run: go mod download
+      - name: Wait for Postgres
+        run: |
+          for i in {1..20}; do
+            pg_isready -h localhost -p 5432 -U test && break
+            sleep 2
+          done
+      - name: Run GPU tests
+        run: go test -v -count=1 -timeout 5m ./test/integration -run TestGPU
+        env:
+          TEST_DB_HOST: localhost
+          TEST_DB_PORT: 5432
+          TEST_DB_USER: test
+          TEST_DB_PASSWORD: test
+          TEST_DB_NAME: platform_test
+
+  test-k8s:
+    name: K8s Integration Tests
+    needs: detect-changes
+    if: needs.detect-changes.outputs.k8s == 'true' || needs.detect-changes.outputs.all == 'true'
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: platform_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+      - name: Download dependencies
+        run: go mod download
       - name: Install kubectl
         run: |
           curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
           chmod +x kubectl
           sudo mv kubectl /usr/local/bin/
-
       - name: Set up Kind
         uses: helm/kind-action@v1.10.0
         with:
           version: v0.24.0
           cluster_name: test-cluster
-
-      - name: Export KUBECONFIG
-        run: echo "KUBECONFIG=$HOME/.kube/config" >> $GITHUB_ENV
-
       - name: Verify Kubernetes cluster
         run: kubectl cluster-info
-
       - name: Wait for Postgres
         run: |
-          echo "Waiting for Postgres to be ready..."
-          sudo apt-get update && sudo apt-get install -y postgresql-client
           for i in {1..20}; do
             pg_isready -h localhost -p 5432 -U test && break
-            echo "Attempt $i/20..."
-            sleep 3
+            sleep 2
           done
-
-      - name: Run integration tests
-        run: go test ./... -v -tags=integration
+      - name: Run K8s tests
+        run: go test -v -count=1 -timeout 10m ./test/integration -run TestK8s
         env:
-          TEST_DB_DSN: "postgres://test:test@localhost:5432/platform?sslmode=disable"
-          KUBECONFIG: ${{ env.KUBECONFIG }}
+          TEST_DB_HOST: localhost
+          TEST_DB_PORT: 5432
+          TEST_DB_USER: test
+          TEST_DB_PASSWORD: test
+          TEST_DB_NAME: platform_test
+          ENABLE_K8S_TESTS: true
 
-      - name: Collect test results
-        if: always()
+  test-summary:
+    name: Test Summary
+    needs: [detect-changes, test-user, test-group, test-project, test-configfile, test-gpu, test-k8s]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check test results
         run: |
-          echo "Integration tests completed with status: $?"
+          echo "## Integration Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Test Suite | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|------------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| User | ${{ needs.test-user.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Group | ${{ needs.test-group.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Project | ${{ needs.test-project.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| ConfigFile | ${{ needs.test-configfile.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| GPU | ${{ needs.test-gpu.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| K8s | ${{ needs.test-k8s.result }} |" >> $GITHUB_STEP_SUMMARY
