@@ -109,7 +109,7 @@ func TestUpdateUserGroup_Success(t *testing.T) {
 	oldUG := group.UserGroup{UID: 1, GID: 1, Role: "user"}
 	newUG := &group.UserGroup{UID: 1, GID: 1, Role: "admin"}
 
-		groupRepo.EXPECT().GetGroupByID(uint(1)).Return(group.Group{}, nil)
+	groupRepo.EXPECT().GetGroupByID(uint(1)).Return(group.Group{}, nil)
 	ugRepo.EXPECT().UpdateUserGroup(newUG).Return(nil)
 
 	res, err := svc.UpdateUserGroup(ctx, newUG, oldUG)
@@ -123,7 +123,7 @@ func TestUpdateUserGroup_Fail_UpdateRepo(t *testing.T) {
 	oldUG := group.UserGroup{UID: 1, GID: 1}
 	newUG := &group.UserGroup{UID: 1, GID: 1}
 
-		groupRepo.EXPECT().GetGroupByID(uint(1)).Return(group.Group{}, nil)
+	groupRepo.EXPECT().GetGroupByID(uint(1)).Return(group.Group{}, nil)
 	ugRepo.EXPECT().UpdateUserGroup(newUG).Return(errors.New("update fail"))
 
 	res, err := svc.UpdateUserGroup(ctx, newUG, oldUG)
@@ -138,7 +138,7 @@ func TestDeleteUserGroup_Success(t *testing.T) {
 
 	oldUG := group.UserGroup{UID: 1, GID: 2}
 	ugRepo.EXPECT().GetUserGroup(uint(1), uint(2)).Return(oldUG, nil)
-		groupRepo.EXPECT().GetGroupByID(uint(2)).Return(group.Group{}, nil)
+	groupRepo.EXPECT().GetGroupByID(uint(2)).Return(group.Group{}, nil)
 	ugRepo.EXPECT().DeleteUserGroup(uint(1), uint(2)).Return(nil)
 	userRepo.EXPECT().GetUsernameByID(uint(1)).Return("admin", nil)
 	projectRepo.EXPECT().ListProjectsByGroup(uint(2)).Return([]project.Project{{PID: 100}}, nil)
