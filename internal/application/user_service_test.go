@@ -158,6 +158,7 @@ func TestUpdateUser_UserNotFound(t *testing.T) {
 // --------------------- RemoveUser ---------------------
 func TestRemoveUser_Success(t *testing.T) {
 	svc, mockUser := setupUserServiceMocks(t)
+	mockUser.EXPECT().GetUserRawByID(uint(1)).Return(user.User{Username: "testuser"}, nil)
 	mockUser.EXPECT().DeleteUser(uint(1)).Return(nil)
 
 	err := svc.RemoveUser(1)
@@ -166,6 +167,7 @@ func TestRemoveUser_Success(t *testing.T) {
 
 func TestRemoveUser_Fail(t *testing.T) {
 	svc, mockUser := setupUserServiceMocks(t)
+	mockUser.EXPECT().GetUserRawByID(uint(1)).Return(user.User{Username: "testuser"}, nil)
 	mockUser.EXPECT().DeleteUser(uint(1)).Return(errors.New("delete fail"))
 
 	err := svc.RemoveUser(1)

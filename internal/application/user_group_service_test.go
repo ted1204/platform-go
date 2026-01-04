@@ -104,11 +104,12 @@ func TestCreateUserGroup_Fail_GetUser(t *testing.T) {
 }
 
 func TestUpdateUserGroup_Success(t *testing.T) {
-	svc, ugRepo, _, _, _, _, ctx := setupUserGroupMocks(t)
+	svc, ugRepo, _, _, groupRepo, _, ctx := setupUserGroupMocks(t)
 
 	oldUG := group.UserGroup{UID: 1, GID: 1, Role: "user"}
 	newUG := &group.UserGroup{UID: 1, GID: 1, Role: "admin"}
 
+		groupRepo.EXPECT().GetGroupByID(uint(1)).Return(group.Group{}, nil)
 	ugRepo.EXPECT().UpdateUserGroup(newUG).Return(nil)
 
 	res, err := svc.UpdateUserGroup(ctx, newUG, oldUG)
@@ -117,11 +118,12 @@ func TestUpdateUserGroup_Success(t *testing.T) {
 }
 
 func TestUpdateUserGroup_Fail_UpdateRepo(t *testing.T) {
-	svc, ugRepo, _, _, _, _, ctx := setupUserGroupMocks(t)
+	svc, ugRepo, _, _, groupRepo, _, ctx := setupUserGroupMocks(t)
 
 	oldUG := group.UserGroup{UID: 1, GID: 1}
 	newUG := &group.UserGroup{UID: 1, GID: 1}
 
+		groupRepo.EXPECT().GetGroupByID(uint(1)).Return(group.Group{}, nil)
 	ugRepo.EXPECT().UpdateUserGroup(newUG).Return(errors.New("update fail"))
 
 	res, err := svc.UpdateUserGroup(ctx, newUG, oldUG)
@@ -132,10 +134,11 @@ func TestUpdateUserGroup_Fail_UpdateRepo(t *testing.T) {
 
 // ---------- DeleteUserGroup ----------
 func TestDeleteUserGroup_Success(t *testing.T) {
-	svc, ugRepo, userRepo, projectRepo, _, _, ctx := setupUserGroupMocks(t)
+	svc, ugRepo, userRepo, projectRepo, groupRepo, _, ctx := setupUserGroupMocks(t)
 
 	oldUG := group.UserGroup{UID: 1, GID: 2}
 	ugRepo.EXPECT().GetUserGroup(uint(1), uint(2)).Return(oldUG, nil)
+		groupRepo.EXPECT().GetGroupByID(uint(2)).Return(group.Group{}, nil)
 	ugRepo.EXPECT().DeleteUserGroup(uint(1), uint(2)).Return(nil)
 	userRepo.EXPECT().GetUsernameByID(uint(1)).Return("admin", nil)
 	projectRepo.EXPECT().ListProjectsByGroup(uint(2)).Return([]project.Project{{PID: 100}}, nil)
@@ -146,10 +149,11 @@ func TestDeleteUserGroup_Success(t *testing.T) {
 }
 
 func TestDeleteUserGroup_Fail_DeleteRepo(t *testing.T) {
-	svc, ugRepo, _, _, _, _, ctx := setupUserGroupMocks(t)
+	svc, ugRepo, _, _, groupRepo, _, ctx := setupUserGroupMocks(t)
 
 	oldUG := group.UserGroup{UID: 1, GID: 2}
 	ugRepo.EXPECT().GetUserGroup(uint(1), uint(2)).Return(oldUG, nil)
+	groupRepo.EXPECT().GetGroupByID(uint(2)).Return(group.Group{}, nil)
 	ugRepo.EXPECT().DeleteUserGroup(uint(1), uint(2)).Return(errors.New("delete fail"))
 
 	err := svc.DeleteUserGroup(ctx, 1, 2)
