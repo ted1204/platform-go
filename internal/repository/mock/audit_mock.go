@@ -63,3 +63,17 @@ func (mr *MockAuditRepoMockRecorder) GetAuditLogs(params interface{}) *gomock.Ca
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAuditLogs", reflect.TypeOf((*MockAuditRepo)(nil).GetAuditLogs), params)
 }
+
+// DeleteOldAuditLogs mocks base method.
+func (m *MockAuditRepo) DeleteOldAuditLogs(retentionDays int) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteOldAuditLogs", retentionDays)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteOldAuditLogs indicates an expected call of DeleteOldAuditLogs.
+func (mr *MockAuditRepoMockRecorder) DeleteOldAuditLogs(retentionDays interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteOldAuditLogs", reflect.TypeOf((*MockAuditRepo)(nil).DeleteOldAuditLogs), retentionDays)
+}

@@ -32,12 +32,6 @@ func NewK8sService(repos *repository.Repos) *K8sService {
 }
 
 func (s *K8sService) CreateJob(ctx context.Context, userID uint, input job.JobSubmission) error {
-	// Get user for admin check
-	user, err := s.repos.User.GetUserByID(userID)
-	if err != nil {
-		return fmt.Errorf("user not found: %w", err)
-	}
-
 	// Extract image name and tag
 	imageParts := strings.Split(input.Image, ":")
 	if len(imageParts) != 2 {
@@ -60,11 +54,13 @@ func (s *K8sService) CreateJob(ctx context.Context, userID uint, input job.JobSu
 		return fmt.Errorf("invalid namespace format, expected pid-username")
 	}
 
-	// Validate image against allowed list (skip for admin)
-	if !user.IsSuperAdmin {
-		isAllowed, err := s.imageService.ValidateImageForProject(imageName, imageTag, projectID)
-		if err != nil || !isAllowed {
-			return fmt.Errorf("image %s:%s is not allowed. Please request approval first", imageName, imageTag)
+	// Check if image is in allowed list. If so, prepend Harbor private prefix.
+	// If not allowed, we don't block it (non-mandatory), but we don't add the prefix.
+	isAllowed, _ := s.imageService.ValidateImageForProject(imageName, imageTag, projectID)
+	if isAllowed {
+		prefix := config.HarborPrivatePrefix
+		if prefix != "" && !strings.HasPrefix(input.Image, prefix) {
+			input.Image = fmt.Sprintf("%s%s", prefix, input.Image)
 		}
 	}
 

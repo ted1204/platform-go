@@ -114,7 +114,7 @@ func (s *ProjectService) CreateProject(c *gin.Context, input project.CreateProje
 		return nil, fmt.Errorf("failed to allocate project resources: %w", err)
 	}
 
-	go utils.LogAuditWithConsole(c, "create", "project", fmt.Sprintf("p_id=%d", p.PID), nil, p, "", s.Repos.Audit)
+	utils.LogAuditWithConsole(c, "create", "project", fmt.Sprintf("p_id=%d", p.PID), nil, p, "", s.Repos.Audit)
 
 	return p, nil
 }
@@ -148,7 +148,7 @@ func (s *ProjectService) UpdateProject(c *gin.Context, id uint, input project.Up
 
 	err = s.Repos.Project.UpdateProject(&p)
 	if err == nil {
-		go utils.LogAuditWithConsole(c, "update", "project", fmt.Sprintf("p_id=%d", p.PID), oldProject, p, "", s.Repos.Audit)
+		utils.LogAuditWithConsole(c, "update", "project", fmt.Sprintf("p_id=%d", p.PID), oldProject, p, "", s.Repos.Audit)
 	}
 
 	return &p, err
@@ -164,7 +164,7 @@ func (s *ProjectService) DeleteProject(c *gin.Context, id uint) error {
 
 	err = s.Repos.Project.DeleteProject(id)
 	if err == nil {
-		go utils.LogAuditWithConsole(c, "delete", "project", fmt.Sprintf("p_id=%d", project.PID), project, nil, "", s.Repos.Audit)
+		utils.LogAuditWithConsole(c, "delete", "project", fmt.Sprintf("p_id=%d", project.PID), project, nil, "", s.Repos.Audit)
 	}
 	return err
 }

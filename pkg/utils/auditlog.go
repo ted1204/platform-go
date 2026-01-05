@@ -11,15 +11,23 @@ import (
 )
 
 var LogAuditWithConsole = func(c *gin.Context, action, resourceType, resourceID string, oldData, newData interface{}, msg string, repos repository.AuditRepo) {
+	// Extract data synchronously to avoid race conditions
 	userID, _ := GetUserIDFromContext(c)
-	if err := LogAudit(c, userID, action, resourceType, resourceID, oldData, newData, msg, repos); err != nil {
-		fmt.Printf("[LogAudit] error: %v\n", err)
-	}
+	ip := c.ClientIP()
+	ua := c.GetHeader("User-Agent")
+
+	// Run DB operation in background
+	go func() {
+		if err := LogAudit(userID, ip, ua, action, resourceType, resourceID, oldData, newData, msg, repos); err != nil {
+			fmt.Printf("[LogAudit] error: %v\n", err)
+		}
+	}()
 }
 
 var LogAudit = func(
-	c *gin.Context,
 	userID uint,
+	ip string,
+	ua string,
 	action string,
 	resourceType string,
 	resourceID string,
@@ -43,9 +51,6 @@ var LogAudit = func(
 			log.Printf("Audit marshal newData error: %v", err)
 		}
 	}
-
-	ip := c.ClientIP()
-	ua := c.GetHeader("User-Agent")
 
 	auditLog := &audit.AuditLog{
 		UserID:       userID,

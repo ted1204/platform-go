@@ -265,7 +265,7 @@ func TestUserGroupHandler_Integration(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 
-		var userGroups []group.UserGroup
+		var userGroups map[string]interface{}
 		err = resp.DecodeJSON(&userGroups)
 		require.NoError(t, err)
 		assert.GreaterOrEqual(t, len(userGroups), 1)

@@ -47,7 +47,7 @@ func (s *GroupService) CreateGroup(c *gin.Context, input group.GroupCreateDTO) (
 	if err != nil {
 		return group.Group{}, err
 	}
-	go utils.LogAuditWithConsole(c, "create", "group", fmt.Sprintf("g_id=%d", grp.GID), nil, grp, "", s.Repos.Audit)
+	utils.LogAuditWithConsole(c, "create", "group", fmt.Sprintf("g_id=%d", grp.GID), nil, grp, "", s.Repos.Audit)
 
 	return grp, nil
 }
@@ -84,7 +84,7 @@ func (s *GroupService) UpdateGroup(c *gin.Context, id uint, input group.GroupUpd
 		return group.Group{}, err
 	}
 
-	go utils.LogAuditWithConsole(c, "update", "group", fmt.Sprintf("g_id=%d", grp.GID), oldGroup, grp, "", s.Repos.Audit)
+	utils.LogAuditWithConsole(c, "update", "group", fmt.Sprintf("g_id=%d", grp.GID), oldGroup, grp, "", s.Repos.Audit)
 
 	return grp, nil
 }
@@ -104,7 +104,7 @@ func (s *GroupService) DeleteGroup(c *gin.Context, id uint) error {
 		return err
 	}
 
-	go utils.LogAuditWithConsole(c, "delete", "group", fmt.Sprintf("g_id=%d", group.GID), group, nil, "", s.Repos.Audit)
+	utils.LogAuditWithConsole(c, "delete", "group", fmt.Sprintf("g_id=%d", group.GID), group, nil, "", s.Repos.Audit)
 
 	return nil
 }

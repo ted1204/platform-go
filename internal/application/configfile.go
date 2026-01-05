@@ -163,14 +163,14 @@ func (s *ConfigFileService) CreateConfigFile(c *gin.Context, cf configfile.Creat
 	if err := s.Repos.ConfigFile.CreateConfigFile(createdCF); err != nil {
 		return nil, err
 	}
-	go utils.LogAuditWithConsole(c, "create", "config_file", fmt.Sprintf("cf_id=%d", createdCF.CFID), nil, *createdCF, "", s.Repos.Audit)
+	utils.LogAuditWithConsole(c, "create", "config_file", fmt.Sprintf("cf_id=%d", createdCF.CFID), nil, *createdCF, "", s.Repos.Audit)
 
 	for _, res := range resources {
 		res.CFID = createdCF.CFID
 		if err := s.Repos.Resource.CreateResource(res); err != nil {
 			return nil, fmt.Errorf("failed to create resource %s/%s: %w", res.Type, res.Name, err)
 		}
-		go utils.LogAuditWithConsole(c, "create", "resource", fmt.Sprintf("r_id=%d", res.RID), nil, *res, "", s.Repos.Audit)
+		utils.LogAuditWithConsole(c, "create", "resource", fmt.Sprintf("r_id=%d", res.RID), nil, *res, "", s.Repos.Audit)
 	}
 
 	return createdCF, nil
@@ -211,7 +211,7 @@ func (s *ConfigFileService) updateYamlContent(c *gin.Context, cf *configfile.Con
 			if err := s.Repos.Resource.CreateResource(res); err != nil {
 				return fmt.Errorf("failed to create resource for document %d: %w", i+1, err)
 			}
-			go utils.LogAuditWithConsole(c, "create", "resource", fmt.Sprintf("r_id=%d", res.RID), nil, *res, "", s.Repos.Audit)
+			utils.LogAuditWithConsole(c, "create", "resource", fmt.Sprintf("r_id=%d", res.RID), nil, *res, "", s.Repos.Audit)
 		} else {
 			usedKeys[name] = true
 			oldTarget := val
@@ -221,7 +221,7 @@ func (s *ConfigFileService) updateYamlContent(c *gin.Context, cf *configfile.Con
 			if err := s.Repos.Resource.UpdateResource(&val); err != nil {
 				return fmt.Errorf("failed to update resource for document %d: %w", i+1, err)
 			}
-			go utils.LogAuditWithConsole(c, "update", "resource", fmt.Sprintf("r_id=%d", val.RID), oldTarget, val, "", s.Repos.Audit)
+			utils.LogAuditWithConsole(c, "update", "resource", fmt.Sprintf("r_id=%d", val.RID), oldTarget, val, "", s.Repos.Audit)
 		}
 	}
 
@@ -230,7 +230,7 @@ func (s *ConfigFileService) updateYamlContent(c *gin.Context, cf *configfile.Con
 			if err := s.Repos.Resource.DeleteResource(resourceMap[key].RID); err != nil {
 				return fmt.Errorf("failed to delete unused resource %s: %w", key, err)
 			}
-			go utils.LogAuditWithConsole(c, "delete", "resource", fmt.Sprintf("r_id=%d", resourceMap[key].RID), resourceMap[key], nil, "", s.Repos.Audit)
+			utils.LogAuditWithConsole(c, "delete", "resource", fmt.Sprintf("r_id=%d", resourceMap[key].RID), resourceMap[key], nil, "", s.Repos.Audit)
 		}
 	}
 	return nil
@@ -264,7 +264,7 @@ func (s *ConfigFileService) UpdateConfigFile(c *gin.Context, id uint, input conf
 		return nil, err
 	}
 
-	go utils.LogAuditWithConsole(c, "update", "config_file", fmt.Sprintf("cf_id=%d", existing.CFID), oldCF, *existing, "", s.Repos.Audit)
+	utils.LogAuditWithConsole(c, "update", "config_file", fmt.Sprintf("cf_id=%d", existing.CFID), oldCF, *existing, "", s.Repos.Audit)
 
 	return existing, nil
 }
@@ -306,7 +306,7 @@ func (s *ConfigFileService) DeleteConfigFile(c *gin.Context, id uint) error {
 		return err
 	}
 
-	go utils.LogAuditWithConsole(c, "delete", "config_file", fmt.Sprintf("cf_id=%d", cf.CFID), *cf, nil, "", s.Repos.Audit)
+	utils.LogAuditWithConsole(c, "delete", "config_file", fmt.Sprintf("cf_id=%d", cf.CFID), *cf, nil, "", s.Repos.Audit)
 	return nil
 }
 

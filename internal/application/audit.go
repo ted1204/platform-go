@@ -18,3 +18,7 @@ func NewAuditService(repos *repository.Repos) *AuditService {
 func (s *AuditService) QueryAuditLogs(params repository.AuditQueryParams) ([]audit.AuditLog, error) {
 	return s.Repos.Audit.GetAuditLogs(params)
 }
+
+func (s *AuditService) CleanupOldLogs(days int) error {
+	return s.Repos.Audit.DeleteOldAuditLogs(days)
+}

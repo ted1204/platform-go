@@ -5,6 +5,7 @@ import (
 	"github.com/linskybing/platform-go/internal/api/handlers"
 	"github.com/linskybing/platform-go/internal/api/middleware"
 	"github.com/linskybing/platform-go/internal/application"
+	"github.com/linskybing/platform-go/internal/cron"
 	"github.com/linskybing/platform-go/internal/domain/configfile"
 	"github.com/linskybing/platform-go/internal/domain/group"
 	"github.com/linskybing/platform-go/internal/repository"
@@ -19,6 +20,9 @@ func RegisterRoutes(r *gin.Engine) {
 	services_instance := application.New(repos_instance)
 	handlers_instance := handlers.New(services_instance, repos_instance, r)
 	authMiddleware := middleware.NewAuth(repos_instance)
+
+	// Start background tasks
+	cron.StartCleanupTask(services_instance.Audit)
 
 	// setup
 	r.POST("/register", handlers_instance.User.Register)
@@ -44,6 +48,7 @@ func RegisterRoutes(r *gin.Engine) {
 		{
 			images.GET("/allowed", handlers_instance.Image.ListAllowed)
 			images.POST("/pull", authMiddleware.Admin(), handlers_instance.Image.PullImage)
+			images.DELETE("/allowed/:id", authMiddleware.Admin(), handlers_instance.Image.DeleteAllowedImage)
 		}
 
 		userGroup := auth.Group("/user-group")

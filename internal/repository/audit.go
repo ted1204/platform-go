@@ -1,8 +1,9 @@
 package repository
 
 import (
-	"github.com/linskybing/platform-go/internal/domain/audit"
 	"time"
+
+	"github.com/linskybing/platform-go/internal/domain/audit"
 
 	"github.com/linskybing/platform-go/internal/config/db"
 )
@@ -20,9 +21,15 @@ type AuditQueryParams struct {
 type AuditRepo interface {
 	GetAuditLogs(params AuditQueryParams) ([]audit.AuditLog, error)
 	CreateAuditLog(audit *audit.AuditLog) error
+	DeleteOldAuditLogs(retentionDays int) error
 }
 
 type DBAuditRepo struct{}
+
+func (r *DBAuditRepo) DeleteOldAuditLogs(retentionDays int) error {
+	cutoff := time.Now().AddDate(0, 0, -retentionDays)
+	return db.DB.Where("created_at < ?", cutoff).Delete(&audit.AuditLog{}).Error
+}
 
 func (r *DBAuditRepo) GetAuditLogs(params AuditQueryParams) ([]audit.AuditLog, error) {
 	var logs []audit.AuditLog

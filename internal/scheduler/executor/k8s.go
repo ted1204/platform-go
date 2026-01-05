@@ -7,8 +7,11 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"strings"
 	"time"
 
+	"github.com/linskybing/platform-go/internal/application"
+	"github.com/linskybing/platform-go/internal/config"
 	"github.com/linskybing/platform-go/internal/domain/job"
 	"github.com/linskybing/platform-go/pkg/k8s"
 	batchv1 "k8s.io/api/batch/v1"
@@ -18,12 +21,16 @@ import (
 
 // K8sExecutor runs jobs on Kubernetes.
 type K8sExecutor struct {
-	jobRepo job.Repository
+	jobRepo      job.Repository
+	imageService *application.ImageService
 }
 
 // NewK8sExecutor constructs a Kubernetes-backed executor.
-func NewK8sExecutor(jobRepo job.Repository) *K8sExecutor {
-	return &K8sExecutor{jobRepo: jobRepo}
+func NewK8sExecutor(jobRepo job.Repository, imageService *application.ImageService) *K8sExecutor {
+	return &K8sExecutor{
+		jobRepo:      jobRepo,
+		imageService: imageService,
+	}
 }
 
 func (e *K8sExecutor) Execute(ctx context.Context, j *job.Job) error {
@@ -34,6 +41,22 @@ func (e *K8sExecutor) Execute(ctx context.Context, j *job.Job) error {
 	var args []string
 	if j.Args != "" {
 		_ = json.Unmarshal([]byte(j.Args), &args)
+	}
+
+	// Handle Image Prefixing
+	if e.imageService != nil && j.ProjectID != nil {
+		parts := strings.Split(j.Image, ":")
+		if len(parts) == 2 {
+			name := parts[0]
+			tag := parts[1]
+			isAllowed, _ := e.imageService.ValidateImageForProject(name, tag, *j.ProjectID)
+			if isAllowed {
+				prefix := config.HarborPrivatePrefix
+				if prefix != "" && !strings.HasPrefix(j.Image, prefix) {
+					j.Image = fmt.Sprintf("%s%s", prefix, j.Image)
+				}
+			}
+		}
 	}
 
 	spec := k8s.JobSpec{

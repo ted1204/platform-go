@@ -139,3 +139,7 @@ func (s *ImageService) validateNameAndTag(name, tag string) string {
 
 	return ""
 }
+
+func (s *ImageService) DeleteAllowedImage(id uint) error {
+	return s.repo.DeleteAllowedImage(id)
+}

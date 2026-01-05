@@ -177,3 +177,17 @@ func (h *ImageHandler) PullImage(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, response.SuccessResponse{Message: "pull queued"})
 }
+
+// Delete allowed image (admin)
+func (h *ImageHandler) DeleteAllowedImage(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, response.ErrorResponse{Error: "invalid id"})
+		return
+	}
+	if err := h.service.DeleteAllowedImage(uint(id)); err != nil {
+		c.JSON(http.StatusInternalServerError, response.ErrorResponse{Error: err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, response.SuccessResponse{Message: "image deleted"})
+}

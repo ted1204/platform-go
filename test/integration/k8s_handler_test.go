@@ -7,8 +7,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/linskybing/platform-go/internal/config"
 	"github.com/linskybing/platform-go/internal/config/db"
+	"github.com/linskybing/platform-go/internal/domain/image"
 	"github.com/linskybing/platform-go/internal/domain/project"
+	"github.com/linskybing/platform-go/internal/repository"
 	"github.com/linskybing/platform-go/pkg/k8s"
 	"github.com/linskybing/platform-go/pkg/utils"
 	"github.com/stretchr/testify/assert"
@@ -163,7 +166,7 @@ func TestK8sHandler_PVC_Integration(t *testing.T) {
 		expandDTO := map[string]interface{}{
 			"namespace": testNamespace,
 			"name":      "test-pvc-1",
-			"capacity":  "1Gi", // Trying to shrink (use capacity field like expand)
+			"capacity":  "500Mi", // Trying to shrink (use capacity field like expand)
 		}
 
 		resp, err := client.PUT("/k8s/pvc/expand", expandDTO)
@@ -538,5 +541,51 @@ func TestK8sHandler_Jobs_Integration(t *testing.T) {
 		require.NoError(t, err)
 		// May be 404 if job doesn't exist
 		assert.True(t, resp.StatusCode == http.StatusOK || resp.StatusCode == http.StatusNotFound)
+	})
+
+	t.Run("CreateJob - Allowed Image Auto-Prefix", func(t *testing.T) {
+		// 1. Add allowed image
+		imgRepo := repository.New().Image
+		allowedImg := &image.AllowedImage{
+			Name:      "nginx",
+			Tag:       "latest",
+			ProjectID: &ctx.TestProject.PID,
+			IsGlobal:  false,
+			CreatedBy: ctx.TestAdmin.UID,
+		}
+		_ = imgRepo.CreateAllowed(allowedImg)
+		defer func() { _ = imgRepo.DeleteAllowedImage(allowedImg.ID) }()
+
+		// 2. Create Job with this image (without prefix)
+		client := NewHTTPClient(ctx.Router, ctx.AdminToken)
+		namespace := fmt.Sprintf("%d-%s", ctx.TestProject.PID, ctx.TestUser.Username)
+
+		// Ensure namespace exists (might fail if already exists, ignore)
+		_ = createTestNamespace(namespace)
+
+		jobName := "prefix-test-job"
+		jobDTO := map[string]interface{}{
+			"name":      jobName,
+			"image":     "nginx:latest",
+			"command":   []string{"echo", "hello"},
+			"namespace": namespace,
+		}
+
+		resp, err := client.POST("/k8s/jobs", jobDTO)
+		require.NoError(t, err)
+		assert.Equal(t, http.StatusCreated, resp.StatusCode)
+
+		// 3. Verify K8s Job has prefix
+		// Wait for creation
+		time.Sleep(2 * time.Second)
+
+		k8sJob, err := k8s.Clientset.BatchV1().Jobs(namespace).Get(context.Background(), jobName, metav1.GetOptions{})
+		require.NoError(t, err)
+
+		expectedImage := config.HarborPrivatePrefix + "nginx:latest"
+		assert.Equal(t, expectedImage, k8sJob.Spec.Template.Spec.Containers[0].Image)
+
+		// Cleanup
+		_ = k8s.DeleteJob(context.Background(), namespace, jobName)
 	})
 }

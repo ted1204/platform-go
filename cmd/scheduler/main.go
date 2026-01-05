@@ -7,6 +7,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/linskybing/platform-go/internal/application"
 	"github.com/linskybing/platform-go/internal/application/scheduler"
 	"github.com/linskybing/platform-go/internal/config"
 	"github.com/linskybing/platform-go/internal/config/db"
@@ -53,8 +54,9 @@ func main() {
 	}
 
 	repos := repository.New()
+	imageService := application.NewImageService(repos.Image)
 	registry := executor.NewExecutorRegistry()
-	registry.Register(job.JobTypeNormal, executor.NewK8sExecutor(repos.Job))
+	registry.Register(job.JobTypeNormal, executor.NewK8sExecutor(repos.Job, imageService))
 	sched := scheduler.NewScheduler(registry, repos.Job)
 
 	ctx, cancel := context.WithCancel(context.Background())

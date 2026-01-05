@@ -89,7 +89,8 @@ func (h *UserGroupHandler) GetUserGroupsByGID(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, response.ErrorResponse{Error: err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, rawData)
+	formattedData := h.svc.FormatByGID(rawData)
+	c.JSON(http.StatusOK, formattedData)
 }
 
 // controller

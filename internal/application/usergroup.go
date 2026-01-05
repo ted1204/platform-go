@@ -80,7 +80,7 @@ func (s *UserGroupService) CreateUserGroup(c *gin.Context, userGroup *group.User
 		return nil, err
 	}
 
-	go utils.LogAuditWithConsole(c, "create", "user_group",
+	utils.LogAuditWithConsole(c, "create", "user_group",
 		fmt.Sprintf("u_id=%d,g_id=%d", userGroup.UID, userGroup.GID),
 		nil, *userGroup, "", s.Repos.Audit)
 
@@ -104,7 +104,7 @@ func (s *UserGroupService) UpdateUserGroup(c *gin.Context, userGroup *group.User
 		return nil, err
 	}
 
-	go utils.LogAuditWithConsole(c, "update", "user_group",
+	utils.LogAuditWithConsole(c, "update", "user_group",
 		fmt.Sprintf("u_id=%d,g_id=%d", userGroup.UID, userGroup.GID),
 		existing, *userGroup, "", s.Repos.Audit)
 
@@ -145,7 +145,7 @@ func (s *UserGroupService) DeleteUserGroup(c *gin.Context, uid, gid uint) error 
 		return err
 	}
 
-	go utils.LogAuditWithConsole(c, "delete", "user_group",
+	utils.LogAuditWithConsole(c, "delete", "user_group",
 		fmt.Sprintf("u_id=%d,g_id=%d", uid, gid),
 		oldUserGroup, nil, "", s.Repos.Audit)
 
