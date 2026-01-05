@@ -24,9 +24,11 @@ spec:
       labels:
         app: postgres
     spec:
+      nodeSelector:
+        kubernetes.io/hostname: gpu1
       containers:
         - name: postgres
-          image: linskybing/postgres-with-pg_cron:latest
+          image: 192.168.109.1:30002/library/postgres-with-pg_cron:latest
           imagePullPolicy: Always
           ports:
             - containerPort: 5432

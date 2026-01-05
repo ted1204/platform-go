@@ -12,11 +12,13 @@ spec:
       labels:
         app: go-api
     spec:
+      nodeSelector:
+        kubernetes.io/hostname: gpu1
       serviceAccountName: admin-sa
       dnsPolicy: ClusterFirst
       containers:
         - name: go-api
-          image: linskybing/platform-go-api:latest
+          image: 192.168.109.1:30002/library/platform-go-api:latest
           imagePullPolicy: Always
           command: ["sleep", "infinity"]
           volumeMounts:
@@ -42,7 +44,7 @@ spec:
       volumes:
         - name: local-data
           hostPath:
-            path: /Users/sky/k8s/platform-go
+            path: /home/user/k8s-gpu-platform/backend
             type: Directory
 ---
 apiVersion: v1

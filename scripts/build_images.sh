@@ -9,7 +9,7 @@ set -e
 # --- Configuration ---
 # Registry details from your previous setup
 HARBOR_HOST="192.168.109.1:30002"
-PROJECT_NAME="platform"   # Ensure this project exists in Harbor UI
+PROJECT_NAME="library"   # Ensure this project exists in Harbor UI
 TAG="latest"
 
 # Image Names
