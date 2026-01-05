@@ -61,6 +61,10 @@ func (s *GroupService) UpdateGroup(c *gin.Context, id uint, input group.GroupUpd
 	oldGroup := grp
 
 	if input.GroupName != nil {
+		// Prevent updating reserved group name (both TO and FROM)
+		if grp.GroupName == config.ReservedGroupName {
+			return group.Group{}, ErrReservedGroupName
+		}
 		if *input.GroupName == config.ReservedGroupName {
 			return group.Group{}, ErrReservedGroupName
 		}

@@ -18,10 +18,10 @@ func TestGPURequestHandler_Integration(t *testing.T) {
 		client := NewHTTPClient(ctx.Router, ctx.UserToken)
 
 		requestDTO := map[string]interface{}{
-			"gpu_type":  "RTX3090",
-			"gpu_count": 2,
-			"duration":  30,
-			"reason":    "Deep learning training",
+			"type":                  "quota",
+			"requested_quota":       10,
+			"requested_access_type": "shared",
+			"reason":                "Deep learning training",
 		}
 
 		path := fmt.Sprintf("/projects/%d/gpu-requests", ctx.TestProject.PID)
@@ -50,28 +50,25 @@ func TestGPURequestHandler_Integration(t *testing.T) {
 			{
 				name: "Negative GPU count",
 				input: map[string]interface{}{
-					"gpu_type":  "RTX3090",
-					"gpu_count": -1,
-					"duration":  30,
-					"reason":    "Test",
+					"type":            "quota",
+					"requested_quota": -1,
+					"reason":          "Test",
 				},
 			},
 			{
 				name: "Zero duration",
 				input: map[string]interface{}{
-					"gpu_type":  "RTX3090",
-					"gpu_count": 1,
-					"duration":  0,
-					"reason":    "Test",
+					"type":            "quota",
+					"requested_quota": 0,
+					"reason":          "Test",
 				},
 			},
 			{
 				name: "Empty reason",
 				input: map[string]interface{}{
-					"gpu_type":  "RTX3090",
-					"gpu_count": 1,
-					"duration":  30,
-					"reason":    "",
+					"type":            "quota",
+					"requested_quota": 1,
+					"reason":          "",
 				},
 			},
 		}
@@ -233,9 +230,9 @@ func TestFormHandler_Integration(t *testing.T) {
 		client := NewHTTPClient(ctx.Router, ctx.UserToken)
 
 		formDTO := map[string]interface{}{
-			"title":   "Resource Request Form",
-			"content": "I need additional resources for my project",
-			"type":    "resource_request",
+			"title":       "Resource Request Form",
+			"description": "I need additional resources for my project",
+			"tag":         "resource_request",
 		}
 
 		resp, err := client.POST("/forms", formDTO)

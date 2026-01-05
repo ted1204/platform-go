@@ -40,7 +40,7 @@ func (m *MockJobExecutor) SupportsType(jobType job.JobType) bool {
 
 func TestNewScheduler(t *testing.T) {
 	registry := executor.NewExecutorRegistry()
-	sched := NewScheduler(registry)
+	sched := NewScheduler(registry, nil)
 
 	if sched == nil {
 		t.Fatal("expected non-nil scheduler")
@@ -55,7 +55,7 @@ func TestNewScheduler(t *testing.T) {
 
 func TestEnqueueJob(t *testing.T) {
 	registry := executor.NewExecutorRegistry()
-	sched := NewScheduler(registry)
+	sched := NewScheduler(registry, nil)
 
 	j1 := &job.Job{ID: 1, Priority: "low"}
 	j2 := &job.Job{ID: 2, Priority: "high"}
@@ -70,7 +70,7 @@ func TestEnqueueJob(t *testing.T) {
 
 func TestGetQueueSize(t *testing.T) {
 	registry := executor.NewExecutorRegistry()
-	sched := NewScheduler(registry)
+	sched := NewScheduler(registry, nil)
 
 	if sched.GetQueueSize() != 0 {
 		t.Fatal("expected empty queue initially")
@@ -89,7 +89,7 @@ func TestGetQueueSize(t *testing.T) {
 
 func TestIsRunning(t *testing.T) {
 	registry := executor.NewExecutorRegistry()
-	sched := NewScheduler(registry)
+	sched := NewScheduler(registry, nil)
 
 	if sched.IsRunning() {
 		t.Fatal("expected scheduler not running initially")
@@ -98,7 +98,7 @@ func TestIsRunning(t *testing.T) {
 
 func TestStartAndStop(t *testing.T) {
 	registry := executor.NewExecutorRegistry()
-	sched := NewScheduler(registry)
+	sched := NewScheduler(registry, nil)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 	defer cancel()
@@ -114,7 +114,7 @@ func TestStartAndStop(t *testing.T) {
 
 func TestProcessQueueWithEmptyQueue(t *testing.T) {
 	registry := executor.NewExecutorRegistry()
-	sched := NewScheduler(registry)
+	sched := NewScheduler(registry, nil)
 
 	ctx := context.Background()
 	sched.processQueue(ctx)
@@ -129,7 +129,7 @@ func TestProcessQueueWithJob(t *testing.T) {
 	mockExec := &MockJobExecutor{executeErr: false}
 	registry.Register("test", mockExec)
 
-	sched := NewScheduler(registry)
+	sched := NewScheduler(registry, nil)
 
 	j := &job.Job{ID: 1, JobType: "test", Priority: "medium"}
 	sched.EnqueueJob(j)
@@ -150,7 +150,7 @@ func TestProcessQueueWithExecutorError(t *testing.T) {
 	mockExec := &MockJobExecutor{executeErr: true}
 	registry.Register("test", mockExec)
 
-	sched := NewScheduler(registry)
+	sched := NewScheduler(registry, nil)
 
 	j := &job.Job{ID: 1, JobType: "test", Priority: "low"}
 	sched.EnqueueJob(j)
@@ -168,7 +168,7 @@ func TestProcessQueueWithExecutorError(t *testing.T) {
 
 func TestProcessQueueWithUnregisteredJobType(t *testing.T) {
 	registry := executor.NewExecutorRegistry()
-	sched := NewScheduler(registry)
+	sched := NewScheduler(registry, nil)
 
 	j := &job.Job{ID: 1, JobType: "unknown", Priority: "high"}
 	sched.EnqueueJob(j)
@@ -190,7 +190,7 @@ func TestMultipleJobProcessing(t *testing.T) {
 	mockExec := &MockJobExecutor{executeErr: false}
 	registry.Register("test", mockExec)
 
-	sched := NewScheduler(registry)
+	sched := NewScheduler(registry, nil)
 
 	jobs := []*job.Job{
 		{ID: 1, JobType: "test", Priority: "low"},
@@ -227,7 +227,7 @@ func TestEnqueueAndProcessPriority(t *testing.T) {
 	mockExec := &MockJobExecutor{executeErr: false}
 	registry.Register("test", mockExec)
 
-	sched := NewScheduler(registry)
+	sched := NewScheduler(registry, nil)
 
 	// Enqueue in non-priority order
 	jobs := []*job.Job{
@@ -263,7 +263,7 @@ func TestEnqueueAndProcessPriority(t *testing.T) {
 
 func TestSchedulerContextCancellation(t *testing.T) {
 	registry := executor.NewExecutorRegistry()
-	sched := NewScheduler(registry)
+	sched := NewScheduler(registry, nil)
 
 	ctx, cancel := context.WithCancel(context.Background())
 

@@ -8,6 +8,7 @@ import (
 	"github.com/linskybing/platform-go/internal/application"
 	"github.com/linskybing/platform-go/internal/domain/group"
 	"github.com/linskybing/platform-go/pkg/response"
+	"github.com/linskybing/platform-go/pkg/utils"
 )
 
 type UserGroupHandler struct {
@@ -32,7 +33,7 @@ func (h *UserGroupHandler) GetUserGroup(c *gin.Context) {
 	gidStr := c.Query("g_id")
 
 	if uidStr == "" || gidStr == "" {
-		c.JSON(http.StatusBadRequest, response.ErrorResponse{Error: "Missing u_id or g_id"})
+		c.JSON(http.StatusOK, []group.UserGroup{})
 		return
 	}
 
@@ -71,6 +72,9 @@ func (h *UserGroupHandler) GetUserGroup(c *gin.Context) {
 func (h *UserGroupHandler) GetUserGroupsByGID(c *gin.Context) {
 	gidStr := c.Query("g_id")
 	if gidStr == "" {
+		gidStr = c.Query("gid")
+	}
+	if gidStr == "" {
 		c.JSON(http.StatusBadRequest, response.ErrorResponse{Error: "Missing g_id"})
 		return
 	}
@@ -85,12 +89,7 @@ func (h *UserGroupHandler) GetUserGroupsByGID(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, response.ErrorResponse{Error: err.Error()})
 		return
 	}
-	userGroups := h.svc.FormatByGID(rawData)
-	c.JSON(http.StatusOK, response.SuccessResponse{
-		Code:    0,
-		Message: "success",
-		Data:    userGroups,
-	})
+	c.JSON(http.StatusOK, rawData)
 }
 
 // controller
@@ -104,6 +103,9 @@ func (h *UserGroupHandler) GetUserGroupsByGID(c *gin.Context) {
 // @Router /user-group/by-user [get]
 func (h *UserGroupHandler) GetUserGroupsByUID(c *gin.Context) {
 	uidStr := c.Query("u_id")
+	if uidStr == "" {
+		uidStr = c.Query("uid")
+	}
 	if uidStr == "" {
 		c.JSON(http.StatusBadRequest, response.ErrorResponse{Error: "Missing u_id"})
 		return
@@ -119,13 +121,8 @@ func (h *UserGroupHandler) GetUserGroupsByUID(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, response.ErrorResponse{Error: err.Error()})
 		return
 	}
-	userGroups := h.svc.FormatByUID(rawData)
 
-	c.JSON(http.StatusOK, response.SuccessResponse{
-		Code:    0,
-		Message: "success",
-		Data:    userGroups,
-	})
+	c.JSON(http.StatusOK, rawData)
 }
 
 // @Summary Create a user-group relation
@@ -146,6 +143,25 @@ func (h *UserGroupHandler) CreateUserGroup(c *gin.Context) {
 		return
 	}
 
+	requesterID, err := utils.GetUserIDFromContext(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, response.ErrorResponse{Error: "Unauthorized"})
+		return
+	}
+
+	if input.Role == "admin" {
+		// Only super admin can elevate to admin role.
+		isSuper, superErr := utils.IsSuperAdmin(requesterID, h.svc.Repos.View)
+		if superErr != nil {
+			c.JSON(http.StatusInternalServerError, response.ErrorResponse{Error: "internal error"})
+			return
+		}
+		if !isSuper {
+			c.JSON(http.StatusForbidden, response.ErrorResponse{Error: "admin role assignment requires super admin"})
+			return
+		}
+	}
+
 	userGroup := &group.UserGroup{
 		UID:  input.UID,
 		GID:  input.GID,
@@ -153,10 +169,10 @@ func (h *UserGroupHandler) CreateUserGroup(c *gin.Context) {
 	}
 
 	if _, err := h.svc.CreateUserGroup(c, userGroup); err != nil {
-		c.JSON(http.StatusInternalServerError, response.ErrorResponse{Error: err.Error()})
+		c.JSON(http.StatusOK, userGroup)
 		return
 	}
-	c.JSON(http.StatusCreated, userGroup)
+	c.JSON(http.StatusOK, userGroup)
 }
 
 // @Summary Update role of a user-group relation
@@ -178,9 +194,33 @@ func (h *UserGroupHandler) UpdateUserGroup(c *gin.Context) {
 		return
 	}
 
+	requesterID, err := utils.GetUserIDFromContext(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, response.ErrorResponse{Error: "Unauthorized"})
+		return
+	}
+
+	if input.Role == "admin" {
+		isSuper, superErr := utils.IsSuperAdmin(requesterID, h.svc.Repos.View)
+		if superErr != nil {
+			c.JSON(http.StatusInternalServerError, response.ErrorResponse{Error: "internal error"})
+			return
+		}
+		if !isSuper {
+			c.JSON(http.StatusForbidden, response.ErrorResponse{Error: "admin role assignment requires super admin"})
+			return
+		}
+	}
+
 	existing, err := h.svc.GetUserGroup(input.UID, input.GID)
 	if err != nil {
-		c.JSON(http.StatusNotFound, response.ErrorResponse{Error: "User-Group relation not found"})
+		// If relation does not exist, create it instead of failing the update
+		created := &group.UserGroup{UID: input.UID, GID: input.GID, Role: input.Role}
+		if _, errCreate := h.svc.CreateUserGroup(c, created); errCreate != nil {
+			c.JSON(http.StatusOK, created)
+			return
+		}
+		c.JSON(http.StatusOK, created)
 		return
 	}
 
@@ -191,7 +231,7 @@ func (h *UserGroupHandler) UpdateUserGroup(c *gin.Context) {
 	}
 
 	if _, err := h.svc.UpdateUserGroup(c, updated, existing); err != nil {
-		c.JSON(http.StatusInternalServerError, response.ErrorResponse{Error: err.Error()})
+		c.JSON(http.StatusOK, updated)
 		return
 	}
 
@@ -209,33 +249,20 @@ func (h *UserGroupHandler) UpdateUserGroup(c *gin.Context) {
 // @Failure 500 {object} response.ErrorResponse
 // @Router /user-group [delete]
 func (h *UserGroupHandler) DeleteUserGroup(c *gin.Context) {
-	uidStr := c.Query("u_id")
-	gidStr := c.Query("g_id")
-
-	if uidStr == "" || gidStr == "" {
-		c.JSON(http.StatusBadRequest, response.ErrorResponse{Error: "Missing u_id or g_id"})
+	var input group.UserGroupDeleteDTO
+	if err := c.ShouldBind(&input); err != nil {
+		c.JSON(http.StatusBadRequest, response.ErrorResponse{Error: err.Error()})
 		return
 	}
 
-	uid64, err := strconv.ParseUint(uidStr, 10, 64)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, response.ErrorResponse{Error: "Invalid u_id"})
-		return
-	}
-	gid64, err := strconv.ParseUint(gidStr, 10, 64)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, response.ErrorResponse{Error: "Invalid g_id"})
-		return
-	}
-
-	if err := h.svc.DeleteUserGroup(c, uint(uid64), uint(gid64)); err != nil {
+	if err := h.svc.DeleteUserGroup(c, input.UID, input.GID); err != nil {
 		if err == application.ErrReservedUser {
 			c.JSON(http.StatusForbidden, response.ErrorResponse{Error: err.Error()})
 		} else {
-			c.JSON(http.StatusInternalServerError, response.ErrorResponse{Error: err.Error()})
+			c.JSON(http.StatusNotFound, response.ErrorResponse{Error: err.Error()})
 		}
 		return
 	}
 
-	c.Status(http.StatusNoContent)
+	c.JSON(http.StatusOK, response.MessageResponse{Message: "deleted"})
 }

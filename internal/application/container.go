@@ -1,6 +1,9 @@
 package application
 
-import "github.com/linskybing/platform-go/internal/repository"
+import (
+	"github.com/linskybing/platform-go/internal/application/job"
+	"github.com/linskybing/platform-go/internal/repository"
+)
 
 type Services struct {
 	Audit      *AuditService
@@ -13,6 +16,8 @@ type Services struct {
 	K8s        *K8sService
 	Form       *FormService
 	GPURequest *GPURequestService
+	Job        *job.Service
+	Image      *ImageService
 }
 
 func New(repos *repository.Repos) *Services {
@@ -27,5 +32,7 @@ func New(repos *repository.Repos) *Services {
 		K8s:        NewK8sService(repos),
 		Form:       NewFormService(repos.Form),
 		GPURequest: NewGPURequestService(repos),
+		Job:        job.NewService(repos.Job, repos.User, repos.Project),
+		Image:      NewImageService(repos.Image),
 	}
 }

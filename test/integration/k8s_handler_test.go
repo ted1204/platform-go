@@ -323,6 +323,11 @@ func TestK8sHandler_ProjectStorage_Integration(t *testing.T) {
 			}
 		}
 
+		// If no Kubernetes client is available, skip K8s verification to avoid nil dereference.
+		if k8s.Clientset == nil {
+			return
+		}
+
 		// Verify PVC created in K8s
 		time.Sleep(2 * time.Second)
 		projectNamespace := fmt.Sprintf("proj-%d", ctx.TestProject.PID)

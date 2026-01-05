@@ -29,7 +29,8 @@ var (
 )
 
 type ConfigFileService struct {
-	Repos *repository.Repos
+	Repos        *repository.Repos
+	imageService *ImageService
 }
 
 func normalizeResourceKind(kind string) string {
@@ -54,8 +55,71 @@ func normalizeResourceKind(kind string) string {
 
 func NewConfigFileService(repos *repository.Repos) *ConfigFileService {
 	return &ConfigFileService{
-		Repos: repos,
+		Repos:        repos,
+		imageService: NewImageService(repos.Image),
 	}
+}
+
+// extractAndValidateImages extracts all images from JSON and validates them for a project
+func (s *ConfigFileService) extractAndValidateImages(jsonBytes []byte, projectID uint, userIsAdmin bool) error {
+	if userIsAdmin {
+		return nil // Skip validation for admin
+	}
+
+	var obj map[string]interface{}
+	if err := json.Unmarshal(jsonBytes, &obj); err != nil {
+		return nil // If not valid JSON, let k8s handle the error
+	}
+
+	// Extract images from common locations
+	images := []string{}
+
+	// Check spec.containers (Pod/Deployment)
+	if spec, ok := obj["spec"].(map[string]interface{}); ok {
+		// Direct containers (Pod)
+		if containers, ok := spec["containers"].([]interface{}); ok {
+			for _, c := range containers {
+				if cont, ok := c.(map[string]interface{}); ok {
+					if img, ok := cont["image"].(string); ok {
+						images = append(images, img)
+					}
+				}
+			}
+		}
+
+		// Deployment template
+		if template, ok := spec["template"].(map[string]interface{}); ok {
+			if tSpec, ok := template["spec"].(map[string]interface{}); ok {
+				if containers, ok := tSpec["containers"].([]interface{}); ok {
+					for _, c := range containers {
+						if cont, ok := c.(map[string]interface{}); ok {
+							if img, ok := cont["image"].(string); ok {
+								images = append(images, img)
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// Validate each image
+	for _, img := range images {
+		parts := strings.Split(img, ":")
+		if len(parts) != 2 {
+			continue // Skip malformed images, let k8s handle it
+		}
+
+		imageName := parts[0]
+		imageTag := parts[1]
+
+		allowed, err := s.imageService.ValidateImageForProject(imageName, imageTag, projectID)
+		if err != nil || !allowed {
+			return fmt.Errorf("image %s is not allowed for this project. Please add it first via project settings", img)
+		}
+	}
+
+	return nil
 }
 
 func (s *ConfigFileService) ListConfigFiles() ([]configfile.ConfigFile, error) {
@@ -394,6 +458,11 @@ func (s *ConfigFileService) CreateInstance(c *gin.Context, id uint) error {
 
 		jsonBytes := []byte(replacedJSON)
 
+		// Validate images in the resource
+		if err := s.extractAndValidateImages(jsonBytes, configfile.ProjectID, claims.IsAdmin); err != nil {
+			return err
+		}
+
 		// // Normalize NFS servers: if path points to project storage (/srv/...), force project NFS server
 		// jsonBytes, err = s.rewriteNfsServers(jsonBytes, nfsServerAddress, projectNfsServerAddress)
 		// if err != nil {
@@ -591,30 +660,26 @@ func (s *ConfigFileService) containerHasGPURequest(podSpec map[string]interface{
 	return false, nil
 }
 
-// validateProjectMPSConfig validates that the project has proper MPS configuration.
+// validateProjectMPSConfig validates that the project has proper GPU configuration.
 // This is the first validation point before resource creation.
 func (s *ConfigFileService) validateProjectMPSConfig(project project.Project) error {
-	// Check if project has MPS configuration defined
-	if project.MPSLimit <= 0 || project.MPSMemory <= 0 {
-		return fmt.Errorf("project MPS configuration invalid: MPSLimit=%d, MPSMemory=%d. Both must be greater than 0",
-			project.MPSLimit, project.MPSMemory)
+	// Check if project has GPU quota defined for GPU resources
+	if project.GPUQuota <= 0 {
+		return fmt.Errorf("project GPU configuration invalid: GPUQuota=%d. Must be greater than 0",
+			project.GPUQuota)
 	}
 
-	// Validate MPS limit is within acceptable range (0-100%)
-	if project.MPSLimit > 100 {
-		return fmt.Errorf("invalid MPS thread limit: %d%%. Must be <= 100%%", project.MPSLimit)
-	}
-
-	// Validate MPS memory is reasonable (at least 512MB)
-	if project.MPSMemory < 512 {
-		return fmt.Errorf("MPS memory limit too low: %dMB. Must be at least 512MB", project.MPSMemory)
+	// Optional: validate MPS memory if configured (at least 512MB if set)
+	if project.MPSMemory > 0 && project.MPSMemory < 512 {
+		return fmt.Errorf("MPS memory limit too low: %dMB. Must be at least 512MB or 0 (disabled)", project.MPSMemory)
 	}
 
 	return nil
 }
 
-// injectMPSConfig injects MPS memory limit configuration into the pod spec.
-// This modifies container resource limits and environment variables for CUDA MPS.
+// injectMPSConfig injects GPU quota configuration into the pod spec.
+// This modifies container resource limits for GPU quota.
+// Note: CUDA_MPS_ACTIVE_THREAD_PERCENTAGE is auto-injected by the system.
 // This is the second validation/injection point during instance creation.
 func (s *ConfigFileService) injectMPSConfig(podSpec map[string]interface{}, project project.Project) error {
 	containers, ok := podSpec["containers"].([]interface{})
@@ -623,47 +688,51 @@ func (s *ConfigFileService) injectMPSConfig(podSpec map[string]interface{}, proj
 	}
 
 	for _, c := range containers {
-		if container, ok := c.(map[string]interface{}); ok {
-			if resources, ok := container["resources"].(map[string]interface{}); ok {
-				if requests, ok := resources["requests"].(map[string]interface{}); ok {
-					if _, hasGPU := requests["nvidia.com/gpu"]; hasGPU {
-						// Ensure limits map exists
-						limits, ok := resources["limits"].(map[string]interface{})
-						if !ok {
-							limits = make(map[string]interface{})
-							resources["limits"] = limits
-						}
-
-						// Inject MPS memory limit as resource limit
-						limits["nvidia.com/gpu.memory"] = fmt.Sprintf("%dM", project.MPSMemory)
-
-						// Also inject thread percentage as a limit
-						limits["nvidia.com/gpu.threads"] = fmt.Sprintf("%d", project.MPSLimit)
-
-						// Inject environment variables for CUDA MPS configuration
-						env, ok := container["env"].([]interface{})
-						if !ok {
-							env = make([]interface{}, 0)
-						}
-
-						// Add MPS memory limit environment variable (convert MB to bytes)
-						memoryBytes := int64(project.MPSMemory) * 1024 * 1024
-						env = append(env, map[string]interface{}{
-							"name":  "CUDA_MPS_PINNED_DEVICE_MEM_LIMIT",
-							"value": fmt.Sprintf("%d", memoryBytes),
-						})
-
-						// Add MPS thread percentage environment variable
-						env = append(env, map[string]interface{}{
-							"name":  "CUDA_MPS_ACTIVE_THREAD_PERCENTAGE",
-							"value": fmt.Sprintf("%d", project.MPSLimit),
-						})
-
-						container["env"] = env
-					}
-				}
-			}
+		container, ok := c.(map[string]interface{})
+		if !ok {
+			continue
 		}
+
+		resources, ok := container["resources"].(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		requests, ok := resources["requests"].(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		if _, hasGPU := requests["nvidia.com/gpu"]; !hasGPU {
+			continue
+		}
+
+		limits, ok := resources["limits"].(map[string]interface{})
+		if !ok {
+			limits = make(map[string]interface{})
+			resources["limits"] = limits
+		}
+		limits["nvidia.com/gpu"] = fmt.Sprintf("%d", project.GPUQuota)
+
+		env, ok := container["env"].([]interface{})
+		if !ok {
+			env = make([]interface{}, 0)
+		}
+
+		env = append(env, map[string]interface{}{
+			"name":  "GPU_QUOTA",
+			"value": fmt.Sprintf("%d", project.GPUQuota),
+		})
+
+		if project.MPSMemory > 0 {
+			memoryBytes := int64(project.MPSMemory) * 1024 * 1024
+			env = append(env, map[string]interface{}{
+				"name":  "CUDA_MPS_PINNED_DEVICE_MEM_LIMIT",
+				"value": fmt.Sprintf("%d", memoryBytes),
+			})
+		}
+
+		container["env"] = env
 	}
 
 	return nil

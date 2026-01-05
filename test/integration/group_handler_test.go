@@ -37,7 +37,7 @@ func TestGroupHandler_Integration(t *testing.T) {
 
 		resp, err := client.POST("/groups", createDTO)
 		require.NoError(t, err)
-		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		assert.Equal(t, http.StatusCreated, resp.StatusCode)
 
 		var created group.Group
 		err = resp.DecodeJSON(&created)

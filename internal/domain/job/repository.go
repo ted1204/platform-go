@@ -13,6 +13,7 @@ type Repository interface {
 	GetQueuedJobs() ([]Job, error)
 	FindAll() ([]Job, error)                             // Find all jobs
 	FindLogs(jobID uint) ([]JobLog, error)               // Find logs for a job
+	SaveLog(entry *JobLog) error                         // Append a log entry
 	FindCheckpoints(jobID uint) ([]JobCheckpoint, error) // Find checkpoints for a job
 	Update(job *Job) error
 	Delete(id uint) error

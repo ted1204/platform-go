@@ -75,6 +75,7 @@ func dropViews() {
 }
 
 func CreateViews() {
+	log.Println("Creating database views...")
 	views := []string{
 		`CREATE OR REPLACE VIEW project_group_views AS
 		SELECT
@@ -85,9 +86,9 @@ func CreateViews() {
 		MAX(g.create_at) AS group_create_at,
 		MAX(g.update_at) AS group_update_at
 		FROM group_list g
-		LEFT JOIN projects p ON p.g_id = g.g_id
+		LEFT JOIN project_list p ON p.g_id = g.g_id
 		LEFT JOIN config_files cf ON cf.project_id = p.p_id
-		LEFT JOIN resources r ON r.cf_id = cf.cf_id
+		LEFT JOIN resource_list r ON r.cf_id = cf.cf_id
 		GROUP BY g.g_id, g.group_name;`,
 
 		`CREATE OR REPLACE VIEW project_resource_views AS
@@ -99,9 +100,9 @@ func CreateViews() {
 		r.name,
 		cf.filename,
 		r.create_at AS resource_create_at
-		FROM projects p
+		FROM project_list p
 		JOIN config_files cf ON cf.project_id = p.p_id
-		JOIN resources r ON r.cf_id = cf.cf_id;`,
+		JOIN resource_list r ON r.cf_id = cf.cf_id;`,
 
 		`CREATE OR REPLACE VIEW group_resource_views AS
 		SELECT
@@ -115,9 +116,9 @@ func CreateViews() {
 		cf.filename,
 		r.create_at AS resource_create_at
 		FROM group_list g
-		LEFT JOIN projects p ON p.g_id = g.g_id
+		LEFT JOIN project_list p ON p.g_id = g.g_id
 		LEFT JOIN config_files cf ON cf.project_id = p.p_id
-		LEFT JOIN resources r ON r.cf_id = cf.cf_id
+		LEFT JOIN resource_list r ON r.cf_id = cf.cf_id
 		WHERE r.r_id IS NOT NULL;`,
 
 		`CREATE OR REPLACE VIEW user_group_views AS
@@ -155,15 +156,19 @@ func CreateViews() {
 		u.u_id,
 		u.username,
 		ug.role
-		FROM projects p
+		FROM project_list p
 		JOIN group_list g ON p.g_id = g.g_id
 		JOIN user_group ug ON ug.g_id = g.g_id
 		JOIN users u ON u.u_id = ug.u_id;`,
 	}
 
-	for _, view := range views {
+	successCount := 0
+	for i, view := range views {
 		if err := DB.Exec(view).Error; err != nil {
-			log.Printf("Failed to create view: %v", err)
+			log.Printf("Failed to create view %d: %v", i+1, err)
+		} else {
+			successCount++
 		}
 	}
+	log.Printf("Database views created (%d/%d successful)", successCount, len(views))
 }

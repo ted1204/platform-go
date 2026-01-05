@@ -57,7 +57,7 @@ func (h *K8sHandler) CreateJob(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusCreated, response.SuccessResponse{
+	c.JSON(http.StatusOK, response.SuccessResponse{
 		Code:    0,
 		Message: "Job created successfully",
 	})
@@ -94,11 +94,7 @@ func (h *K8sHandler) ListJobs(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, response.SuccessResponse{
-		Code:    0,
-		Message: "success",
-		Data:    jobs,
-	})
+	c.JSON(http.StatusOK, jobs)
 }
 
 // @Summary Get Job
@@ -671,11 +667,7 @@ func (h *K8sHandler) GetUserProjectStorages(c *gin.Context) {
 		}
 	}
 
-	c.JSON(http.StatusOK, response.SuccessResponse{
-		Code:    0,
-		Message: "success",
-		Data:    userStorages,
-	})
+	c.JSON(http.StatusOK, userStorages)
 }
 
 // CreateProjectStorage provisions a new shared storage (PVC) for a project.
@@ -685,7 +677,7 @@ func (h *K8sHandler) GetUserProjectStorages(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Param request body job.CreateProjectStorageRequest true "Project Storage Request"
-// @Success 201 {object} map[string]interface{} "Storage created successfully"
+// @Success 200 {object} map[string]interface{} "Storage created successfully"
 // @Failure 400 {object} map[string]string "Invalid request parameters"
 // @Failure 409 {object} map[string]string "Storage already exists"
 // @Failure 500 {object} map[string]string "Internal Server Error"
@@ -736,8 +728,8 @@ func (h *K8sHandler) CreateProjectStorage(c *gin.Context) {
 		return
 	}
 
-	// Return Success Response
-	c.JSON(http.StatusCreated, gin.H{
+	// Return Success Response (200 aligns with integration tests)
+	c.JSON(http.StatusOK, gin.H{
 		"message":   "Project storage created successfully",
 		"id":        req.ProjectID,
 		"pvcName":   createdPVC.Name,

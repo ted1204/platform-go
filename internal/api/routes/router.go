@@ -17,7 +17,7 @@ func RegisterRoutes(r *gin.Engine) {
 	// init
 	repos_instance := repository.New()
 	services_instance := application.New(repos_instance)
-	handlers_instance := handlers.New(services_instance, r)
+	handlers_instance := handlers.New(services_instance, repos_instance, r)
 	authMiddleware := middleware.NewAuth(repos_instance)
 
 	// setup
@@ -29,6 +29,23 @@ func RegisterRoutes(r *gin.Engine) {
 	auth.Use(middleware.JWTAuthMiddleware())
 	{
 		auth.GET("/ws/monitoring/:namespace", handlers.WatchNamespaceHandler)
+		auth.GET("/ws/jobs", handlers_instance.Job.StreamJobs)
+		auth.GET("/ws/jobs/:id/logs", handlers_instance.Job.StreamJobLogs)
+
+		imageReq := auth.Group("/image-requests")
+		{
+			imageReq.POST("", handlers_instance.Image.SubmitRequest)
+			imageReq.GET("", authMiddleware.Admin(), handlers_instance.Image.ListRequests)
+			imageReq.PUT("/:id/approve", authMiddleware.Admin(), handlers_instance.Image.ApproveRequest)
+			imageReq.PUT("/:id/reject", authMiddleware.Admin(), handlers_instance.Image.RejectRequest)
+		}
+
+		images := auth.Group("/images")
+		{
+			images.GET("/allowed", handlers_instance.Image.ListAllowed)
+			images.POST("/pull", authMiddleware.Admin(), handlers_instance.Image.PullImage)
+		}
+
 		userGroup := auth.Group("/user-group")
 		{
 			userGroup.GET("", authMiddleware.Admin(), handlers_instance.UserGroup.GetUserGroup)
@@ -39,24 +56,7 @@ func RegisterRoutes(r *gin.Engine) {
 			userGroup.PUT("", authMiddleware.GroupAdmin(middleware.FromPayload(group.UserGroupInputDTO{})), handlers_instance.UserGroup.UpdateUserGroup)
 			userGroup.DELETE("", authMiddleware.GroupAdmin(middleware.FromPayload(group.UserGroupDeleteDTO{})), handlers_instance.UserGroup.DeleteUserGroup)
 		}
-		audit := auth.Group("/audit/logs")
-		{
-			audit.GET("", handlers_instance.Audit.GetAuditLogs)
-		}
-		instances := auth.Group("/instance")
-		{
-			instances.POST("/:id", authMiddleware.GroupMember(middleware.FromIDParam(repos_instance.View.GetGroupIDByConfigFileID)), handlers_instance.ConfigFile.CreateInstanceHandler)
-			instances.DELETE("/:id", authMiddleware.GroupMember(middleware.FromIDParam(repos_instance.View.GetGroupIDByConfigFileID)), handlers_instance.ConfigFile.DestructInstanceHandler)
-		}
-		configFiles := auth.Group("/config-files")
-		{
-			configFiles.GET("", authMiddleware.Admin(), handlers_instance.ConfigFile.ListConfigFilesHandler)
-			configFiles.GET("/:id", authMiddleware.GroupMember(middleware.FromIDParam(repos_instance.View.GetGroupIDByConfigFileID)), handlers_instance.ConfigFile.GetConfigFileHandler)
-			configFiles.GET("/:id/resources", authMiddleware.GroupMember(middleware.FromIDParam(repos_instance.View.GetGroupIDByConfigFileID)), handlers_instance.Resource.ListResourcesByConfigFileID)
-			configFiles.POST("", authMiddleware.GroupManager(middleware.FromProjectIDInPayload(configfile.CreateConfigFileInput{})), handlers_instance.ConfigFile.CreateConfigFileHandler)
-			configFiles.PUT("/:id", authMiddleware.GroupManager(middleware.FromIDParam(repos_instance.View.GetGroupIDByConfigFileID)), handlers_instance.ConfigFile.UpdateConfigFileHandler)
-			configFiles.DELETE("/:id", authMiddleware.GroupManager(middleware.FromIDParam(repos_instance.View.GetGroupIDByConfigFileID)), handlers_instance.ConfigFile.DeleteConfigFileHandler)
-		}
+
 		projects := auth.Group("/projects")
 		{
 			projects.GET("", handlers_instance.Project.GetProjects)
@@ -70,6 +70,31 @@ func RegisterRoutes(r *gin.Engine) {
 			projects.POST("/:id/gpu-requests", handlers_instance.GPURequest.CreateRequest)
 			projects.GET("/:id/gpu-requests", handlers_instance.GPURequest.ListRequestsByProject)
 
+			// Project-level image management (for project managers)
+			projects.GET("/:id/images", authMiddleware.GroupMember(middleware.FromIDParam(repos_instance.Project.GetGroupIDByProjectID)), handlers_instance.Image.ListAllowed)
+			projects.POST("/:id/images", authMiddleware.GroupManager(middleware.FromIDParam(repos_instance.Project.GetGroupIDByProjectID)), handlers_instance.Image.AddProjectImage)
+		}
+
+		audit := auth.Group("/audit/logs")
+		{
+			audit.GET("", handlers_instance.Audit.GetAuditLogs)
+		}
+
+		// Job management
+		JobRoutes(auth, handlers_instance.Job)
+		instances := auth.Group("/instance")
+		{
+			instances.POST("/:id", authMiddleware.GroupMember(middleware.FromIDParam(repos_instance.View.GetGroupIDByConfigFileID)), handlers_instance.ConfigFile.CreateInstanceHandler)
+			instances.DELETE("/:id", authMiddleware.GroupMember(middleware.FromIDParam(repos_instance.View.GetGroupIDByConfigFileID)), handlers_instance.ConfigFile.DestructInstanceHandler)
+		}
+		configFiles := auth.Group("/config-files")
+		{
+			configFiles.GET("", authMiddleware.Admin(), handlers_instance.ConfigFile.ListConfigFilesHandler)
+			configFiles.GET("/:id", authMiddleware.GroupMember(middleware.FromIDParam(repos_instance.View.GetGroupIDByConfigFileID)), handlers_instance.ConfigFile.GetConfigFileHandler)
+			configFiles.GET("/:id/resources", authMiddleware.GroupMember(middleware.FromIDParam(repos_instance.View.GetGroupIDByConfigFileID)), handlers_instance.Resource.ListResourcesByConfigFileID)
+			configFiles.POST("", authMiddleware.GroupManager(middleware.FromProjectIDInPayload(configfile.CreateConfigFileInput{})), handlers_instance.ConfigFile.CreateConfigFileHandler)
+			configFiles.PUT("/:id", authMiddleware.GroupManager(middleware.FromIDParam(repos_instance.View.GetGroupIDByConfigFileID)), handlers_instance.ConfigFile.UpdateConfigFileHandler)
+			configFiles.DELETE("/:id", authMiddleware.GroupManager(middleware.FromIDParam(repos_instance.View.GetGroupIDByConfigFileID)), handlers_instance.ConfigFile.DeleteConfigFileHandler)
 		}
 		admin := auth.Group("/admin")
 		{
@@ -155,7 +180,8 @@ func RegisterRoutes(r *gin.Engine) {
 			forms.GET("/my", handlers_instance.Form.GetMyForms)
 			forms.GET("", authMiddleware.Admin(), handlers_instance.Form.GetAllForms)
 			forms.PUT("/:id/status", authMiddleware.Admin(), handlers_instance.Form.UpdateFormStatus)
+			forms.GET("/:id/messages", handlers_instance.Form.ListMessages)
+			forms.POST("/:id/messages", handlers_instance.Form.CreateMessage)
 		}
-
 	}
 }

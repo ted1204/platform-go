@@ -56,16 +56,17 @@ CUDA_MPS_ACTIVE_THREAD_PERCENTAGE = ThreadPercentage (0-100)
 
 3. **`validateProjectMPSConfig()`**
    - First validation point
-   - Ensures MPSLimit and MPSMemory are both > 0
-   - Validates MPSLimit <= 100%
-   - Validates MPSMemory >= 512MB (minimum requirement)
+    - Ensures GPUQuota is > 0
+    - Validates optional MPSMemory >= 512MB (minimum requirement when set)
 
 4. **`injectMPSConfig()`**
    - Second validation/injection point
    - Injects resource limits:
-     - `nvidia.com/gpu.memory`: Memory limit in MB
-     - `nvidia.com/gpu.threads`: Thread percentage
-   - Injects CUDA environment variables
+       - `nvidia.com/gpu`: GPU quota (integer units)
+    - Injects CUDA environment variables
+       - `GPU_QUOTA`
+       - `CUDA_MPS_PINNED_DEVICE_MEM_LIMIT` (only when MPSMemory is set)
+    - `CUDA_MPS_ACTIVE_THREAD_PERCENTAGE` is auto-injected by the system
    - Only runs for containers with GPU requests
 
 #### 3. Swagger Documentation
@@ -87,19 +88,19 @@ New test suite `TestValidateAndInjectGPUConfig` with 5 test cases:
 
 2. **GPUConfig_WithGPURequest_ValidConfig**
    - Verifies GPU config is properly injected
-   - Checks resource limits and env vars are set
+   - Checks GPU limit and env vars are set
 
-3. **GPUConfig_InvalidMPSLimit**
-   - Tests error handling for MPSLimit > 100%
+3. **GPUConfig_InvalidGPUQuota**
+   - Tests error handling for zero/invalid GPU quota
    - Ensures validation prevents invalid configs
 
 4. **GPUConfig_InvalidMPSMemory**
    - Tests error handling for insufficient memory
    - Ensures minimum 512MB requirement is enforced
 
-5. **GPUConfig_MissingMPSConfig**
-   - Tests error handling for zero MPS configuration
-   - Ensures projects must have MPS limits defined
+5. **GPUConfig_MPSMemoryOptional**
+   - Tests optional MPS memory (0 means disabled)
+   - Ensures GPU quota still injects envs without memory
 
 #### MPS Package Tests (`pkg/mps/mps_test.go`)
 
@@ -155,13 +156,12 @@ spec:
       requests:
         nvidia.com/gpu: "1"
       limits:
-        nvidia.com/gpu.memory: "2048M"
-        nvidia.com/gpu.threads: "80"
+            nvidia.com/gpu: "10"
     env:
+      - name: GPU_QUOTA
+         value: "10"
     - name: CUDA_MPS_PINNED_DEVICE_MEM_LIMIT
       value: "2147483648"  # 2GB in bytes
-    - name: CUDA_MPS_ACTIVE_THREAD_PERCENTAGE
-      value: "80"
 ```
 
 ## Database Schema

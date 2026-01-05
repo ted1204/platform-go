@@ -278,7 +278,7 @@ func TestValidateAndInjectGPUConfig(t *testing.T) {
 		proj := project.Project{
 			PID:         1,
 			ProjectName: "test-proj",
-			MPSLimit:    100,
+			GPUQuota:    10,
 			MPSMemory:   1024,
 		}
 
@@ -323,7 +323,7 @@ func TestValidateAndInjectGPUConfig(t *testing.T) {
 		proj := project.Project{
 			PID:         1,
 			ProjectName: "test-proj",
-			MPSLimit:    80,
+			GPUQuota:    10,
 			MPSMemory:   2048,
 		}
 
@@ -345,11 +345,10 @@ func TestValidateAndInjectGPUConfig(t *testing.T) {
 
 		// Check resource limits were set
 		limits := resources["limits"].(map[string]interface{})
-		if _, ok := limits["nvidia.com/gpu.memory"]; !ok {
-			t.Fatalf("expected gpu.memory limit to be injected")
-		}
-		if _, ok := limits["nvidia.com/gpu.threads"]; !ok {
-			t.Fatalf("expected gpu.threads limit to be injected")
+		if val, ok := limits["nvidia.com/gpu"]; !ok {
+			t.Fatalf("expected nvidia.com/gpu limit to be injected")
+		} else if val != "10" {
+			t.Fatalf("expected nvidia.com/gpu limit 10, got %v", val)
 		}
 
 		// Check environment variables were set
@@ -357,9 +356,32 @@ func TestValidateAndInjectGPUConfig(t *testing.T) {
 		if len(env) < 2 {
 			t.Fatalf("expected at least 2 env vars for GPU, got %d", len(env))
 		}
+		// Verify GPU_QUOTA and memory env
+		foundQuota := false
+		foundMemory := false
+		for _, e := range env {
+			if item, ok := e.(map[string]interface{}); ok {
+				switch item["name"] {
+				case "GPU_QUOTA":
+					if item["value"] == "10" {
+						foundQuota = true
+					}
+				case "CUDA_MPS_PINNED_DEVICE_MEM_LIMIT":
+					if item["value"] == "2147483648" {
+						foundMemory = true
+					}
+				}
+			}
+		}
+		if !foundQuota {
+			t.Fatalf("GPU_QUOTA env not injected or incorrect")
+		}
+		if !foundMemory {
+			t.Fatalf("CUDA_MPS_PINNED_DEVICE_MEM_LIMIT env not injected or incorrect")
+		}
 	})
 
-	t.Run("GPUConfig_InvalidMPSLimit", func(t *testing.T) {
+	t.Run("GPUConfig_InvalidGPUQuota", func(t *testing.T) {
 		podJSON := `{
 			"kind": "Pod",
 			"metadata": {"name": "gpu-pod"},
@@ -379,7 +401,7 @@ func TestValidateAndInjectGPUConfig(t *testing.T) {
 		proj := project.Project{
 			PID:         1,
 			ProjectName: "test-proj",
-			MPSLimit:    150, // Invalid: > 100
+			GPUQuota:    0, // Invalid: must be > 0
 			MPSMemory:   2048,
 		}
 
@@ -409,7 +431,7 @@ func TestValidateAndInjectGPUConfig(t *testing.T) {
 		proj := project.Project{
 			PID:         1,
 			ProjectName: "test-proj",
-			MPSLimit:    80,
+			GPUQuota:    10,
 			MPSMemory:   256, // Invalid: < 512MB minimum
 		}
 
@@ -419,7 +441,7 @@ func TestValidateAndInjectGPUConfig(t *testing.T) {
 		}
 	})
 
-	t.Run("GPUConfig_MissingMPSConfig", func(t *testing.T) {
+	t.Run("GPUConfig_MPSMemoryOptional", func(t *testing.T) {
 		podJSON := `{
 			"kind": "Pod",
 			"metadata": {"name": "gpu-pod"},
@@ -439,13 +461,46 @@ func TestValidateAndInjectGPUConfig(t *testing.T) {
 		proj := project.Project{
 			PID:         1,
 			ProjectName: "test-proj",
-			MPSLimit:    0, // Not configured
-			MPSMemory:   0,
+			GPUQuota:    5,
+			MPSMemory:   0, // Optional
 		}
 
-		_, err := svc.ValidateAndInjectGPUConfig([]byte(podJSON), proj)
-		if err == nil {
-			t.Fatalf("expected error for missing MPS config, but got nil")
+		result, err := svc.ValidateAndInjectGPUConfig([]byte(podJSON), proj)
+		if err != nil {
+			t.Fatalf("expected no error for optional MPS memory, got: %v", err)
+		}
+
+		var obj map[string]interface{}
+		if err := json.Unmarshal(result, &obj); err != nil {
+			t.Fatalf("failed to unmarshal result: %v", err)
+		}
+
+		spec := obj["spec"].(map[string]interface{})
+		containers := spec["containers"].([]interface{})
+		container := containers[0].(map[string]interface{})
+		resources := container["resources"].(map[string]interface{})
+		limits := resources["limits"].(map[string]interface{})
+		if limits["nvidia.com/gpu"] != "5" {
+			t.Fatalf("expected GPU limit 5, got %v", limits["nvidia.com/gpu"])
+		}
+		env := container["env"].([]interface{})
+		foundQuota := false
+		foundMem := false
+		for _, e := range env {
+			if item, ok := e.(map[string]interface{}); ok {
+				if item["name"] == "GPU_QUOTA" && item["value"] == "5" {
+					foundQuota = true
+				}
+				if item["name"] == "CUDA_MPS_PINNED_DEVICE_MEM_LIMIT" {
+					foundMem = true
+				}
+			}
+		}
+		if !foundQuota {
+			t.Fatalf("GPU_QUOTA env not injected or incorrect")
+		}
+		if foundMem {
+			t.Fatalf("did not expect CUDA_MPS_PINNED_DEVICE_MEM_LIMIT when memory is 0")
 		}
 	})
 }

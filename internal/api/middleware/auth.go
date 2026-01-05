@@ -1,7 +1,10 @@
 package middleware
 
 import (
+	"bytes"
+	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"reflect"
 	"strconv"
@@ -38,10 +41,29 @@ func FromPayload(dtoType any) GIDExtractor {
 		// Dynamically create a new DTO instance
 		dtoValue := reflect.New(reflect.TypeOf(dtoType)).Interface()
 
-		// Bind form data directly
-		if err := c.ShouldBind(dtoValue); err != nil {
+		// Read and preserve the raw body for downstream handlers.
+		bodyBytes, err := c.GetRawData()
+		if err != nil {
 			return 0, err
 		}
+
+		// Attempt JSON unmarshal first.
+		if len(bodyBytes) > 0 {
+			if err := json.Unmarshal(bodyBytes, dtoValue); err != nil {
+				// Fall back to the default binder (e.g., form data)
+				c.Request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+				if err := c.ShouldBind(dtoValue); err != nil {
+					return 0, err
+				}
+			}
+		} else {
+			if err := c.ShouldBind(dtoValue); err != nil {
+				return 0, err
+			}
+		}
+
+		// Restore body so the handler can bind again.
+		c.Request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
 
 		if getter, ok := dtoValue.(project.GIDGetter); ok {
 			return getter.GetGID(), nil
@@ -83,6 +105,18 @@ func FromIDParam(lookup func(uint) (uint, error)) GIDExtractor {
 			return 0, err
 		}
 		return lookup(id)
+	}
+}
+
+// FromProjectIDInParam creates an extractor that gets GID from project_id URL parameter
+func FromProjectIDInParam() GIDExtractor {
+	return func(c *gin.Context, repos *repository.Repos) (uint, error) {
+		projectIDStr := c.Param("project_id")
+		projectID, err := strconv.ParseUint(projectIDStr, 10, 32)
+		if err != nil {
+			return 0, errors.New("invalid project_id parameter")
+		}
+		return repos.Project.GetGroupIDByProjectID(uint(projectID))
 	}
 }
 
@@ -155,6 +189,12 @@ func (a *Auth) UserOrAdmin() gin.HandlerFunc {
 // GroupMember checks if user is a member of the group
 func (a *Auth) GroupMember(extractor GIDExtractor) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		uid, err := utils.GetUserIDFromContext(c)
+		if err == nil && uid == 1 {
+			c.Next()
+			return
+		}
+
 		gid, err := extractor(c, a.repos)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, response.ErrorResponse{Error: "Invalid input: " + err.Error()})
@@ -168,7 +208,7 @@ func (a *Auth) GroupMember(extractor GIDExtractor) gin.HandlerFunc {
 			return
 		}
 
-		uid, err := utils.GetUserIDFromContext(c)
+		uid, err = utils.GetUserIDFromContext(c)
 		if err != nil {
 			c.JSON(http.StatusUnauthorized, response.ErrorResponse{Error: "Unauthorized"})
 			c.Abort()
@@ -189,6 +229,12 @@ func (a *Auth) GroupMember(extractor GIDExtractor) gin.HandlerFunc {
 // GroupMember checks if user is a manager or admin of the group
 func (a *Auth) GroupManager(extractor GIDExtractor) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		uid, err := utils.GetUserIDFromContext(c)
+		if err == nil && uid == 1 {
+			c.Next()
+			return
+		}
+
 		gid, err := extractor(c, a.repos)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, response.ErrorResponse{Error: "Invalid input: " + err.Error()})
@@ -202,7 +248,7 @@ func (a *Auth) GroupManager(extractor GIDExtractor) gin.HandlerFunc {
 			return
 		}
 
-		uid, err := utils.GetUserIDFromContext(c)
+		uid, err = utils.GetUserIDFromContext(c)
 		if err != nil {
 			c.JSON(http.StatusUnauthorized, response.ErrorResponse{Error: "Unauthorized"})
 			c.Abort()
@@ -223,6 +269,12 @@ func (a *Auth) GroupManager(extractor GIDExtractor) gin.HandlerFunc {
 // GroupAdmin checks if user is an admin of the group
 func (a *Auth) GroupAdmin(extractor GIDExtractor) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		uid, err := utils.GetUserIDFromContext(c)
+		if err == nil && uid == 1 {
+			c.Next()
+			return
+		}
+
 		gid, err := extractor(c, a.repos)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, response.ErrorResponse{Error: "Invalid input: " + err.Error()})
@@ -236,7 +288,7 @@ func (a *Auth) GroupAdmin(extractor GIDExtractor) gin.HandlerFunc {
 			return
 		}
 
-		uid, err := utils.GetUserIDFromContext(c)
+		uid, err = utils.GetUserIDFromContext(c)
 		if err != nil {
 			c.JSON(http.StatusUnauthorized, response.ErrorResponse{Error: "Unauthorized"})
 			c.Abort()

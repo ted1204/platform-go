@@ -19,6 +19,7 @@ func (s *FormService) CreateForm(userID uint, input form.CreateFormDTO) (*form.F
 		ProjectID:   input.ProjectID,
 		Title:       input.Title,
 		Description: input.Description,
+		Tag:         input.Tag, // TODO: enforce allowed tags from config
 		Status:      form.FormStatusPending,
 	}
 	return f, s.repo.Create(f)
@@ -39,4 +40,18 @@ func (s *FormService) UpdateFormStatus(id uint, status string) (*form.Form, erro
 	}
 	f.Status = form.FormStatus(status)
 	return f, s.repo.Update(f)
+}
+
+func (s *FormService) AddMessage(formID, userID uint, content string) (*form.FormMessage, error) {
+	f, err := s.repo.FindByID(formID)
+	if err != nil {
+		return nil, err
+	}
+	// TODO: block messages when status is Completed; currently allow to unblock later if needed
+	msg := &form.FormMessage{FormID: f.ID, UserID: userID, Content: content}
+	return msg, s.repo.CreateMessage(msg)
+}
+
+func (s *FormService) ListMessages(formID uint) ([]form.FormMessage, error) {
+	return s.repo.ListMessages(formID)
 }

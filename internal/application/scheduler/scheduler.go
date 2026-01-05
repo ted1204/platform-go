@@ -15,14 +15,18 @@ type Scheduler struct {
 	jobQueue *queue.JobQueue
 	registry *executor.ExecutorRegistry
 	running  bool
+	jobRepo  job.Repository
+	enqueued map[uint]bool
 }
 
 // NewScheduler creates a new scheduler
-func NewScheduler(registry *executor.ExecutorRegistry) *Scheduler {
+func NewScheduler(registry *executor.ExecutorRegistry, jobRepo job.Repository) *Scheduler {
 	return &Scheduler{
 		jobQueue: queue.NewJobQueue(),
 		registry: registry,
 		running:  false,
+		jobRepo:  jobRepo,
+		enqueued: make(map[uint]bool),
 	}
 }
 
@@ -41,6 +45,7 @@ func (s *Scheduler) Start(ctx context.Context) error {
 			log.Println("Scheduler stopped")
 			return ctx.Err()
 		case <-ticker.C:
+			s.syncQueued()
 			s.processQueue(ctx)
 		}
 	}
@@ -49,6 +54,9 @@ func (s *Scheduler) Start(ctx context.Context) error {
 // EnqueueJob adds a job to queue
 func (s *Scheduler) EnqueueJob(j *job.Job) {
 	s.jobQueue.Push(j)
+	if j != nil {
+		s.enqueued[j.ID] = true
+	}
 }
 
 // processQueue processes pending jobs
@@ -56,6 +64,11 @@ func (s *Scheduler) processQueue(ctx context.Context) {
 	j := s.jobQueue.Pop()
 	if j == nil {
 		return
+	}
+
+	if s.jobRepo != nil {
+		j.Status = string(job.JobStatusScheduling)
+		_ = s.jobRepo.Update(j)
 	}
 
 	err := s.registry.Execute(ctx, j)
@@ -66,9 +79,15 @@ func (s *Scheduler) processQueue(ctx context.Context) {
 	}
 	if err != nil {
 		log.Printf("Job error: %v", err)
-		j.Status = string(job.StatusFailed)
+		j.Status = string(job.JobStatusFailed)
+		if s.jobRepo != nil {
+			_ = s.jobRepo.Update(j)
+		}
 	} else {
-		j.Status = string(job.StatusRunning)
+		j.Status = string(job.JobStatusRunning)
+		if s.jobRepo != nil {
+			_ = s.jobRepo.Update(j)
+		}
 	}
 }
 
@@ -80,4 +99,22 @@ func (s *Scheduler) IsRunning() bool {
 // GetQueueSize returns pending count
 func (s *Scheduler) GetQueueSize() int {
 	return s.jobQueue.Len()
+}
+
+// syncQueued fetches queued jobs from the repository and enqueues them.
+func (s *Scheduler) syncQueued() {
+	if s.jobRepo == nil {
+		return
+	}
+	jbs, err := s.jobRepo.GetQueuedJobs()
+	if err != nil {
+		log.Printf("syncQueued error: %v", err)
+		return
+	}
+	for i := range jbs {
+		if s.enqueued[jbs[i].ID] {
+			continue
+		}
+		s.EnqueueJob(&jbs[i])
+	}
 }

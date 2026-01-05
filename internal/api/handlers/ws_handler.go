@@ -11,6 +11,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/linskybing/platform-go/pkg/k8s"
 	"github.com/linskybing/platform-go/pkg/response"
+	"k8s.io/client-go/kubernetes"
 )
 
 const (
@@ -45,10 +46,16 @@ func ExecWebSocketHandler(c *gin.Context) {
 		return
 	}
 
+	cs, ok := k8s.Clientset.(*kubernetes.Clientset)
+	if !ok || cs == nil {
+		c.JSON(http.StatusServiceUnavailable, response.ErrorResponse{Error: "k8s client not available"})
+		return
+	}
+
 	err = k8s.ExecToPodViaWebSocket(
 		conn,
 		k8s.Config,
-		k8s.Clientset,
+		cs,
 		c.Query("namespace"),
 		c.Query("pod"),
 		c.Query("container"),

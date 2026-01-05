@@ -28,6 +28,7 @@ import (
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
+	k8sfake "k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/restmapper"
@@ -55,7 +56,7 @@ type TerminalMessage struct {
 
 var (
 	Config        *rest.Config
-	Clientset     *kubernetes.Clientset
+	Clientset     kubernetes.Interface
 	Dc            *discovery.DiscoveryClient
 	Resources     []*restmapper.APIGroupResources
 	Mapper        meta.RESTMapper
@@ -68,7 +69,8 @@ func InitTestCluster() {
 	// For integration tests that don't strictly require K8s, we can make this optional.
 	kubeconfig := os.Getenv("KUBECONFIG")
 	if kubeconfig == "" {
-		log.Println("KUBECONFIG is not set, skipping K8s cluster initialization")
+		log.Println("KUBECONFIG is not set, using fake Kubernetes client for tests")
+		Clientset = k8sfake.NewSimpleClientset()
 		return
 	}
 
@@ -890,6 +892,12 @@ func CreateJob(ctx context.Context, spec JobSpec) error {
 
 	_, err := Clientset.BatchV1().Jobs(spec.Namespace).Create(ctx, job, metav1.CreateOptions{})
 	return err
+}
+
+// DeleteJob deletes a Kubernetes Job and its pods.
+func DeleteJob(ctx context.Context, namespace, name string) error {
+	propagation := metav1.DeletePropagationForeground
+	return Clientset.BatchV1().Jobs(namespace).Delete(ctx, name, metav1.DeleteOptions{PropagationPolicy: &propagation})
 }
 
 // CreateFileBrowserPod creates a pod running filebrowser with multiple PVC mounts.

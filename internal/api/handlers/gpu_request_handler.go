@@ -7,7 +7,6 @@ import (
 	"github.com/linskybing/platform-go/internal/application"
 	"github.com/linskybing/platform-go/internal/domain/gpu"
 	"github.com/linskybing/platform-go/pkg/response"
-	"github.com/linskybing/platform-go/pkg/types"
 	"github.com/linskybing/platform-go/pkg/utils"
 )
 
@@ -66,13 +65,30 @@ func (h *GPURequestHandler) CreateRequest(c *gin.Context) {
 		return
 	}
 
+	if input.Type == "quota" {
+		if input.RequestedQuota == nil || *input.RequestedQuota <= 0 {
+			c.JSON(http.StatusBadRequest, response.ErrorResponse{Error: "requested_quota must be > 0"})
+			return
+		}
+	}
+	if input.Type == "access" {
+		if input.RequestedAccessType == nil || *input.RequestedAccessType == "" {
+			c.JSON(http.StatusBadRequest, response.ErrorResponse{Error: "requested_access_type is required for access requests"})
+			return
+		}
+	}
+	if input.Reason == "" {
+		c.JSON(http.StatusBadRequest, response.ErrorResponse{Error: "reason is required"})
+		return
+	}
+
 	req, err := h.svc.CreateRequest(projectID, userID, input)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, response.ErrorResponse{Error: err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusCreated, req)
+	c.JSON(http.StatusOK, req)
 }
 
 // ListRequestsByProject godoc
@@ -132,13 +148,6 @@ func (h *GPURequestHandler) ListRequestsByProject(c *gin.Context) {
 // @Failure 500 {object} response.ErrorResponse
 // @Router /admin/gpu-requests [get]
 func (h *GPURequestHandler) ListPendingRequests(c *gin.Context) {
-	claimsVal, _ := c.Get("claims")
-	claims := claimsVal.(*types.Claims)
-	if !claims.IsAdmin {
-		c.JSON(http.StatusForbidden, response.ErrorResponse{Error: "permission denied"})
-		return
-	}
-
 	reqs, err := h.svc.ListPending()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, response.ErrorResponse{Error: err.Error()})
@@ -162,13 +171,6 @@ func (h *GPURequestHandler) ListPendingRequests(c *gin.Context) {
 // @Failure 500 {object} response.ErrorResponse
 // @Router /admin/gpu-requests/{id}/status [put]
 func (h *GPURequestHandler) ProcessRequest(c *gin.Context) {
-	claimsVal, _ := c.Get("claims")
-	claims := claimsVal.(*types.Claims)
-	if !claims.IsAdmin {
-		c.JSON(http.StatusForbidden, response.ErrorResponse{Error: "permission denied"})
-		return
-	}
-
 	requestID, err := utils.ParseIDParam(c, "id")
 	if err != nil {
 		c.JSON(http.StatusBadRequest, response.ErrorResponse{Error: "invalid request id"})

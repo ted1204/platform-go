@@ -13,6 +13,7 @@ import (
 	"github.com/linskybing/platform-go/internal/domain/form"
 	"github.com/linskybing/platform-go/internal/domain/gpu"
 	"github.com/linskybing/platform-go/internal/domain/group"
+	"github.com/linskybing/platform-go/internal/domain/image"
 	"github.com/linskybing/platform-go/internal/domain/job"
 	"github.com/linskybing/platform-go/internal/domain/project"
 	"github.com/linskybing/platform-go/internal/domain/resource"
@@ -45,9 +46,14 @@ func main() {
 		&configfile.ConfigFile{},
 		&resource.Resource{},
 		&job.Job{},
+		&job.JobLog{},
+		&job.JobCheckpoint{},
 		&form.Form{},
+		&form.FormMessage{},
 		&audit.AuditLog{},
 		&gpu.GPURequest{},
+		&image.ImageRequest{},
+		&image.AllowedImage{},
 	); err != nil {
 		log.Fatalf("Failed to migrate database: %v", err)
 	}

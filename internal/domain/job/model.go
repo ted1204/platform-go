@@ -25,11 +25,14 @@ const (
 
 // Status aliases for backward compatibility
 const (
-	StatusPending   JobStatus = "pending"
-	StatusRunning   JobStatus = "running"
-	StatusCompleted JobStatus = "completed"
-	StatusFailed    JobStatus = "failed"
-	StatusCancelled JobStatus = "cancelled"
+	StatusPending    JobStatus = "pending"
+	StatusRunning    JobStatus = "running"
+	StatusCompleted  JobStatus = "completed"
+	StatusFailed     JobStatus = "failed"
+	StatusCancelled  JobStatus = "cancelled"
+	StatusQueued     JobStatus = JobStatusQueued
+	StatusScheduling JobStatus = JobStatusScheduling
+	StatusPreempted  JobStatus = JobStatusPreempted
 )
 
 // Priority constants

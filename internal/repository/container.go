@@ -12,6 +12,7 @@ type Repos struct {
 	Form       *FormRepository
 	GPURequest GPURequestRepo
 	Job        JobRepo
+	Image      ImageRepo
 }
 
 func New() *Repos {
@@ -27,5 +28,6 @@ func New() *Repos {
 		Form:       NewFormRepository(),
 		GPURequest: &DBGPURequestRepo{},
 		Job:        &DBJobRepo{},
+		Image:      &DBImageRepo{},
 	}
 }

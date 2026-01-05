@@ -1,10 +1,8 @@
 package mps
 
 const (
-	MPSUnitsPerGPU  = 10  // 1 dedicated GPU = 10 MPS units
-	DefaultMPSLimit = 100 // Default MPS thread percentage limit
-	MaxMPSLimit     = 100 // Maximum MPS thread percentage (100%)
-	MinMPSLimit     = 0   // Minimum MPS thread percentage
+	MPSUnitsPerGPU = 10 // 1 dedicated GPU = 10 MPS units
+	// GPU quota is now in integer units (system auto-injects CUDA_MPS_ACTIVE_THREAD_PERCENTAGE)
 )
 
 // ConvertGPUToMPS converts dedicated GPU count to MPS units
@@ -21,9 +19,9 @@ func ConvertMPSToGPU(mpsUnits int) int {
 	return gpus
 }
 
-// ValidateMPSLimit validates if MPS limit is within acceptable range
-func ValidateMPSLimit(limit int) bool {
-	return limit >= MinMPSLimit && limit <= MaxMPSLimit
+// ValidateGPUQuota validates if GPU quota is positive (system will auto-inject CUDA_MPS_ACTIVE_THREAD_PERCENTAGE)
+func ValidateGPUQuota(quota int) bool {
+	return quota > 0
 }
 
 // CalculateMPSUsage calculates total MPS units from a list of requests

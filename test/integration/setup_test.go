@@ -22,6 +22,7 @@ import (
 	"github.com/linskybing/platform-go/internal/domain/form"
 	"github.com/linskybing/platform-go/internal/domain/gpu"
 	"github.com/linskybing/platform-go/internal/domain/group"
+	"github.com/linskybing/platform-go/internal/domain/image"
 	"github.com/linskybing/platform-go/internal/domain/job"
 	"github.com/linskybing/platform-go/internal/domain/project"
 	"github.com/linskybing/platform-go/internal/domain/resource"
@@ -89,9 +90,14 @@ func setupTestEnvironment() error {
 		&configfile.ConfigFile{},
 		&resource.Resource{},
 		&job.Job{},
+		&job.JobLog{},
+		&job.JobCheckpoint{},
 		&form.Form{},
+		&form.FormMessage{},
 		&audit.AuditLog{},
 		&gpu.GPURequest{},
+		&image.ImageRequest{},
+		&image.AllowedImage{},
 	); err != nil {
 		return fmt.Errorf("failed to drop tables: %v", err)
 	}
@@ -105,9 +111,14 @@ func setupTestEnvironment() error {
 		&configfile.ConfigFile{},
 		&resource.Resource{},
 		&job.Job{},
+		&job.JobLog{},
+		&job.JobCheckpoint{},
 		&form.Form{},
+		&form.FormMessage{},
 		&audit.AuditLog{},
 		&gpu.GPURequest{},
+		&image.ImageRequest{},
+		&image.AllowedImage{},
 	); err != nil {
 		return fmt.Errorf("failed to migrate database: %v", err)
 	}
@@ -135,6 +146,11 @@ func setupTestEnvironment() error {
 		}()
 	} else {
 		log.Println("K8s tests disabled (set ENABLE_K8S_TESTS=true to enable)")
+		// Fallback to a fake client so integration tests can run without a real cluster.
+		k8s.InitTestCluster()
+		if k8s.Clientset != nil {
+			k8sAvailable = true
+		}
 	}
 
 	log.Println("Setting up test context...") // Setup test context
@@ -254,6 +270,9 @@ func createTestData() error {
 	testProject := &project.Project{
 		ProjectName: "test-project",
 		GID:         superGroup.GID,
+		GPUQuota:    10,       // 10 GPU units for testing
+		GPUAccess:   "shared", // Shared GPU access via MPS
+		MPSMemory:   1024,     // 1GB MPS memory (optional)
 	}
 	if err := db.DB.Create(testProject).Error; err != nil {
 		return fmt.Errorf("failed to create test project: %v", err)
@@ -321,8 +340,8 @@ func cleanupTestEnvironment() {
 		return
 	}
 
-	// Delete test namespace
-	if testCtx.TestNamespace != "" {
+	// Delete test namespace only if K8s client is available
+	if testCtx.TestNamespace != "" && k8s.Clientset != nil {
 		_ = k8s.Clientset.CoreV1().Namespaces().Delete(
 			context.Background(),
 			testCtx.TestNamespace,
@@ -340,9 +359,14 @@ func cleanupTestEnvironment() {
 			&configfile.ConfigFile{},
 			&resource.Resource{},
 			&job.Job{},
+			&job.JobLog{},
+			&job.JobCheckpoint{},
 			&form.Form{},
+			&form.FormMessage{},
 			&audit.AuditLog{},
 			&gpu.GPURequest{},
+			&image.ImageRequest{},
+			&image.AllowedImage{},
 		)
 	}
 }

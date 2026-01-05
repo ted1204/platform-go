@@ -16,11 +16,10 @@ type Project struct {
 	PID         uint      `gorm:"primaryKey;column:p_id;autoIncrement"`
 	ProjectName string    `gorm:"size:100;not null"`
 	Description string    `gorm:"type:text"`
-	GID         uint      `gorm:"not null"` // Group ID
-	GPUQuota    int       `gorm:"default:0;column:gpu_quota"`
+	GID         uint      `gorm:"not null"`                   // Group ID
+	GPUQuota    int       `gorm:"default:0;column:gpu_quota"` // GPU quota in integer units (system auto-injects CUDA_MPS_ACTIVE_THREAD_PERCENTAGE)
 	GPUAccess   string    `gorm:"default:'shared';column:gpu_access"`
-	MPSLimit    int       `gorm:"default:100;column:mps_limit"`
-	MPSMemory   int       `gorm:"default:0;column:mps_memory"`
+	MPSMemory   int       `gorm:"default:0;column:mps_memory"` // MPS memory limit in MB (optional)
 	CreatedAt   time.Time `gorm:"column:create_at;autoCreateTime"`
 	UpdatedAt   time.Time `gorm:"column:update_at;autoUpdateTime"`
 }

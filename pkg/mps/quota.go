@@ -5,7 +5,7 @@ type ProjectMPSQuota struct {
 	ProjectID     uint
 	TotalMPSUnits int // Total MPS units available
 	UsedMPSUnits  int // Currently allocated MPS units
-	MPSLimit      int // MPS thread percentage limit (0-100)
+	// MPSLimit field has been removed
 }
 
 // AvailableMPS returns the remaining MPS units available

@@ -38,7 +38,7 @@ func (h *FormHandler) CreateForm(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusCreated, response.SuccessResponse{Data: form})
+	c.JSON(http.StatusOK, form)
 }
 
 func (h *FormHandler) GetMyForms(c *gin.Context) {
@@ -54,7 +54,7 @@ func (h *FormHandler) GetMyForms(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, response.SuccessResponse{Data: forms})
+	c.JSON(http.StatusOK, forms)
 }
 
 func (h *FormHandler) GetAllForms(c *gin.Context) {
@@ -64,7 +64,7 @@ func (h *FormHandler) GetAllForms(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, response.SuccessResponse{Data: forms})
+	c.JSON(http.StatusOK, forms)
 }
 
 func (h *FormHandler) UpdateFormStatus(c *gin.Context) {
@@ -87,5 +87,51 @@ func (h *FormHandler) UpdateFormStatus(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, response.SuccessResponse{Data: form})
+	c.JSON(http.StatusOK, form)
+}
+
+func (h *FormHandler) CreateMessage(c *gin.Context) {
+	formIDStr := c.Param("id")
+	formID, err := strconv.ParseUint(formIDStr, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, response.ErrorResponse{Error: "Invalid ID"})
+		return
+	}
+
+	var input form.CreateFormMessageDTO
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, response.ErrorResponse{Error: err.Error()})
+		return
+	}
+
+	userID, err := utils.GetUserIDFromContext(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, response.ErrorResponse{Error: "Unauthorized"})
+		return
+	}
+
+	msg, err := h.service.AddMessage(uint(formID), userID, input.Content)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, response.ErrorResponse{Error: err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, msg)
+}
+
+func (h *FormHandler) ListMessages(c *gin.Context) {
+	formIDStr := c.Param("id")
+	formID, err := strconv.ParseUint(formIDStr, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, response.ErrorResponse{Error: "Invalid ID"})
+		return
+	}
+
+	msgs, err := h.service.ListMessages(uint(formID))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, response.ErrorResponse{Error: err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, msgs)
 }

@@ -1,23 +1,21 @@
 package project
 
 type CreateProjectDTO struct {
-	ProjectName string  `form:"project_name" binding:"required"`
-	Description *string `form:"description,omitempty"`
-	GID         uint    `form:"g_id" binding:"required"`
-	GPUQuota    *int    `form:"gpu_quota,omitempty"`
-	GPUAccess   *string `form:"gpu_access,omitempty"`
-	MPSLimit    *int    `form:"mps_limit,omitempty"`
-	MPSMemory   *int    `form:"mps_memory,omitempty"`
+	ProjectName string  `json:"project_name" form:"project_name" binding:"required"`
+	Description *string `json:"description,omitempty" form:"description,omitempty"`
+	GID         uint    `json:"gid" form:"g_id" binding:"required"`
+	GPUQuota    *int    `json:"gpu_quota,omitempty" form:"gpu_quota,omitempty"` // GPU quota in integer units
+	GPUAccess   *string `json:"gpu_access,omitempty" form:"gpu_access,omitempty"`
+	MPSMemory   *int    `json:"mps_memory,omitempty" form:"mps_memory,omitempty"` // MPS memory limit in MB (optional)
 }
 
 type UpdateProjectDTO struct {
-	ProjectName *string `form:"project_name,omitempty"`
-	Description *string `form:"description,omitempty"`
-	GID         *uint   `form:"g_id,omitempty"`
-	GPUQuota    *int    `form:"gpu_quota,omitempty"`
-	GPUAccess   *string `form:"gpu_access,omitempty"`
-	MPSLimit    *int    `form:"mps_limit,omitempty"`
-	MPSMemory   *int    `form:"mps_memory,omitempty"`
+	ProjectName *string `json:"project_name,omitempty" form:"project_name,omitempty"`
+	Description *string `json:"description,omitempty" form:"description,omitempty"`
+	GID         *uint   `json:"gid,omitempty" form:"g_id,omitempty"`
+	GPUQuota    *int    `json:"gpu_quota,omitempty" form:"gpu_quota,omitempty"` // GPU quota in integer units
+	GPUAccess   *string `json:"gpu_access,omitempty" form:"gpu_access,omitempty"`
+	MPSMemory   *int    `json:"mps_memory,omitempty" form:"mps_memory,omitempty"` // MPS memory limit in MB (optional)
 }
 
 type CreateProjectPVCDTO struct {

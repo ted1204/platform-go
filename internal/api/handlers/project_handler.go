@@ -159,7 +159,7 @@ func (h *ProjectHandler) CreateProject(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusCreated, project)
+	c.JSON(http.StatusOK, project)
 }
 
 // UpdateProject godoc
@@ -266,5 +266,5 @@ func (h *ProjectHandler) CreateProjectPVC(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusCreated, response.MessageResponse{Message: "PVC created successfully"})
+	c.JSON(http.StatusOK, response.MessageResponse{Message: "PVC created successfully"})
 }

@@ -84,9 +84,6 @@ func (s *ProjectService) CreateProject(c *gin.Context, input project.CreateProje
 	if input.GPUAccess != nil {
 		p.GPUAccess = *input.GPUAccess
 	}
-	if input.MPSLimit != nil {
-		p.MPSLimit = *input.MPSLimit
-	}
 	if input.MPSMemory != nil {
 		p.MPSMemory = *input.MPSMemory
 	}
@@ -139,9 +136,6 @@ func (s *ProjectService) UpdateProject(c *gin.Context, id uint, input project.Up
 	}
 	if input.GPUAccess != nil {
 		p.GPUAccess = *input.GPUAccess
-	}
-	if input.MPSLimit != nil {
-		p.MPSLimit = *input.MPSLimit
 	}
 	if input.MPSMemory != nil {
 		p.MPSMemory = *input.MPSMemory

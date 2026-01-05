@@ -17,12 +17,15 @@ func TestConvertMPSToGPU(t *testing.T) {
 	}
 }
 
-func TestValidateMPSLimit(t *testing.T) {
-	if !ValidateMPSLimit(100) {
-		t.Fatalf("expected limit 100 to be valid")
+func TestValidateGPUQuota(t *testing.T) {
+	if !ValidateGPUQuota(100) {
+		t.Fatalf("expected quota 100 to be valid")
 	}
-	if ValidateMPSLimit(-1) {
-		t.Fatalf("expected negative limit to be invalid")
+	if ValidateGPUQuota(-1) {
+		t.Fatalf("expected negative quota to be invalid")
+	}
+	if ValidateGPUQuota(0) {
+		t.Fatalf("expected zero quota to be invalid")
 	}
 }
 
@@ -39,21 +42,20 @@ func TestProjectMPSQuota(t *testing.T) {
 	}
 }
 
-// TestMPSConfigToEnvVars verifies that MPS configuration is correctly converted to CUDA environment variables
 func TestMPSConfigToEnvVars(t *testing.T) {
-	t.Run("ThreadPercentage and MemoryLimit both set", func(t *testing.T) {
+	t.Run("GPUQuota and MemoryLimit both set", func(t *testing.T) {
 		cfg := &MPSConfig{
-			ThreadPercentage: 80,
-			MemoryLimitMB:    2048,
+			GPUQuota:      80,
+			MemoryLimitMB: 2048,
 		}
 
 		env := cfg.ToEnvVars()
 
-		// Check thread percentage env var
-		if threadVal, ok := env["CUDA_MPS_ACTIVE_THREAD_PERCENTAGE"]; !ok {
-			t.Fatalf("expected CUDA_MPS_ACTIVE_THREAD_PERCENTAGE to be set")
-		} else if threadVal != "80" {
-			t.Fatalf("expected thread percentage 80, got %s", threadVal)
+		// Check GPU quota env var
+		if quotaVal, ok := env["GPU_QUOTA"]; !ok {
+			t.Fatalf("expected GPU_QUOTA to be set")
+		} else if quotaVal != "80" {
+			t.Fatalf("expected GPU quota 80, got %s", quotaVal)
 		}
 
 		// Check memory limit env var (should be in bytes)
@@ -70,15 +72,15 @@ func TestMPSConfigToEnvVars(t *testing.T) {
 
 	t.Run("Only MemoryLimit set", func(t *testing.T) {
 		cfg := &MPSConfig{
-			ThreadPercentage: 0,
-			MemoryLimitMB:    1024,
+			GPUQuota:      0,
+			MemoryLimitMB: 1024,
 		}
 
 		env := cfg.ToEnvVars()
 
-		// Should not have thread percentage env var
-		if _, ok := env["CUDA_MPS_ACTIVE_THREAD_PERCENTAGE"]; ok {
-			t.Fatalf("should not set thread percentage when 0")
+		// Should not have GPU quota env var when 0
+		if _, ok := env["GPU_QUOTA"]; ok {
+			t.Fatalf("should not set GPU quota when 0")
 		}
 
 		// Should have memory limit env var
@@ -89,8 +91,8 @@ func TestMPSConfigToEnvVars(t *testing.T) {
 
 	t.Run("No configuration set", func(t *testing.T) {
 		cfg := &MPSConfig{
-			ThreadPercentage: 0,
-			MemoryLimitMB:    0,
+			GPUQuota:      0,
+			MemoryLimitMB: 0,
 		}
 
 		env := cfg.ToEnvVars()

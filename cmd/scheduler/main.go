@@ -19,6 +19,7 @@ import (
 	"github.com/linskybing/platform-go/internal/domain/project"
 	"github.com/linskybing/platform-go/internal/domain/resource"
 	"github.com/linskybing/platform-go/internal/domain/user"
+	"github.com/linskybing/platform-go/internal/repository"
 	"github.com/linskybing/platform-go/internal/scheduler/executor"
 	"github.com/linskybing/platform-go/pkg/k8s"
 )
@@ -42,6 +43,8 @@ func main() {
 		&configfile.ConfigFile{},
 		&resource.Resource{},
 		&job.Job{},
+		&job.JobLog{},
+		&job.JobCheckpoint{},
 		&form.Form{},
 		&audit.AuditLog{},
 		&gpu.GPURequest{},
@@ -49,8 +52,10 @@ func main() {
 		log.Fatalf("Failed to migrate database: %v", err)
 	}
 
+	repos := repository.New()
 	registry := executor.NewExecutorRegistry()
-	sched := scheduler.NewScheduler(registry)
+	registry.Register(job.JobTypeNormal, executor.NewK8sExecutor(repos.Job))
+	sched := scheduler.NewScheduler(registry, repos.Job)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

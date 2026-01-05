@@ -5,6 +5,9 @@ import (
 	"net/http"
 	"os"
 
+	"gopkg.in/yaml.v3"
+	"k8s.io/apimachinery/pkg/api/resource"
+
 	"github.com/gin-gonic/gin"
 	"github.com/linskybing/platform-go/internal/application"
 	"github.com/linskybing/platform-go/internal/domain/configfile"
@@ -103,6 +106,11 @@ func (h *ConfigFileHandler) CreateConfigFileHandler(c *gin.Context) {
 		return
 	}
 
+	if err := validateResourceLimits(input.RawYaml); err != nil {
+		c.JSON(http.StatusBadRequest, response.ErrorResponse{Error: err.Error()})
+		return
+	}
+
 	configFile, err := h.svc.CreateConfigFile(c, input)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, response.ErrorResponse{Error: err.Error()})
@@ -136,6 +144,13 @@ func (h *ConfigFileHandler) UpdateConfigFileHandler(c *gin.Context) {
 	if err := c.ShouldBind(&input); err != nil {
 		c.JSON(http.StatusBadRequest, response.ErrorResponse{Error: err.Error()})
 		return
+	}
+
+	if input.RawYaml != nil {
+		if err := validateResourceLimits(*input.RawYaml); err != nil {
+			c.JSON(http.StatusBadRequest, response.ErrorResponse{Error: err.Error()})
+			return
+		}
 	}
 
 	updatedConfigFile, err := h.svc.UpdateConfigFile(c, uint(id), input)
@@ -179,6 +194,91 @@ func (h *ConfigFileHandler) DeleteConfigFileHandler(c *gin.Context) {
 	}
 
 	c.Status(http.StatusNoContent)
+}
+
+// validateResourceLimits ensures CPU/memory limits are not less than requests for all containers in the YAML.
+func validateResourceLimits(rawYaml string) error {
+	docs := utils.SplitYAMLDocuments(rawYaml)
+	for _, doc := range docs {
+		if doc == "" {
+			continue
+		}
+
+		var obj map[string]interface{}
+		if err := yaml.Unmarshal([]byte(doc), &obj); err != nil {
+			continue // skip unparsable docs
+		}
+
+		// Navigate to pod spec
+		kind, _ := obj["kind"].(string)
+		var podSpec map[string]interface{}
+		switch kind {
+		case "Pod":
+			if spec, ok := obj["spec"].(map[string]interface{}); ok {
+				podSpec = spec
+			}
+		case "Deployment", "StatefulSet", "DaemonSet", "Job":
+			if spec, ok := obj["spec"].(map[string]interface{}); ok {
+				if template, ok := spec["template"].(map[string]interface{}); ok {
+					if tSpec, ok := template["spec"].(map[string]interface{}); ok {
+						podSpec = tSpec
+					}
+				}
+			}
+		}
+
+		if podSpec == nil {
+			continue
+		}
+
+		containers, ok := podSpec["containers"].([]interface{})
+		if !ok {
+			continue
+		}
+
+		for _, c := range containers {
+			container, ok := c.(map[string]interface{})
+			if !ok {
+				continue
+			}
+
+			resources, ok := container["resources"].(map[string]interface{})
+			if !ok {
+				continue
+			}
+
+			requests, _ := resources["requests"].(map[string]interface{})
+			limits, _ := resources["limits"].(map[string]interface{})
+
+			if requests == nil || limits == nil {
+				continue
+			}
+
+			// CPU
+			if reqCPU, ok := requests["cpu"].(string); ok {
+				if limCPU, ok := limits["cpu"].(string); ok {
+					reqQ, err1 := resource.ParseQuantity(reqCPU)
+					limQ, err2 := resource.ParseQuantity(limCPU)
+					if err1 == nil && err2 == nil && limQ.Cmp(reqQ) < 0 {
+						return fmt.Errorf("CPU limit should be >= request")
+					}
+				}
+			}
+
+			// Memory
+			if reqMem, ok := requests["memory"].(string); ok {
+				if limMem, ok := limits["memory"].(string); ok {
+					reqQ, err1 := resource.ParseQuantity(reqMem)
+					limQ, err2 := resource.ParseQuantity(limMem)
+					if err1 == nil && err2 == nil && limQ.Cmp(reqQ) < 0 {
+						return fmt.Errorf("Memory limit should be >= request")
+					}
+				}
+			}
+		}
+	}
+
+	return nil
 }
 
 // ListConfigFilesByProjectID godoc

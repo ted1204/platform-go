@@ -93,5 +93,21 @@ func (h *AuditHandler) GetAuditLogs(c *gin.Context) {
 		return
 	}
 
+	// For pagination requests, wrap with metadata to match client expectations
+	if c.Query("page") != "" || c.Query("page_size") != "" || c.Query("limit") != "" || c.Query("offset") != "" {
+		page := 1
+		if limit > 0 {
+			page = offset/limit + 1
+		}
+		c.JSON(http.StatusOK, gin.H{
+			"data":      logs,
+			"total":     len(logs),
+			"page":      page,
+			"page_size": limit,
+			"offset":    offset,
+		})
+		return
+	}
+
 	c.JSON(http.StatusOK, logs)
 }

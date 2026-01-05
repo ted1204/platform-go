@@ -361,8 +361,8 @@ func TestConfigFileHandler_ResourceLimits(t *testing.T) {
 // TestConfigFileGPUMPSConfiguration tests GPU MPS configuration validation and injection
 func TestConfigFileGPUMPSConfiguration(t *testing.T) {
 	ctx := GetTestContext()
-	if ctx.TestProject.MPSMemory == 0 || ctx.TestProject.MPSLimit == 0 {
-		t.Skip("Project MPS configuration not set up for testing")
+	if ctx.TestProject.GPUQuota == 0 {
+		t.Skip("Project GPU quota not set up for testing")
 	}
 
 	client := NewHTTPClient(ctx.Router, ctx.ManagerToken)

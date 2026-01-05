@@ -16,15 +16,25 @@ import (
 // Service handles job-related business logic
 type Service struct {
 	jobRepo     job.Repository
-	userRepo    user.Repository
-	projectRepo project.Repository
+	userRepo    UserFinder
+	projectRepo ProjectFinder
+}
+
+// UserFinder provides minimal user lookup needed for jobs.
+type UserFinder interface {
+	GetUserRawByID(id uint) (user.User, error)
+}
+
+// ProjectFinder provides minimal project lookup needed for jobs.
+type ProjectFinder interface {
+	GetProjectByID(id uint) (project.Project, error)
 }
 
 // NewService creates a new job service
 func NewService(
 	jobRepo job.Repository,
-	userRepo user.Repository,
-	projectRepo project.Repository,
+	userRepo UserFinder,
+	projectRepo ProjectFinder,
 ) *Service {
 	return &Service{
 		jobRepo:     jobRepo,
@@ -57,7 +67,7 @@ type CreateJobRequest struct {
 
 // CreateJob creates a new job in pending state
 func (s *Service) CreateJob(ctx context.Context, userID uint, req CreateJobRequest) (*job.Job, error) {
-	_, err := s.userRepo.FindByID(userID)
+	_, err := s.userRepo.GetUserRawByID(userID)
 	if err != nil {
 		return nil, fmt.Errorf("user not found: %w", err)
 	}
@@ -74,12 +84,12 @@ func (s *Service) CreateJob(ctx context.Context, userID uint, req CreateJobReque
 	}
 
 	if req.GPUCount > 0 && projectID != nil {
-		proj, err := s.projectRepo.FindByID(*projectID)
+		proj, err := s.projectRepo.GetProjectByID(*projectID)
 		if err != nil {
 			return nil, fmt.Errorf("project not found: %w", err)
 		}
 
-		if !s.isGPUAccessAllowed(proj, req.GPUType) {
+		if !s.isGPUAccessAllowed(&proj, req.GPUType) {
 			return nil, fmt.Errorf("GPU access type '%s' not allowed for this project", req.GPUType)
 		}
 
@@ -132,7 +142,7 @@ func (s *Service) CreateJob(ctx context.Context, userID uint, req CreateJobReque
 		CheckpointPath:     req.CheckpointPath,
 		K8sJobName:         req.Name,
 		Priority:           job.PriorityLow,
-		Status:             string(job.StatusPending),
+		Status:             string(job.JobStatusQueued),
 		EnableCheckpoint:   req.EnableCheckpoint,
 		CheckpointInterval: req.CheckpointInterval,
 		Volumes:            string(volumesJSON),
@@ -197,7 +207,7 @@ func (s *Service) RestartJob(ctx context.Context, jobID uint, checkpointID *uint
 		return fmt.Errorf("cannot restart running job")
 	}
 
-	j.Status = string(job.StatusPending)
+	j.Status = string(job.JobStatusQueued)
 	j.RestartCount++
 	j.CompletedAt = nil
 	j.StartedAt = nil
