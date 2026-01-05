@@ -29,9 +29,11 @@ help:
 	@echo "  make k8s-logs-scheduler - Stream scheduler logs"
 	@echo "  make ci                - Run CI pipeline (format check, lint, vet, test, build)"
 	@echo "  make local-test        - Run local tests with coverage report"
-	@echo "  make all               - Run full pipeline (CI + K8s deploy)"  make test-integration  - Run integration tests
-  make test-integration-quick - Run quick integration tests
-  make test-clean        - Clean test environment
+	@echo "  make all               - Run full pipeline (CI + K8s deploy)"
+	@echo "  make test-integration  - Run integration tests"
+	@echo "  make test-integration-quick - Run quick integration tests"
+	@echo "  make test-clean        - Clean test environment"
+
 ## Testing targets
 test:
 	@echo "$(YELLOW)Running all tests...$(NC)"
