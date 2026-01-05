@@ -31,13 +31,13 @@ func TestGroupHandler_Integration(t *testing.T) {
 	t.Run("CreateGroup - Success as Admin", func(t *testing.T) {
 		client := NewHTTPClient(ctx.Router, ctx.AdminToken)
 
-		createDTO := map[string]interface{}{
+		createDTO := map[string]string{
 			"group_name": "test-integration-group",
 		}
 
-		resp, err := client.POST("/groups", createDTO)
+		resp, err := client.POSTForm("/groups", createDTO)
 		require.NoError(t, err)
-		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		assert.Equal(t, http.StatusCreated, resp.StatusCode)
 
 		var created group.Group
 		err = resp.DecodeJSON(&created)
@@ -50,11 +50,11 @@ func TestGroupHandler_Integration(t *testing.T) {
 	t.Run("CreateGroup - Forbidden for Regular User", func(t *testing.T) {
 		client := NewHTTPClient(ctx.Router, ctx.UserToken)
 
-		createDTO := map[string]interface{}{
+		createDTO := map[string]string{
 			"group_name": "unauthorized-group",
 		}
 
-		resp, err := client.POST("/groups", createDTO)
+		resp, err := client.POSTForm("/groups", createDTO)
 		require.NoError(t, err)
 		assert.Equal(t, http.StatusForbidden, resp.StatusCode)
 	})
@@ -62,11 +62,11 @@ func TestGroupHandler_Integration(t *testing.T) {
 	t.Run("CreateGroup - Forbidden for Manager", func(t *testing.T) {
 		client := NewHTTPClient(ctx.Router, ctx.ManagerToken)
 
-		createDTO := map[string]interface{}{
+		createDTO := map[string]string{
 			"group_name": "manager-group",
 		}
 
-		resp, err := client.POST("/groups", createDTO)
+		resp, err := client.POSTForm("/groups", createDTO)
 		require.NoError(t, err)
 		assert.Equal(t, http.StatusForbidden, resp.StatusCode)
 	})
@@ -74,11 +74,11 @@ func TestGroupHandler_Integration(t *testing.T) {
 	t.Run("CreateGroup - Empty Name Validation", func(t *testing.T) {
 		client := NewHTTPClient(ctx.Router, ctx.AdminToken)
 
-		createDTO := map[string]interface{}{
+		createDTO := map[string]string{
 			"group_name": "",
 		}
 
-		resp, err := client.POST("/groups", createDTO)
+		resp, err := client.POSTForm("/groups", createDTO)
 		require.NoError(t, err)
 		assert.GreaterOrEqual(t, resp.StatusCode, 400)
 	})
@@ -86,11 +86,11 @@ func TestGroupHandler_Integration(t *testing.T) {
 	t.Run("CreateGroup - Duplicate Name", func(t *testing.T) {
 		client := NewHTTPClient(ctx.Router, ctx.AdminToken)
 
-		createDTO := map[string]interface{}{
+		createDTO := map[string]string{
 			"group_name": ctx.TestGroup.GroupName,
 		}
 
-		resp, err := client.POST("/groups", createDTO)
+		resp, err := client.POSTForm("/groups", createDTO)
 		require.NoError(t, err)
 		assert.GreaterOrEqual(t, resp.StatusCode, 400)
 	})
@@ -125,12 +125,12 @@ func TestGroupHandler_Integration(t *testing.T) {
 
 		client := NewHTTPClient(ctx.Router, ctx.AdminToken)
 
-		updateDTO := map[string]interface{}{
+		updateDTO := map[string]string{
 			"group_name": "updated-group-name",
 		}
 
 		path := fmt.Sprintf("/groups/%d", testGroupID)
-		resp, err := client.PUT(path, updateDTO)
+		resp, err := client.PUTForm(path, updateDTO)
 
 		require.NoError(t, err)
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
@@ -148,12 +148,12 @@ func TestGroupHandler_Integration(t *testing.T) {
 	t.Run("UpdateGroup - Forbidden for Regular User", func(t *testing.T) {
 		client := NewHTTPClient(ctx.Router, ctx.UserToken)
 
-		updateDTO := map[string]interface{}{
+		updateDTO := map[string]string{
 			"group_name": "hacked",
 		}
 
 		path := fmt.Sprintf("/groups/%d", ctx.TestGroup.GID)
-		resp, err := client.PUT(path, updateDTO)
+		resp, err := client.PUTForm(path, updateDTO)
 
 		require.NoError(t, err)
 		assert.Equal(t, http.StatusForbidden, resp.StatusCode)
@@ -162,12 +162,12 @@ func TestGroupHandler_Integration(t *testing.T) {
 	t.Run("UpdateGroup - Cannot Update Reserved Group", func(t *testing.T) {
 		client := NewHTTPClient(ctx.Router, ctx.AdminToken)
 
-		updateDTO := map[string]interface{}{
+		updateDTO := map[string]string{
 			"group_name": "new-super-name",
 		}
 
 		path := fmt.Sprintf("/groups/%d", ctx.TestGroup.GID)
-		resp, err := client.PUT(path, updateDTO)
+		resp, err := client.PUTForm(path, updateDTO)
 
 		require.NoError(t, err)
 		_ = resp // Response validation depends on business logic
@@ -179,11 +179,11 @@ func TestGroupHandler_Integration(t *testing.T) {
 		// Create a group to delete
 		client := NewHTTPClient(ctx.Router, ctx.AdminToken)
 
-		createDTO := map[string]interface{}{
+		createDTO := map[string]string{
 			"group_name": "group-to-delete",
 		}
 
-		createResp, err := client.POST("/groups", createDTO)
+		createResp, err := client.POSTForm("/groups", createDTO)
 		require.NoError(t, err)
 
 		var created group.Group

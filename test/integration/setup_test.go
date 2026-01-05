@@ -321,8 +321,8 @@ func cleanupTestEnvironment() {
 		return
 	}
 
-	// Delete test namespace
-	if testCtx.TestNamespace != "" {
+	// Delete test namespace only if K8s is available
+	if testCtx.TestNamespace != "" && k8s.Clientset != nil {
 		_ = k8s.Clientset.CoreV1().Namespaces().Delete(
 			context.Background(),
 			testCtx.TestNamespace,
