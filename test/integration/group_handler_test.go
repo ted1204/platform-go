@@ -332,9 +332,15 @@ func TestUserGroupHandler_Integration(t *testing.T) {
 
 	t.Run("UpdateUserGroup - Success as Group Admin", func(t *testing.T) {
 		client := NewHTTPClient(ctx.Router, ctx.AdminToken)
+		generator := NewTestDataGenerator()
+
+		// Create an isolated user to avoid mutating shared test users
+		tempUser := generator.GenerateUser("update-role")
+		require.NoError(t, generator.CreateTestUser(tempUser))
+		require.NoError(t, generator.AddUserToGroup(tempUser.UID, ctx.TestGroup.GID, "user"))
 
 		updateDTO := map[string]interface{}{
-			"uid":  ctx.TestManager.UID,
+			"uid":  tempUser.UID,
 			"gid":  ctx.TestGroup.GID,
 			"role": "admin",
 		}
@@ -345,7 +351,7 @@ func TestUserGroupHandler_Integration(t *testing.T) {
 
 		// Verify update
 		verifyResp, err := client.GET("/user-group/by-user", map[string]string{
-			"uid": fmt.Sprintf("%d", ctx.TestManager.UID),
+			"uid": fmt.Sprintf("%d", tempUser.UID),
 		})
 		require.NoError(t, err)
 
@@ -356,7 +362,7 @@ func TestUserGroupHandler_Integration(t *testing.T) {
 		// Find the updated role
 		found := false
 		for _, ug := range userGroups {
-			if ug.GID == ctx.TestGroup.GID && ug.UID == ctx.TestManager.UID {
+			if ug.GID == ctx.TestGroup.GID && ug.UID == tempUser.UID {
 				assert.Equal(t, "admin", ug.Role)
 				found = true
 				break
@@ -385,11 +391,15 @@ func TestUserGroupHandler_Integration(t *testing.T) {
 	t.Run("DeleteUserGroup - Success as Group Admin", func(t *testing.T) {
 		// First create a user group to delete
 		client := NewHTTPClient(ctx.Router, ctx.AdminToken)
+		generator := NewTestDataGenerator()
 
-		// Create temp user for deletion test
-		// Assuming we can use existing user
+		// Create a temporary user and add to group so we don't remove shared fixtures
+		tempUser := generator.GenerateUser("delete-role")
+		require.NoError(t, generator.CreateTestUser(tempUser))
+		require.NoError(t, generator.AddUserToGroup(tempUser.UID, ctx.TestGroup.GID, "user"))
+
 		deleteDTO := map[string]interface{}{
-			"uid": ctx.TestUser.UID,
+			"uid": tempUser.UID,
 			"gid": ctx.TestGroup.GID,
 		}
 

@@ -11,6 +11,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/joho/godotenv"
+	"golang.org/x/crypto/bcrypt"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -228,10 +229,11 @@ func createTestData() error {
 
 	// Create test admin user
 	adminEmail := "admin@test.com"
+	hashedAdminPass, _ := bcrypt.GenerateFromPassword([]byte("password123"), bcrypt.DefaultCost)
 	adminUser := &user.User{
 		Username: "test-admin",
 		Email:    &adminEmail,
-		Password: "password123",
+		Password: string(hashedAdminPass),
 	}
 	if err := db.DB.Create(adminUser).Error; err != nil {
 		return fmt.Errorf("failed to create admin user: %v", err)
@@ -250,10 +252,11 @@ func createTestData() error {
 
 	// Create test regular user
 	userEmail := "user@test.com"
+	hashedUserPass, _ := bcrypt.GenerateFromPassword([]byte("password123"), bcrypt.DefaultCost)
 	regularUser := &user.User{
 		Username: "test-user",
 		Email:    &userEmail,
-		Password: "password123",
+		Password: string(hashedUserPass),
 	}
 	if err := db.DB.Create(regularUser).Error; err != nil {
 		return fmt.Errorf("failed to create regular user: %v", err)
@@ -262,10 +265,11 @@ func createTestData() error {
 
 	// Create test manager user
 	managerEmail := "manager@test.com"
+	hashedManagerPass, _ := bcrypt.GenerateFromPassword([]byte("password123"), bcrypt.DefaultCost)
 	managerUser := &user.User{
 		Username: "test-manager",
 		Email:    &managerEmail,
-		Password: "password123",
+		Password: string(hashedManagerPass),
 	}
 	if err := db.DB.Create(managerUser).Error; err != nil {
 		return fmt.Errorf("failed to create manager user: %v", err)
