@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/linskybing/platform-go/internal/config"
 	"github.com/linskybing/platform-go/internal/domain/group"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -170,9 +171,17 @@ func TestGroupHandler_Integration(t *testing.T) {
 		resp, err := client.PUTForm(path, updateDTO)
 
 		require.NoError(t, err)
-		_ = resp // Response validation depends on business logic
-		// Should fail or succeed with special handling for reserved groups
-		// Check your business logic
+		// Should fail with forbidden status because super group cannot be renamed
+		assert.Equal(t, http.StatusForbidden, resp.StatusCode)
+
+		// Verify super group name is unchanged
+		getResp, err := client.GET(path)
+		require.NoError(t, err)
+
+		var g group.Group
+		err = getResp.DecodeJSON(&g)
+		require.NoError(t, err)
+		assert.Equal(t, config.ReservedGroupName, g.GroupName, "Super group name should remain unchanged")
 	})
 
 	t.Run("DeleteGroup - Success as Admin", func(t *testing.T) {
