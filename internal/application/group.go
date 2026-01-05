@@ -58,6 +58,11 @@ func (s *GroupService) UpdateGroup(c *gin.Context, id uint, input group.GroupUpd
 		return group.Group{}, err
 	}
 
+	// Cannot modify the reserved super group's name
+	if grp.GroupName == config.ReservedGroupName && input.GroupName != nil {
+		return group.Group{}, ErrReservedGroupName
+	}
+
 	oldGroup := grp
 
 	if input.GroupName != nil {
