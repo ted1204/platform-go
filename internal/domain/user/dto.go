@@ -10,9 +10,9 @@ type UpdateUserInput struct {
 }
 
 type CreateUserInput struct {
-	Username string  `form:"username" binding:"required" example:"johndoe"`
-	Password string  `form:"password" binding:"required" example:"password123"`
-	Email    *string `form:"email" example:"user@example.com"`
+	Username string  `form:"username" binding:"required,min=3,max=50" example:"johndoe"`
+	Password string  `form:"password" binding:"required,min=6" example:"password123"`
+	Email    *string `form:"email" binding:"omitempty,email" example:"user@example.com"`
 	FullName *string `form:"full_name" example:"John Doe"`
 	Type     *string `form:"type" binding:"omitempty,oneof=origin oauth2" example:"origin"`
 	Status   *string `form:"status" binding:"omitempty,oneof=online offline delete" example:"online"`

@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/linskybing/platform-go/internal/config/db"
 	"github.com/linskybing/platform-go/internal/domain/project"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -205,9 +206,25 @@ func TestProjectHandler_Integration(t *testing.T) {
 	})
 
 	t.Run("DeleteProject - Forbidden for Manager", func(t *testing.T) {
+		// Create a project for this test (the shared test project may have been deleted)
+		adminClient := NewHTTPClient(ctx.Router, ctx.AdminToken)
+
+		createDTO := map[string]interface{}{
+			"project_name": "manager-delete-test-project",
+			"gid":          ctx.TestGroup.GID,
+		}
+
+		createResp, err := adminClient.POST("/projects", createDTO)
+		require.NoError(t, err)
+
+		var created project.Project
+		err = createResp.DecodeJSON(&created)
+		require.NoError(t, err)
+
+		// Now try to delete as manager (should be forbidden)
 		client := NewHTTPClient(ctx.Router, ctx.ManagerToken)
 
-		path := fmt.Sprintf("/projects/%d", ctx.TestProject.PID)
+		path := fmt.Sprintf("/projects/%d", created.PID)
 		resp, err := client.DELETE(path)
 
 		require.NoError(t, err)
@@ -215,6 +232,21 @@ func TestProjectHandler_Integration(t *testing.T) {
 	})
 
 	t.Run("CreateProjectPVC - Success with K8s Verification", func(t *testing.T) {
+		// Create a fresh project for PVC testing
+		adminClient := NewHTTPClient(ctx.Router, ctx.AdminToken)
+
+		createDTO := map[string]interface{}{
+			"project_name": "pvc-test-project",
+			"gid":          ctx.TestGroup.GID,
+		}
+
+		createResp, err := adminClient.POST("/projects", createDTO)
+		require.NoError(t, err)
+
+		var testProj project.Project
+		err = createResp.DecodeJSON(&testProj)
+		require.NoError(t, err)
+
 		client := NewHTTPClient(ctx.Router, ctx.UserToken)
 
 		pvcDTO := map[string]interface{}{
@@ -223,27 +255,46 @@ func TestProjectHandler_Integration(t *testing.T) {
 			"size":          "1Gi",
 		}
 
-		path := fmt.Sprintf("/k8s/pvc/project/%d", ctx.TestProject.PID)
+		path := fmt.Sprintf("/k8s/pvc/project/%d", testProj.PID)
 		resp, err := client.POST(path, pvcDTO)
 
 		require.NoError(t, err)
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 
-		// Verify PVC exists in K8s
-		namespace := fmt.Sprintf("proj-%d", ctx.TestProject.PID)
-		exists, err := k8sValidator.PVCExists(namespace, "test-pvc")
+		// Verify PVC exists in K8s user namespaces
+		// The CreateProjectPVC creates PVCs in each user's namespace
+		testUsers := []string{"test-admin", "test-user", "test-manager"}
+		for _, username := range testUsers {
+			namespace := fmt.Sprintf("proj-%d-%s", testProj.PID, username)
+			exists, err := k8sValidator.PVCExists(namespace, "test-pvc")
 
-		// Note: This may fail if namespace doesn't exist yet
-		// In a real scenario, the CreateProject should create the namespace
-		if err == nil {
-			assert.True(t, exists, "PVC should exist in Kubernetes")
+			// The namespace may not exist if users weren't added to the project
+			// or if namespaces weren't created yet
+			if err == nil {
+				assert.True(t, exists, "PVC should exist in namespace %s", namespace)
+			}
 		}
 	})
 
 	t.Run("ListPVCsByProject - Verify K8s Resources", func(t *testing.T) {
+		// Create a fresh project for this test
+		adminClient := NewHTTPClient(ctx.Router, ctx.AdminToken)
+
+		createDTO := map[string]interface{}{
+			"project_name": "list-pvc-test-project",
+			"gid":          ctx.TestGroup.GID,
+		}
+
+		createResp, err := adminClient.POST("/projects", createDTO)
+		require.NoError(t, err)
+
+		var testProj project.Project
+		err = createResp.DecodeJSON(&testProj)
+		require.NoError(t, err)
+
 		client := NewHTTPClient(ctx.Router, ctx.UserToken)
 
-		path := fmt.Sprintf("/k8s/pvc/by-project/%d", ctx.TestProject.PID)
+		path := fmt.Sprintf("/k8s/pvc/by-project/%d", testProj.PID)
 		resp, err := client.GET(path)
 
 		require.NoError(t, err)
@@ -270,6 +321,17 @@ func TestProjectHandler_Integration(t *testing.T) {
 func TestProjectHandler_PermissionBoundaries(t *testing.T) {
 	ctx := GetTestContext()
 
+	// Create a fresh project for permission boundary tests
+	// This avoids conflicts with other tests that may delete the shared test project
+	permissionTestProject := &project.Project{
+		ProjectName: "permission-test-project",
+		GID:         ctx.TestGroup.GID,
+		GPUQuota:    10,
+		GPUAccess:   "shared",
+	}
+	err := db.DB.Create(permissionTestProject).Error
+	require.NoError(t, err, "Failed to create permission test project")
+
 	testCases := []struct {
 		name         string
 		method       string
@@ -292,7 +354,7 @@ func TestProjectHandler_PermissionBoundaries(t *testing.T) {
 		{
 			name:         "DeleteProject - Admin only",
 			method:       "DELETE",
-			path:         fmt.Sprintf("/projects/%d", ctx.TestProject.PID),
+			path:         fmt.Sprintf("/projects/%d", permissionTestProject.PID),
 			token:        ctx.ManagerToken,
 			expectedCode: http.StatusForbidden,
 			description:  "Managers cannot delete projects (admin only)",
@@ -301,7 +363,7 @@ func TestProjectHandler_PermissionBoundaries(t *testing.T) {
 		{
 			name:         "UpdateProject - Manager allowed",
 			method:       "PUT",
-			path:         fmt.Sprintf("/projects/%d", ctx.TestProject.PID),
+			path:         fmt.Sprintf("/projects/%d", permissionTestProject.PID),
 			token:        ctx.ManagerToken,
 			body:         map[string]interface{}{"project_name": "updated"},
 			expectedCode: http.StatusOK,
@@ -319,7 +381,7 @@ func TestProjectHandler_PermissionBoundaries(t *testing.T) {
 		{
 			name:         "UpdateProject - User forbidden",
 			method:       "PUT",
-			path:         fmt.Sprintf("/projects/%d", ctx.TestProject.PID),
+			path:         fmt.Sprintf("/projects/%d", permissionTestProject.PID),
 			token:        ctx.UserToken,
 			body:         map[string]interface{}{"project_name": "should-fail"},
 			expectedCode: http.StatusForbidden,
@@ -346,6 +408,12 @@ func TestProjectHandler_PermissionBoundaries(t *testing.T) {
 			}
 
 			require.NoError(t, err, tc.description)
+			if resp.StatusCode != tc.expectedCode {
+				// Print response body for debugging
+				var errorResp map[string]interface{}
+				_ = resp.DecodeJSON(&errorResp)
+				t.Logf("Response body: %+v", errorResp)
+			}
 			assert.Equal(t, tc.expectedCode, resp.StatusCode, tc.description)
 		})
 	}

@@ -214,7 +214,22 @@ func ExpandPVC(ns, pvcName, newSize string) error {
 		return fmt.Errorf("failed to get PVC: %w", err)
 	}
 
-	pvc.Spec.Resources.Requests[corev1.ResourceStorage] = resource.MustParse(newSize)
+	// Parse new size
+	newQuantity, err := resource.ParseQuantity(newSize)
+	if err != nil {
+		return fmt.Errorf("invalid size format: %w", err)
+	}
+
+	// Get current size
+	currentSize := pvc.Spec.Resources.Requests[corev1.ResourceStorage]
+
+	// Check if new size is smaller than current size (shrinking not allowed)
+	if newQuantity.Cmp(currentSize) < 0 {
+		return fmt.Errorf("cannot shrink PVC: current size %s, requested %s", currentSize.String(), newSize)
+	}
+
+	// Update the PVC spec with new size
+	pvc.Spec.Resources.Requests[corev1.ResourceStorage] = newQuantity
 
 	_, err = client.Update(context.TODO(), pvc, metav1.UpdateOptions{})
 	if err != nil {
