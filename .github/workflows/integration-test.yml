@@ -57,11 +57,6 @@ jobs:
               - 'internal/application/*gpu*.go'
               - 'internal/api/handlers/*gpu*.go'
               - 'test/integration/*gpu*.go'
-            k8s:
-              - 'pkg/k8s/**'
-              - 'internal/api/handlers/*k8s*.go'
-              - 'test/integration/*k8s*.go'
-              - 'k8s/**'
             audit:
               - 'internal/domain/audit/**'
               - 'internal/application/*audit*.go'
