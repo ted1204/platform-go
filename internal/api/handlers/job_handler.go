@@ -213,7 +213,9 @@ func (h *JobHandler) StreamJobs(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, response.ErrorResponse{Error: "websocket upgrade failed: " + err.Error()})
 		return
 	}
-	defer conn.Close()
+	defer func() {
+		_ = conn.Close()
+	}()
 
 	// Heartbeat handling
 	_ = conn.SetReadDeadline(time.Now().Add(pongWait))
@@ -268,7 +270,9 @@ func (h *JobHandler) StreamJobLogs(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, response.ErrorResponse{Error: "websocket upgrade failed: " + err.Error()})
 		return
 	}
-	defer conn.Close()
+	defer func() {
+		_ = conn.Close()
+	}()
 
 	_ = conn.SetReadDeadline(time.Now().Add(pongWait))
 	conn.SetPongHandler(func(string) error {

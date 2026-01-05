@@ -8,6 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/golang/mock/gomock"
 	"github.com/linskybing/platform-go/internal/application"
+	"github.com/linskybing/platform-go/internal/domain/group"
 	"github.com/linskybing/platform-go/internal/domain/project"
 	"github.com/linskybing/platform-go/internal/domain/view"
 	"github.com/linskybing/platform-go/internal/repository"
@@ -27,6 +28,7 @@ func setupProjectMocks(t *testing.T) (*application.ProjectService,
 	mockProject := mock.NewMockProjectRepo(ctrl)
 	mockView := mock.NewMockViewRepo(ctrl)
 	mockAudit := mock.NewMockAuditRepo(ctrl)
+	mockGroup := mock.NewMockGroupRepo(ctrl)
 
 	// Provide a default behavior for ListUsersByProjectID to avoid brittle ordering issues in tests.
 	mockView.EXPECT().ListUsersByProjectID(gomock.Any()).Return([]view.ProjectUserView{}, nil).AnyTimes()
@@ -35,6 +37,7 @@ func setupProjectMocks(t *testing.T) (*application.ProjectService,
 		Project: mockProject,
 		View:    mockView,
 		Audit:   mockAudit,
+		Group:   mockGroup,
 	}
 
 	svc := application.NewProjectService(repos)
@@ -54,8 +57,14 @@ func setupProjectMocks(t *testing.T) (*application.ProjectService,
 func TestProjectServiceCRUD(t *testing.T) {
 	svc, mockProject, _, _, c := setupProjectMocks(t)
 
+	// Get mockGroup from the service's repositories
+	mockGroup := svc.Repos.Group.(*mock.MockGroupRepo)
+
 	t.Run("CreateProject success", func(t *testing.T) {
 		input := project.CreateProjectDTO{ProjectName: "proj1", GID: 1}
+
+		// First, mock GetGroupByID (called for validation)
+		mockGroup.EXPECT().GetGroupByID(uint(1)).Return(group.Group{GID: 1, GroupName: "test-group"}, nil)
 
 		mockProject.EXPECT().CreateProject(gomock.Any()).Do(func(p *project.Project) {
 			// Simulate GORM's behavior of setting the PID after successful CREATE
@@ -81,6 +90,8 @@ func TestProjectServiceCRUD(t *testing.T) {
 		input := project.CreateProjectDTO{ProjectName: "proj2", GID: 1}
 		expectedErr := errors.New("database error")
 
+		// Mock GetGroupByID for validation
+		mockGroup.EXPECT().GetGroupByID(uint(1)).Return(group.Group{GID: 1, GroupName: "test-group"}, nil)
 		mockProject.EXPECT().CreateProject(gomock.Any()).Return(expectedErr)
 
 		project, err := svc.CreateProject(c, input)

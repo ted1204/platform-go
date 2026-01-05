@@ -215,11 +215,10 @@ func TestConfigFileHandler_Integration(t *testing.T) {
 		if resp.StatusCode == http.StatusForbidden {
 			t.Errorf("User should have permission to create instance")
 		}
-
 		// Only verify K8s deployment if K8s is available and creation succeeded
 		if resp.StatusCode == http.StatusOK && k8sValidator != nil {
 			namespace := fmt.Sprintf("proj-%d", ctx.TestProject.PID)
-			deploymentName := fmt.Sprintf("test-config-deployment")
+			deploymentName := "test-config-deployment"
 
 			exists, err := k8sValidator.DeploymentExists(namespace, deploymentName)
 			if err == nil && exists {

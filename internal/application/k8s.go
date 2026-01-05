@@ -557,9 +557,7 @@ func (s *K8sService) CreateProjectPVC(ctx context.Context, req job.VolumeSpec) (
 // delete project storage
 func (s *K8sService) DeleteProjectAllPVC(ctx context.Context, projectName string, projectID uint) error {
 	ns := utils.GenerateSafeResourceName("project", projectName, projectID)
-	if err := utils.DeleteNamespace(ns); err != nil {
-
-	}
+	_ = utils.DeleteNamespace(ns)
 	return nil
 }
 

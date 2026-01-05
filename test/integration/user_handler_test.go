@@ -118,7 +118,7 @@ func TestUserHandler_Integration(t *testing.T) {
 			Email:    &tempEmail,
 			Password: "password",
 		}
-		err := GetTestContext().Router.Run() // Initialize if needed
+		_ = GetTestContext().Router.Run() // Initialize if needed
 
 		// For this test, we'll use admin to create then user to delete
 		// In practice, users might not be able to delete themselves

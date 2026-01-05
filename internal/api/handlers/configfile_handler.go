@@ -271,7 +271,7 @@ func validateResourceLimits(rawYaml string) error {
 					reqQ, err1 := resource.ParseQuantity(reqMem)
 					limQ, err2 := resource.ParseQuantity(limMem)
 					if err1 == nil && err2 == nil && limQ.Cmp(reqQ) < 0 {
-						return fmt.Errorf("Memory limit should be >= request")
+						return fmt.Errorf("memory limit should be >= request")
 					}
 				}
 			}

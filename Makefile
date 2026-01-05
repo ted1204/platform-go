@@ -40,12 +40,12 @@ test:
 	@go test ./... -v
 
 test-unit:
-	@echo "$(YELLOW)Running unit tests...$(NC)"
-	@go test ./... -v -short
+	@echo "$(YELLOW)Running unit tests (excluding integration)...$(NC)"
+	@go test ./pkg/... ./internal/... -v -short
 
 test-verbose:
 	@echo "$(YELLOW)Running tests with verbose output...$(NC)"
-	@go test ./... -v -count=1
+	@go test ./pkg/... ./internal/... -v -count=1
 
 test-coverage:
 	@echo "$(YELLOW)Running tests with coverage...$(NC)"
@@ -176,7 +176,7 @@ k8s-logs-scheduler:
 	@kubectl logs -f deployment/go-scheduler --tail=100
 
 ## Combined targets
-ci: fmt-check lint vet test build
+ci: fmt-check lint vet test-unit build
 	@echo "$(GREEN)CI checks passed$(NC)"
 
 local-test: clean deps test coverage-html

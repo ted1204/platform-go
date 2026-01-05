@@ -132,7 +132,7 @@ func (e *K8sExecutor) followLogs(ctx context.Context, j *job.Job) {
 			line := scanner.Text()
 			_ = e.jobRepo.SaveLog(&job.JobLog{JobID: j.ID, Content: line})
 		}
-		stream.Close()
+		_ = stream.Close()
 		return
 	}
 }
@@ -219,7 +219,9 @@ func (e *K8sExecutor) readPodLog(ctx context.Context, pod *corev1.Pod) string {
 		log.Printf("pod log stream err: %v", err)
 		return ""
 	}
-	defer stream.Close()
+	defer func() {
+		_ = stream.Close()
+	}()
 	data, err := io.ReadAll(stream)
 	if err != nil {
 		log.Printf("read pod log err: %v", err)

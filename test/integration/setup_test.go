@@ -10,6 +10,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/joho/godotenv"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -63,15 +64,20 @@ func TestMain(m *testing.M) {
 }
 
 func setupTestEnvironment() error {
+	// Load test configuration from .env file in test/integration directory
+	envPath := ".env"
+	if err := godotenv.Load(envPath); err != nil {
+		log.Printf("Warning: Could not load %s file: %v", envPath, err)
+	}
+
 	// Load test configuration
-	os.Setenv("DB_HOST", getEnvOrDefault("TEST_DB_HOST", "localhost"))
-	os.Setenv("DB_PORT", getEnvOrDefault("TEST_DB_PORT", "5432"))
-	os.Setenv("DB_USER", getEnvOrDefault("TEST_DB_USER", "postgres"))
-	os.Setenv("DB_PASSWORD", getEnvOrDefault("TEST_DB_PASSWORD", "postgres"))
-	os.Setenv("DB_NAME", getEnvOrDefault("TEST_DB_NAME", "platform_test"))
-	os.Setenv("JWT_SECRET", "test-secret-key-for-integration-testing")
-	os.Setenv("SERVER_PORT", "8081")
-	os.Setenv("ISSUER", "test-platform")
+	_ = os.Setenv("DB_PORT", getEnvOrDefault("TEST_DB_PORT", "5432"))
+	_ = os.Setenv("DB_USER", getEnvOrDefault("TEST_DB_USER", "postgres"))
+	_ = os.Setenv("DB_PASSWORD", getEnvOrDefault("TEST_DB_PASSWORD", "postgres"))
+	_ = os.Setenv("DB_NAME", getEnvOrDefault("TEST_DB_NAME", "platform_test"))
+	_ = os.Setenv("JWT_SECRET", "test-secret-key-for-integration-testing")
+	_ = os.Setenv("SERVER_PORT", "8081")
+	_ = os.Setenv("ISSUER", "test-platform")
 
 	// Load config
 	config.LoadConfig()
