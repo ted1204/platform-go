@@ -14,14 +14,41 @@ func GenerateFilename(projectID uint) string {
 }
 
 var SplitYAMLDocuments = func(content string) []string {
-	parts := strings.Split(content, "---")
+	// Split on YAML document separators (--- at start of line)
+	// Use line-by-line processing to match --- that appears at the beginning of a line
+	lines := strings.Split(content, "\n")
 	docs := make([]string, 0)
-	for _, part := range parts {
-		trimmed := strings.TrimSpace(part)
-		if trimmed != "" {
-			docs = append(docs, trimmed)
+	var currentDoc []string
+
+	for _, line := range lines {
+		trimmedLine := strings.TrimSpace(line)
+		// Check if this line is a document separator (--- at start, possibly with whitespace)
+		// Must be exactly "---" or "--- " followed by space/comment, not part of a string
+		if trimmedLine == "---" || strings.HasPrefix(trimmedLine, "--- ") {
+			// Save the current document if it's not empty
+			if len(currentDoc) > 0 {
+				docStr := strings.TrimSpace(strings.Join(currentDoc, "\n"))
+				if docStr != "" {
+					docs = append(docs, docStr)
+				}
+				currentDoc = nil
+			}
+			// Skip the separator line itself
+			continue
+		}
+
+		// Add line to current document
+		currentDoc = append(currentDoc, line)
+	}
+
+	// Don't forget the last document
+	if len(currentDoc) > 0 {
+		docStr := strings.TrimSpace(strings.Join(currentDoc, "\n"))
+		if docStr != "" {
+			docs = append(docs, docStr)
 		}
 	}
+
 	return docs
 }
 

@@ -78,10 +78,22 @@ func FromProjectIDInPayload(dtoType any) GIDExtractor {
 		// Dynamically create a new DTO instance
 		dtoValue := reflect.New(reflect.TypeOf(dtoType)).Interface()
 
+		// Read and preserve the raw body for downstream handlers.
+		bodyBytes, err := c.GetRawData()
+		if err != nil {
+			return 0, err
+		}
+
+		// Restore body for form data binding
+		c.Request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+
 		// Bind form data directly
 		if err := c.ShouldBind(dtoValue); err != nil {
 			return 0, err
 		}
+
+		// Restore body again so the handler can bind again.
+		c.Request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
 
 		// Check if DTO has GetProjectID method
 		type ProjectIDGetter interface {
