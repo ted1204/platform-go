@@ -3,6 +3,7 @@ package application
 import (
 	"context"
 	"fmt"
+	"io"
 	"log"
 	"regexp"
 	"strings"
@@ -314,42 +315,49 @@ func (s *ImageService) PullImageAsync(name, tag string) (string, error) {
 			TTLSecondsAfterFinished: &ttl,
 			Template: corev1.PodTemplateSpec{
 				Spec: corev1.PodSpec{
-					RestartPolicy: corev1.RestartPolicyOnFailure,
+					RestartPolicy:      corev1.RestartPolicyOnFailure,
+					ImagePullSecrets:   []corev1.LocalObjectReference{{Name: "harbor-regcred"}},
+					ServiceAccountName: "default",
+					InitContainers: []corev1.Container{
+						{
+							Name:            "pull-source",
+							Image:           fullImage,
+							ImagePullPolicy: corev1.PullAlways,
+							Command:         []string{"/bin/sh", "-c", "echo 'Image pulled successfully'"},
+						},
+					},
 					Containers: []corev1.Container{
 						{
-							Name:            "puller",
-							Image:           "docker:24-dind",
+							Name:            "push-to-harbor",
+							Image:           "gcr.io/go-containerregistry/crane:latest",
 							ImagePullPolicy: corev1.PullIfNotPresent,
-							Command:         []string{"/bin/sh", "-c"},
-							Args: []string{
-								fmt.Sprintf(`
-									set -e
-									echo "Pulling image %s..."
-									docker pull %s
-									echo "Tagging image for Harbor..."
-									docker tag %s %s
-									echo "Pushing to Harbor..."
-									docker push %s
-									echo "Successfully pushed to Harbor"
-								`, fullImage, fullImage, fullImage, harborImage, harborImage),
-							},
-							SecurityContext: &corev1.SecurityContext{
-								Privileged: boolPtr(true),
+							Command:         []string{"crane", "copy", fullImage, harborImage, "--insecure"},
+							Env: []corev1.EnvVar{
+								{
+									Name:  "DOCKER_CONFIG",
+									Value: "/kaniko/.docker",
+								},
 							},
 							VolumeMounts: []corev1.VolumeMount{
 								{
-									Name:      "docker-sock",
-									MountPath: "/var/run/docker.sock",
+									Name:      "docker-config",
+									MountPath: "/kaniko/.docker",
 								},
 							},
 						},
 					},
 					Volumes: []corev1.Volume{
 						{
-							Name: "docker-sock",
+							Name: "docker-config",
 							VolumeSource: corev1.VolumeSource{
-								HostPath: &corev1.HostPathVolumeSource{
-									Path: "/var/run/docker.sock",
+								Secret: &corev1.SecretVolumeSource{
+									SecretName: "harbor-regcred",
+									Items: []corev1.KeyToPath{
+										{
+											Key:  ".dockerconfigjson",
+											Path: "config.json",
+										},
+									},
 								},
 							},
 						},
@@ -387,7 +395,9 @@ func (s *ImageService) monitorPullJob(jobID, imageName, imageTag string) {
 	for range ticker.C {
 		retries++
 		if retries > maxRetries {
-			pullTracker.UpdateJob(jobID, "failed", 0, "Job timeout")
+			logs := s.getPodLogsForJob(jobID)
+			errMsg := fmt.Sprintf("Job timeout. Logs: %s", logs)
+			pullTracker.UpdateJob(jobID, "failed", 0, errMsg)
 			pullTracker.RemoveJob(jobID)
 			return
 		}
@@ -395,8 +405,80 @@ func (s *ImageService) monitorPullJob(jobID, imageName, imageTag string) {
 		k8sJob, err := k8s.Clientset.BatchV1().Jobs("default").Get(context.TODO(), jobID, metav1.GetOptions{})
 		if err != nil {
 			log.Printf("Error getting job %s: %v", jobID, err)
-			pullTracker.UpdateJob(jobID, "pulling", 50, "Monitoring...")
 			continue
+		}
+
+		// Get pod status for real-time updates
+		labelSelector := fmt.Sprintf("job-name=%s", jobID)
+		pods, err := k8s.Clientset.CoreV1().Pods("default").List(context.TODO(), metav1.ListOptions{
+			LabelSelector: labelSelector,
+		})
+
+		var statusMsg string
+		var progress int
+
+		if err == nil && len(pods.Items) > 0 {
+			pod := &pods.Items[0]
+
+			// Check init container status (pulling source image)
+			if len(pod.Status.InitContainerStatuses) > 0 {
+				initStatus := pod.Status.InitContainerStatuses[0]
+				if initStatus.State.Running != nil {
+					statusMsg = "Pulling source image..."
+					progress = 30
+				} else if initStatus.State.Terminated != nil {
+					if initStatus.State.Terminated.ExitCode == 0 {
+						statusMsg = "Source image pulled, pushing to Harbor..."
+						progress = 60
+					} else {
+						logs := s.getPodLogsForJob(jobID)
+						errMsg := fmt.Sprintf("Failed to pull source image. Logs: %s", logs)
+						pullTracker.UpdateJob(jobID, "failed", 0, errMsg)
+						pullTracker.RemoveJob(jobID)
+						return
+					}
+				} else if initStatus.State.Waiting != nil {
+					statusMsg = fmt.Sprintf("Waiting: %s", initStatus.State.Waiting.Reason)
+					progress = 10
+				}
+			}
+
+			// Check main container status (pushing to Harbor)
+			if len(pod.Status.ContainerStatuses) > 0 {
+				containerStatus := pod.Status.ContainerStatuses[0]
+				if containerStatus.State.Running != nil {
+					statusMsg = "Pushing to Harbor..."
+					progress = 80
+				} else if containerStatus.State.Waiting != nil {
+					if statusMsg == "" {
+						statusMsg = fmt.Sprintf("Waiting: %s", containerStatus.State.Waiting.Reason)
+						progress = 50
+					}
+				}
+			}
+
+			// Check pod phase
+			switch pod.Status.Phase {
+			case corev1.PodPending:
+				if statusMsg == "" {
+					statusMsg = "Pod pending..."
+					progress = 5
+				}
+			case corev1.PodRunning:
+				if statusMsg == "" {
+					statusMsg = "Processing..."
+					progress = 50
+				}
+			case corev1.PodFailed:
+				logs := s.getPodLogsForJob(jobID)
+				errMsg := fmt.Sprintf("Pod failed. Logs: %s", logs)
+				pullTracker.UpdateJob(jobID, "failed", 0, errMsg)
+				pullTracker.RemoveJob(jobID)
+				return
+			}
+		} else {
+			statusMsg = "Initializing..."
+			progress = 5
 		}
 
 		// Check if job succeeded
@@ -416,18 +498,61 @@ func (s *ImageService) monitorPullJob(jobID, imageName, imageTag string) {
 
 		// Check if job failed
 		if k8sJob.Status.Failed > 0 {
-			pullTracker.UpdateJob(jobID, "failed", 0, "Job failed to pull image")
+			logs := s.getPodLogsForJob(jobID)
+			errMsg := fmt.Sprintf("Job failed. Logs: %s", logs)
+			pullTracker.UpdateJob(jobID, "failed", 0, errMsg)
 			pullTracker.RemoveJob(jobID)
 			return
 		}
 
-		// Update progress
-		progress := 20 + (retries * 70 / maxRetries)
-		if progress > 90 {
-			progress = 90
-		}
-		pullTracker.UpdateJob(jobID, "pulling", progress, fmt.Sprintf("Pulling... (%d%%)", progress))
+		// Update with real status
+		pullTracker.UpdateJob(jobID, "pulling", progress, statusMsg)
 	}
+}
+
+// getPodLogsForJob retrieves the logs from all pods associated with a job
+func (s *ImageService) getPodLogsForJob(jobName string) string {
+	ctx := context.TODO()
+	labelSelector := fmt.Sprintf("job-name=%s", jobName)
+
+	pods, err := k8s.Clientset.CoreV1().Pods("default").List(ctx, metav1.ListOptions{
+		LabelSelector: labelSelector,
+	})
+	if err != nil {
+		return fmt.Sprintf("Error listing pods: %v", err)
+	}
+
+	if len(pods.Items) == 0 {
+		return "No pods found for this job"
+	}
+
+	var logBuilder strings.Builder
+	for i := range pods.Items {
+		pod := &pods.Items[i]
+		logBuilder.WriteString(fmt.Sprintf("=== Pod: %s ===\n", pod.Name))
+
+		req := k8s.Clientset.CoreV1().Pods(pod.Namespace).GetLogs(pod.Name, &corev1.PodLogOptions{
+			TailLines: func() *int64 { i := int64(100); return &i }(), // Last 100 lines
+		})
+
+		stream, err := req.Stream(ctx)
+		if err != nil {
+			logBuilder.WriteString(fmt.Sprintf("Error getting logs: %v\n", err))
+			continue
+		}
+
+		data, err := io.ReadAll(stream)
+		stream.Close()
+		if err != nil {
+			logBuilder.WriteString(fmt.Sprintf("Error reading logs: %v\n", err))
+			continue
+		}
+
+		logBuilder.Write(data)
+		logBuilder.WriteString("\n")
+	}
+
+	return logBuilder.String()
 }
 
 // GetPullJobStatus returns the current status of a pull job
