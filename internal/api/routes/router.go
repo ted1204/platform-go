@@ -54,6 +54,8 @@ func RegisterRoutes(r *gin.Engine) {
 		images := auth.Group("/images")
 		{
 			images.GET("/allowed", handlers_instance.Image.ListAllowed)
+			images.GET("/pull-active", authMiddleware.Admin(), handlers_instance.Image.GetActivePullJobs)
+			images.GET("/pull-failed", authMiddleware.Admin(), handlers_instance.Image.GetFailedPullJobs)
 			images.POST("/pull", authMiddleware.Admin(), handlers_instance.Image.PullImage)
 			images.DELETE("/allowed/:id", authMiddleware.Admin(), handlers_instance.Image.DeleteAllowedImage)
 		}

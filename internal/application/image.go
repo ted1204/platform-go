@@ -36,14 +36,18 @@ type PullJobStatus struct {
 
 // PullJobTracker holds active pull jobs and their status
 type PullJobTracker struct {
-	mu    sync.RWMutex
-	jobs  map[string]*PullJobStatus
-	chans map[string][]chan *PullJobStatus
+	mu         sync.RWMutex
+	jobs       map[string]*PullJobStatus
+	chans      map[string][]chan *PullJobStatus
+	failedJobs []*PullJobStatus // Keep history of failed jobs
+	maxHistory int
 }
 
 var pullTracker = &PullJobTracker{
-	jobs:  make(map[string]*PullJobStatus),
-	chans: make(map[string][]chan *PullJobStatus),
+	jobs:       make(map[string]*PullJobStatus),
+	chans:      make(map[string][]chan *PullJobStatus),
+	failedJobs: make([]*PullJobStatus, 0),
+	maxHistory: 50,
 }
 
 func (pt *PullJobTracker) AddJob(jobID, imageName, imageTag string) {
@@ -99,7 +103,44 @@ func (pt *PullJobTracker) Subscribe(jobID string) <-chan *PullJobStatus {
 func (pt *PullJobTracker) RemoveJob(jobID string) {
 	pt.mu.Lock()
 	defer pt.mu.Unlock()
+
+	// Save failed job to history before removing
+	if job, ok := pt.jobs[jobID]; ok && job.Status == "failed" {
+		pt.failedJobs = append(pt.failedJobs, job)
+		// Keep only recent failed jobs
+		if len(pt.failedJobs) > pt.maxHistory {
+			pt.failedJobs = pt.failedJobs[len(pt.failedJobs)-pt.maxHistory:]
+		}
+	}
+
 	delete(pt.jobs, jobID)
+}
+
+func (pt *PullJobTracker) GetFailedJobs(limit int) []*PullJobStatus {
+	pt.mu.RLock()
+	defer pt.mu.RUnlock()
+
+	if limit <= 0 || limit > len(pt.failedJobs) {
+		limit = len(pt.failedJobs)
+	}
+
+	// Return most recent first
+	result := make([]*PullJobStatus, 0, limit)
+	for i := len(pt.failedJobs) - 1; i >= len(pt.failedJobs)-limit && i >= 0; i-- {
+		result = append(result, pt.failedJobs[i])
+	}
+	return result
+}
+
+func (pt *PullJobTracker) GetActiveJobs() []*PullJobStatus {
+	pt.mu.RLock()
+	defer pt.mu.RUnlock()
+
+	result := make([]*PullJobStatus, 0, len(pt.jobs))
+	for _, job := range pt.jobs {
+		result = append(result, job)
+	}
+	return result
 }
 
 type ImageService struct {
@@ -397,6 +438,16 @@ func (s *ImageService) GetPullJobStatus(jobID string) *PullJobStatus {
 // SubscribeToPullJob returns a channel that receives status updates for a pull job
 func (s *ImageService) SubscribeToPullJob(jobID string) <-chan *PullJobStatus {
 	return pullTracker.Subscribe(jobID)
+}
+
+// GetFailedPullJobs returns recent failed pull jobs
+func (s *ImageService) GetFailedPullJobs(limit int) []*PullJobStatus {
+	return pullTracker.GetFailedJobs(limit)
+}
+
+// GetActivePullJobs returns currently active pull jobs
+func (s *ImageService) GetActivePullJobs() []*PullJobStatus {
+	return pullTracker.GetActiveJobs()
 }
 
 // validateNameAndTag performs lightweight format checks; returns warning string but does not block.

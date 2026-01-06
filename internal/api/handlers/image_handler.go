@@ -245,6 +245,25 @@ func (h *ImageHandler) GetPullJobStatus(c *gin.Context) {
 	c.JSON(http.StatusOK, response.SuccessResponse{Data: status})
 }
 
+// GetFailedPullJobs retrieves recent failed pull jobs (admin)
+func (h *ImageHandler) GetFailedPullJobs(c *gin.Context) {
+	limit := 10
+	if limitStr := c.Query("limit"); limitStr != "" {
+		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 && l <= 100 {
+			limit = l
+		}
+	}
+
+	failedJobs := h.service.GetFailedPullJobs(limit)
+	c.JSON(http.StatusOK, response.SuccessResponse{Data: failedJobs})
+}
+
+// GetActivePullJobs retrieves currently active pull jobs (admin)
+func (h *ImageHandler) GetActivePullJobs(c *gin.Context) {
+	activeJobs := h.service.GetActivePullJobs()
+	c.JSON(http.StatusOK, response.SuccessResponse{Data: activeJobs})
+}
+
 // Delete allowed image (admin)
 func (h *ImageHandler) DeleteAllowedImage(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
