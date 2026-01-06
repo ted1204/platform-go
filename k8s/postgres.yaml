@@ -3,7 +3,7 @@ kind: PersistentVolumeClaim
 metadata:
   name: pg-pvc
 spec:
-  storageClassName: longhorn
+  storageClassName: nfs-client
   accessModes:
     - ReadWriteOnce
   resources:
@@ -28,7 +28,7 @@ spec:
         kubernetes.io/hostname: gpu1
       containers:
         - name: postgres
-          image: 192.168.109.1:30002/library/postgres-with-pg_cron:latest
+          image: 192.168.109.1:30003/library/postgres-with-pg_cron:latest
           imagePullPolicy: Always
           ports:
             - containerPort: 5432
@@ -51,7 +51,7 @@ spec:
       volumes:
         - name: pgdata
           hostPath:
-            path: /Users/sky/tmp
+            path: /home/user/tmp
             type: Directory
 ---
 apiVersion: v1

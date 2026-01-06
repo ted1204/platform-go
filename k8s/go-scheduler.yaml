@@ -16,11 +16,13 @@ spec:
         app: go-scheduler
         component: job-scheduler
     spec:
-      serviceAccountName: admin-sa
+      serviceAccountName: scheduler-sa
       dnsPolicy: ClusterFirst
+      nodeSelector:
+        kubernetes.io/hostname: gpu1
       containers:
         - name: go-scheduler
-          image: linskybing/platform-go-scheduler:latest
+          image: 192.168.109.1:30003/library/platform-go-scheduler:latest
           imagePullPolicy: Always
           command: ["sleep", "infinity"]
           resources:
@@ -73,7 +75,7 @@ spec:
       volumes:
         - name: local-data
           hostPath:
-            path: /Users/sky/k8s/platform-go
+            path: /home/user/k8s-gpu-platform/backend
             type: Directory
 ---
 apiVersion: v1

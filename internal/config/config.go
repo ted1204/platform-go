@@ -32,7 +32,7 @@ var (
 	MinioBucket             string
 	Scheme                  = runtime.NewScheme()
 	DefaultStorageName      = "project"
-	DefaultStorageClassName = "longhorn"
+	DefaultStorageClassName = "nfs-client"
 	DefaultStorageSize      = "3Gi"
 	UserPVSize              = "50Gi"
 	// Environment
@@ -68,6 +68,8 @@ func LoadConfig() {
 	MinioSecretKey = getEnv("MINIO_SECRET_KEY", "minio123")
 	MinioBucket = getEnv("MINIO_BUCKET", "platform-bucket")
 	MinioUseSSL, _ = strconv.ParseBool(getEnv("MINIO_USE_SSL", "true"))
+
+	DefaultStorageClassName = getEnv("DEFAULT_STORAGE_CLASS_NAME", "nfs-client")
 
 	// Environment
 	env := getEnv("GO_ENV", "development")

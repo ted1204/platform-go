@@ -1,5 +1,7 @@
 FROM golang:1.24 AS builder
 
+ARG MAIN_PATH=./cmd/api/main.go
+
 WORKDIR /app
 
 COPY go.mod go.sum ./
@@ -9,7 +11,7 @@ RUN go mod download
 COPY . .
 
 # Build the final static binary for Linux
-RUN CGO_ENABLED=0 GOOS=linux go build -o main ./cmd/api/main.go
+RUN CGO_ENABLED=0 GOOS=linux go build -o main ${MAIN_PATH}
 
 # --- Final Stage: Use a minimal base image ---
 FROM ubuntu:latest
@@ -33,3 +35,6 @@ COPY --from=builder /app/main .
 # COPY --from=builder /app/config ./config
 
 EXPOSE 8080
+
+# Default entrypoint (can be overridden by k8s manifest)
+CMD ["./main"]

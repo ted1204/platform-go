@@ -144,7 +144,6 @@ clean:
 k8s-deploy:
 	@echo "$(YELLOW)Deploying to Kubernetes...$(NC)"
 	@kubectl apply -f k8s/secret.yaml
-	@kubectl apply -f k8s/storage.yaml
 	@kubectl apply -f k8s/postgres.yaml
 	@kubectl apply -f k8s/ca.yaml
 	@kubectl apply -f k8s/go-api.yaml
