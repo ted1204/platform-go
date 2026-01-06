@@ -11,5 +11,4 @@ type Repository interface {
 	Update(project *Project) error
 	Delete(pid uint) error
 	UpdateGPUQuota(pid uint, quota int) error
-	UpdateMPSLimit(pid uint, limit int) error
 }
