@@ -19,11 +19,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// boolPtr returns a pointer to a boolean value
-func boolPtr(b bool) *bool {
-	return &b
-}
-
 // PullJobStatus represents the status of an image pull job
 type PullJobStatus struct {
 	JobID     string    `json:"job_id"`

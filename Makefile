@@ -106,7 +106,17 @@ fmt-check:
 
 lint:
 	@echo "$(YELLOW)Running golangci-lint...$(NC)"
-	@golangci-lint run ./... --timeout=5m
+	@if command -v golangci-lint > /dev/null 2>&1; then \
+		golangci-lint run ./... --timeout=5m; \
+	elif [ -f $(HOME)/go/bin/golangci-lint ]; then \
+		$(HOME)/go/bin/golangci-lint run ./... --timeout=5m; \
+	elif [ -f $(HOME)/bin/golangci-lint ]; then \
+		$(HOME)/bin/golangci-lint run ./... --timeout=5m; \
+	else \
+		echo "$(RED)golangci-lint not found. Installing...$(NC)"; \
+		go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest; \
+		$(HOME)/go/bin/golangci-lint run ./... --timeout=5m; \
+	fi
 
 vet:
 	@echo "$(YELLOW)Running go vet...$(NC)"
