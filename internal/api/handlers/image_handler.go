@@ -180,22 +180,61 @@ func (h *ImageHandler) RemoveProjectImage(c *gin.Context) {
 	c.JSON(http.StatusOK, response.SuccessResponse{Message: "image removed from project"})
 }
 
-// Trigger cluster pull (admin)
+// PullImage handles pulling multiple images asynchronously (admin)
 func (h *ImageHandler) PullImage(c *gin.Context) {
 	var payload struct {
-		Name string `json:"name" binding:"required"`
-		Tag  string `json:"tag" binding:"required"`
+		Names []string `json:"names" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&payload); err != nil {
 		c.JSON(http.StatusBadRequest, response.ErrorResponse{Error: err.Error()})
 		return
 	}
-	// TODO: implement actual pull. For now, accept and return success.
-	if err := h.service.PullImage(payload.Name, payload.Tag); err != nil {
-		c.JSON(http.StatusInternalServerError, response.ErrorResponse{Error: err.Error()})
+
+	type PullRequest struct {
+		Name string `json:"name"`
+		Tag  string `json:"tag"`
+	}
+
+	var requests []PullRequest
+	for _, fullImage := range payload.Names {
+		// Parse "name:tag" format
+		requests = append(requests, PullRequest{
+			Name: fullImage,
+			Tag:  "latest",
+		})
+	}
+
+	var jobIDs []string
+	for _, req := range requests {
+		jobID, err := h.service.PullImageAsync(req.Name, req.Tag)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, response.ErrorResponse{Error: err.Error()})
+			return
+		}
+		jobIDs = append(jobIDs, jobID)
+	}
+
+	c.JSON(http.StatusOK, response.SuccessResponse{Data: gin.H{
+		"job_ids": jobIDs,
+		"message": "Images queued for pulling",
+	}})
+}
+
+// GetPullJobStatus retrieves the current status of a pull job
+func (h *ImageHandler) GetPullJobStatus(c *gin.Context) {
+	jobID := c.Param("job_id")
+	if jobID == "" {
+		c.JSON(http.StatusBadRequest, response.ErrorResponse{Error: "job_id required"})
 		return
 	}
-	c.JSON(http.StatusOK, response.SuccessResponse{Message: "pull queued"})
+
+	status := h.service.GetPullJobStatus(jobID)
+	if status == nil {
+		c.JSON(http.StatusNotFound, response.ErrorResponse{Error: "job not found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, response.SuccessResponse{Data: status})
 }
 
 // Delete allowed image (admin)

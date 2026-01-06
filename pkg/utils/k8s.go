@@ -557,9 +557,13 @@ var CreateNFSDeployment = func(ns string, pvcName string) error {
 							},
 							SecurityContext: &corev1.SecurityContext{
 								Privileged: &privileged, // Required for NFS kernel capabilities
+								Capabilities: &corev1.Capabilities{
+									Add: []corev1.Capability{"SYS_ADMIN", "SETPCAP", "DAC_READ_SEARCH"},
+								},
 							},
 							VolumeMounts: []corev1.VolumeMount{
 								{Name: "hub-storage", MountPath: "/exports"},
+								{Name: "modules", MountPath: "/lib/modules", ReadOnly: true},
 							},
 						},
 					},
@@ -569,6 +573,14 @@ var CreateNFSDeployment = func(ns string, pvcName string) error {
 							VolumeSource: corev1.VolumeSource{
 								PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
 									ClaimName: pvcName,
+								},
+							},
+						},
+						{
+							Name: "modules",
+							VolumeSource: corev1.VolumeSource{
+								HostPath: &corev1.HostPathVolumeSource{
+									Path: "/lib/modules",
 								},
 							},
 						},

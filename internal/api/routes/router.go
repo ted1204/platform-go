@@ -35,6 +35,13 @@ func RegisterRoutes(r *gin.Engine) {
 		auth.GET("/ws/monitoring/:namespace", handlers.WatchNamespaceHandler)
 		auth.GET("/ws/jobs", handlers_instance.Job.StreamJobs)
 		auth.GET("/ws/jobs/:id/logs", handlers_instance.Job.StreamJobLogs)
+		// Image pull monitoring WebSocket
+		auth.GET("/ws/image-pull/:job_id", func(c *gin.Context) {
+			handlers.WatchImagePullHandler(c, services_instance.Image)
+		})
+		auth.GET("/ws/image-pull-all", func(c *gin.Context) {
+			handlers.WatchMultiplePullJobsHandler(c, services_instance.Image)
+		})
 
 		imageReq := auth.Group("/image-requests")
 		{

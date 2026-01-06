@@ -37,6 +37,12 @@ func CreateFileBrowserPod(ctx context.Context, ns string, pvcName string) (*core
 			Labels:    map[string]string{"app": podName}, // Unique label for Service selector
 		},
 		Spec: corev1.PodSpec{
+			// Set pod-level security context for consistent file permissions
+			SecurityContext: &corev1.PodSecurityContext{
+				RunAsUser:  int64Ptr(1000), // Non-root user
+				RunAsGroup: int64Ptr(1000), // Non-root group
+				FSGroup:    int64Ptr(1000), // All files created will belong to this group
+			},
 			Containers: []corev1.Container{
 				{
 					Name:  "filebrowser",
@@ -194,16 +200,18 @@ func StartUserHubBrowser(ctx context.Context, username string) (string, error) {
 			Labels:    map[string]string{"app": appName},
 		},
 		Spec: corev1.PodSpec{
+			// Set pod-level security context for consistent file permissions across all pods
+			SecurityContext: &corev1.PodSecurityContext{
+				RunAsUser:  int64Ptr(1000), // Non-root user (matches training pods)
+				RunAsGroup: int64Ptr(1000), // Non-root group
+				FSGroup:    int64Ptr(1000), // All files created will belong to this group
+			},
 			Containers: []corev1.Container{
 				{
 					Name:  "filebrowser",
 					Image: "filebrowser/filebrowser:v2",
 					Args:  []string{"--noauth", "--root=/srv", "--address=0.0.0.0", "--baseurl=/k8s/users/proxy"},
 					Ports: []corev1.ContainerPort{{ContainerPort: 80}},
-					SecurityContext: &corev1.SecurityContext{
-						RunAsUser:  int64Ptr(0),
-						RunAsGroup: int64Ptr(0),
-					},
 					VolumeMounts: []corev1.VolumeMount{
 						{
 							Name:      "nfs-data",

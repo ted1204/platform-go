@@ -122,6 +122,69 @@ func (s *ConfigFileService) extractAndValidateImages(jsonBytes []byte, projectID
 	return nil
 }
 
+// injectHarborPrefix modifies image references to use Harbor registry for pulled images
+func (s *ConfigFileService) injectHarborPrefix(jsonBytes []byte, projectID uint) ([]byte, error) {
+	var obj map[string]interface{}
+	if err := json.Unmarshal(jsonBytes, &obj); err != nil {
+		return jsonBytes, nil // If not valid JSON, let k8s handle the error
+	}
+
+	// Helper function to check if image has been pulled
+	isImagePulled := func(imageName, imageTag string) bool {
+		allowed, err := s.imageService.GetAllowedImage(imageName, imageTag, projectID)
+		if err != nil || allowed == nil {
+			return false
+		}
+		return allowed.IsPulled
+	}
+
+	// Helper function to process container images
+	processContainers := func(containers []interface{}) {
+		for _, c := range containers {
+			if cont, ok := c.(map[string]interface{}); ok {
+				if img, ok := cont["image"].(string); ok {
+					// Skip if already has Harbor prefix
+					if strings.HasPrefix(img, config.HarborPrivatePrefix) {
+						continue
+					}
+
+					parts := strings.Split(img, ":")
+					if len(parts) != 2 {
+						continue // Skip malformed images
+					}
+
+					imageName := parts[0]
+					imageTag := parts[1]
+
+					// If image is pulled, inject Harbor prefix
+					if isImagePulled(imageName, imageTag) {
+						cont["image"] = config.HarborPrivatePrefix + img
+					}
+				}
+			}
+		}
+	}
+
+	// Check spec.containers (Pod/Deployment)
+	if spec, ok := obj["spec"].(map[string]interface{}); ok {
+		// Direct containers (Pod)
+		if containers, ok := spec["containers"].([]interface{}); ok {
+			processContainers(containers)
+		}
+
+		// Deployment template
+		if template, ok := spec["template"].(map[string]interface{}); ok {
+			if tSpec, ok := template["spec"].(map[string]interface{}); ok {
+				if containers, ok := tSpec["containers"].([]interface{}); ok {
+					processContainers(containers)
+				}
+			}
+		}
+	}
+
+	return json.Marshal(obj)
+}
+
 func (s *ConfigFileService) ListConfigFiles() ([]configfile.ConfigFile, error) {
 	return s.Repos.ConfigFile.ListConfigFiles()
 }
@@ -463,6 +526,12 @@ func (s *ConfigFileService) CreateInstance(c *gin.Context, id uint) error {
 			return err
 		}
 
+		// Inject Harbor prefix for pulled images
+		jsonBytes, err = s.injectHarborPrefix(jsonBytes, configfile.ProjectID)
+		if err != nil {
+			return err
+		}
+
 		// // Normalize NFS servers: if path points to project storage (/srv/...), force project NFS server
 		// jsonBytes, err = s.rewriteNfsServers(jsonBytes, nfsServerAddress, projectNfsServerAddress)
 		// if err != nil {
@@ -479,6 +548,12 @@ func (s *ConfigFileService) CreateInstance(c *gin.Context, id uint) error {
 
 		// Validate and inject GPU configurations if GPU resources are requested
 		jsonBytes, err = s.ValidateAndInjectGPUConfig(jsonBytes, project)
+		if err != nil {
+			return err
+		}
+
+		// Inject fsGroup to ensure consistent file permissions for mounted volumes
+		jsonBytes, err = s.injectFSGroup(jsonBytes)
 		if err != nil {
 			return err
 		}
@@ -806,4 +881,70 @@ func (s *ConfigFileService) deleteConfigFileInstance(configfile *configfile.Conf
 	}
 
 	return resources, nil
+}
+
+// injectFSGroup injects fsGroup into pod specs to ensure consistent file permissions for mounted volumes.
+// This is crucial for NFS and PVC mounts where multiple pods/containers need consistent access.
+// fsGroup ensures all files created in the volume belong to the specified group (1000).
+func (s *ConfigFileService) injectFSGroup(jsonBytes []byte) ([]byte, error) {
+	var obj map[string]interface{}
+	if err := json.Unmarshal(jsonBytes, &obj); err != nil {
+		return nil, err
+	}
+
+	kind, ok := obj["kind"].(string)
+	if !ok {
+		return jsonBytes, nil
+	}
+
+	var podSpec map[string]interface{}
+
+	// Extract pod spec from different resource kinds
+	switch kind {
+	case "Pod":
+		if spec, ok := obj["spec"].(map[string]interface{}); ok {
+			podSpec = spec
+		}
+	case "Deployment", "StatefulSet", "DaemonSet", "Job":
+		if spec, ok := obj["spec"].(map[string]interface{}); ok {
+			if template, ok := spec["template"].(map[string]interface{}); ok {
+				if tSpec, ok := template["spec"].(map[string]interface{}); ok {
+					podSpec = tSpec
+				}
+			}
+		}
+	default:
+		return jsonBytes, nil
+	}
+
+	if podSpec == nil {
+		return jsonBytes, nil
+	}
+
+	// Check if spec has volumes (PVC or NFS mounts)
+	if _, hasVolumes := podSpec["volumes"]; !hasVolumes {
+		return jsonBytes, nil
+	}
+
+	// Create or update securityContext
+	secContext, ok := podSpec["securityContext"].(map[string]interface{})
+	if !ok {
+		secContext = make(map[string]interface{})
+		podSpec["securityContext"] = secContext
+	}
+
+	// Set fsGroup to 1000 to ensure consistent file permissions for all mounted volumes
+	// This allows all pods using the same volume to read/write files created by any pod
+	int64Value := int64(1000)
+	secContext["fsGroup"] = int64Value
+
+	// Also set runAsUser and runAsGroup for consistency if not already set
+	if _, hasRunAsUser := secContext["runAsUser"]; !hasRunAsUser {
+		secContext["runAsUser"] = int64Value
+	}
+	if _, hasRunAsGroup := secContext["runAsGroup"]; !hasRunAsGroup {
+		secContext["runAsGroup"] = int64Value
+	}
+
+	return json.Marshal(obj)
 }

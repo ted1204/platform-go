@@ -22,5 +22,6 @@ type AllowedImage struct {
 	Tag       string `json:"tag"`
 	ProjectID *uint  `json:"project_id"`                     // nil if global
 	IsGlobal  bool   `json:"is_global" gorm:"default:false"` // true if admin-approved for all
+	IsPulled  bool   `json:"is_pulled" gorm:"default:false"` // true if image has been pulled to cluster
 	CreatedBy uint   `json:"created_by"`                     // user who added this image
 }

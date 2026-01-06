@@ -16,7 +16,9 @@ type ImageRepo interface {
 	FindAllowedImagesForProject(projectID uint) ([]image.AllowedImage, error)
 	FindAllowedByID(id uint) (*image.AllowedImage, error)
 	ValidateImageForProject(name, tag string, projectID uint) (bool, error)
+	FindAllowedImage(name, tag string, projectID uint) (*image.AllowedImage, error)
 	DeleteAllowedImage(id uint) error
+	UpdateImagePulledStatus(name, tag string, isPulled bool) error
 }
 
 type DBImageRepo struct{}
@@ -89,6 +91,25 @@ func (r *DBImageRepo) ValidateImageForProject(name, tag string, projectID uint) 
 	return count > 0, err
 }
 
+// FindAllowedImage retrieves an allowed image by name, tag, and project
+func (r *DBImageRepo) FindAllowedImage(name, tag string, projectID uint) (*image.AllowedImage, error) {
+	var img image.AllowedImage
+	err := db.DB.Where("name = ? AND tag = ? AND (is_global = ? OR project_id = ?)",
+		name, tag, true, projectID).
+		First(&img).Error
+	if err != nil {
+		return nil, err
+	}
+	return &img, nil
+}
+
 func (r *DBImageRepo) DeleteAllowedImage(id uint) error {
 	return db.DB.Delete(&image.AllowedImage{}, id).Error
+}
+
+// UpdateImagePulledStatus marks an image as pulled after successful pull job
+func (r *DBImageRepo) UpdateImagePulledStatus(name, tag string, isPulled bool) error {
+	return db.DB.Model(&image.AllowedImage{}).
+		Where("name = ? AND tag = ?", name, tag).
+		Update("is_pulled", isPulled).Error
 }

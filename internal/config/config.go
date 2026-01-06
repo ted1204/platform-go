@@ -80,7 +80,7 @@ func LoadConfig() {
 	ProjectStorageServiceName = getEnv("PROJECT_STORAGE_SERVICE_NAME", "storage-svc")
 	ProjectStorageBrowserSVCName = getEnv("PROJECT_STORAGE_BROWSER_SVC_NAME", "filebrowser-project-svc")
 	ProjectNfsServiceName = getEnv("PROJECT_NFS_SERVICE_NAME", "storage-svc")
-	HarborPrivatePrefix = getEnv("HARBOR_PRIVATE_PREFIX", "192.168.109.1:30002/library/")
+	HarborPrivatePrefix = getEnv("HARBOR_PRIVATE_PREFIX", "192.168.109.1:30003/library/")
 }
 
 func getEnv(key, fallback string) string {

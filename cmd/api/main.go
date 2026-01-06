@@ -8,6 +8,7 @@ import (
 	"github.com/linskybing/platform-go/internal/api/routes"
 	"github.com/linskybing/platform-go/internal/config"
 	"github.com/linskybing/platform-go/internal/config/db"
+	"github.com/linskybing/platform-go/internal/cron"
 	"github.com/linskybing/platform-go/internal/domain/audit"
 	"github.com/linskybing/platform-go/internal/domain/configfile"
 	"github.com/linskybing/platform-go/internal/domain/form"
@@ -60,6 +61,12 @@ func main() {
 
 	// Create database views after tables are created
 	db.CreateViews()
+
+	// Initialize Docker cleanup CronJob
+	if err := cron.CreateDockerCleanupCronJob(); err != nil {
+		log.Printf("Warning: Failed to create Docker cleanup CronJob: %v", err)
+		// Don't fail startup if CronJob creation fails
+	}
 
 	gin.SetMode(gin.ReleaseMode)
 	router := gin.Default()
