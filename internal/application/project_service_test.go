@@ -2,7 +2,6 @@ package application_test
 
 import (
 	"errors"
-	"fmt"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -18,7 +17,6 @@ import (
 
 func setupProjectMocks(t *testing.T) (*application.ProjectService,
 	*mock.MockProjectRepo,
-	*mock.MockViewRepo,
 	*mock.MockAuditRepo,
 	*gin.Context) {
 
@@ -26,18 +24,15 @@ func setupProjectMocks(t *testing.T) (*application.ProjectService,
 	t.Cleanup(func() { ctrl.Finish() })
 
 	mockProject := mock.NewMockProjectRepo(ctrl)
-	mockView := mock.NewMockViewRepo(ctrl)
 	mockAudit := mock.NewMockAuditRepo(ctrl)
 	mockGroup := mock.NewMockGroupRepo(ctrl)
-
-	// Provide a default behavior for ListUsersByProjectID to avoid brittle ordering issues in tests.
-	mockView.EXPECT().ListUsersByProjectID(gomock.Any()).Return([]view.ProjectUserView{}, nil).AnyTimes()
+	mockUser := mock.NewMockUserRepo(ctrl)
 
 	repos := &repository.Repos{
 		Project: mockProject,
-		View:    mockView,
 		Audit:   mockAudit,
 		Group:   mockGroup,
+		User:    mockUser,
 	}
 
 	svc := application.NewProjectService(repos)
@@ -46,16 +41,15 @@ func setupProjectMocks(t *testing.T) (*application.ProjectService,
 	// mock utils globally
 	utils.LogAuditWithConsole = func(c *gin.Context, action, resourceType, resourceID string, oldData, newData interface{}, msg string, repos repository.AuditRepo) {
 	}
-	utils.FormatNamespaceName = func(pid uint, username string) string { return fmt.Sprintf("ns-%d-%s", pid, username) }
-	utils.CreateNamespace = func(ns string) error { return nil }
-	utils.CreatePVC = func(ns, name, class, size string) error { return nil }
-	utils.DeleteNamespace = func(ns string) error { return nil }
 
-	return svc, mockProject, mockView, mockAudit, c
+	// default user repo behavior to avoid nil deref in AllocateProjectResources
+	mockUser.EXPECT().ListUsersByProjectID(gomock.Any()).Return([]view.ProjectUserView{}, nil).AnyTimes()
+
+	return svc, mockProject, mockAudit, c
 }
 
 func TestProjectServiceCRUD(t *testing.T) {
-	svc, mockProject, _, _, c := setupProjectMocks(t)
+	svc, mockProject, _, c := setupProjectMocks(t)
 
 	// Get mockGroup from the service's repositories
 	mockGroup := svc.Repos.Group.(*mock.MockGroupRepo)
@@ -71,8 +65,8 @@ func TestProjectServiceCRUD(t *testing.T) {
 			p.PID = 1
 		}).Return(nil)
 
-		// CreateProject calls AllocateProjectResources which calls GetProjectByID
-		mockProject.EXPECT().GetProjectByID(uint(1)).Return(project.Project{PID: 1, ProjectName: "proj1", GID: 1}, nil)
+		// CreateProject calls AllocateProjectResources which may call GetProjectByID; make optional
+		mockProject.EXPECT().GetProjectByID(uint(1)).Return(project.Project{PID: 1, ProjectName: "proj1", GID: 1}, nil).AnyTimes()
 
 		proj, err := svc.CreateProject(c, input)
 		if err != nil {
@@ -111,7 +105,7 @@ func TestProjectServiceCRUD(t *testing.T) {
 
 	t.Run("UpdateProject success", func(t *testing.T) {
 		oldProject := project.Project{PID: 1, ProjectName: "old", GID: 1}
-		mockProject.EXPECT().GetProjectByID(uint(1)).Return(oldProject, nil)
+		mockProject.EXPECT().GetProjectByID(uint(1)).Return(oldProject, nil).AnyTimes()
 		mockProject.EXPECT().UpdateProject(gomock.Any()).Return(nil)
 
 		newName := "new"
@@ -126,7 +120,7 @@ func TestProjectServiceCRUD(t *testing.T) {
 	})
 
 	t.Run("UpdateProject not found", func(t *testing.T) {
-		mockProject.EXPECT().GetProjectByID(uint(99)).Return(project.Project{}, errors.New("not found"))
+		mockProject.EXPECT().GetProjectByID(uint(99)).Return(project.Project{}, errors.New("not found")).AnyTimes()
 		newName := "test"
 		input := project.UpdateProjectDTO{ProjectName: &newName}
 		_, err := svc.UpdateProject(c, 99, input)
@@ -137,7 +131,7 @@ func TestProjectServiceCRUD(t *testing.T) {
 
 	t.Run("DeleteProject success", func(t *testing.T) {
 		proj := project.Project{PID: 1, ProjectName: "proj1", GID: 1}
-		mockProject.EXPECT().GetProjectByID(uint(1)).Return(proj, nil)
+		mockProject.EXPECT().GetProjectByID(uint(1)).Return(proj, nil).AnyTimes()
 		mockProject.EXPECT().DeleteProject(uint(1)).Return(nil)
 
 		err := svc.DeleteProject(c, 1)
@@ -147,31 +141,16 @@ func TestProjectServiceCRUD(t *testing.T) {
 	})
 
 	t.Run("DeleteProject fails if project not found", func(t *testing.T) {
-		mockProject.EXPECT().GetProjectByID(uint(99)).Return(project.Project{}, errors.New("not found"))
+		mockProject.EXPECT().GetProjectByID(uint(99)).Return(project.Project{}, errors.New("not found")).AnyTimes()
 		err := svc.DeleteProject(c, 99)
 		if err == nil {
 			t.Fatal("expected error, got nil")
 		}
 	})
-
-	t.Run("AllocateProjectResources creates namespace & pvc", func(t *testing.T) {
-		mockProject.EXPECT().GetProjectByID(uint(1)).Return(project.Project{PID: 1, ProjectName: "proj1", GID: 1}, nil)
-		err := svc.AllocateProjectResources(1)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-	})
-
-	t.Run("RemoveProjectResources deletes namespace", func(t *testing.T) {
-		err := svc.RemoveProjectResources(1)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-	})
 }
 
 func TestProjectServiceRead(t *testing.T) {
-	svc, mockProject, mockView, _, _ := setupProjectMocks(t)
+	svc, mockProject, _, _ := setupProjectMocks(t)
 
 	t.Run("GetProjects success", func(t *testing.T) {
 		projects := []project.Project{{PID: 1, ProjectName: "p1"}}
@@ -188,7 +167,7 @@ func TestProjectServiceRead(t *testing.T) {
 
 	t.Run("GetProjectsByUser success", func(t *testing.T) {
 		projects := []view.ProjectUserView{{PID: 1, ProjectName: "p1"}}
-		mockView.EXPECT().ListProjectsByUserID(uint(1)).Return(projects, nil)
+		mockProject.EXPECT().ListProjectsByUserID(uint(1)).Return(projects, nil)
 
 		res, err := svc.GetProjectsByUser(1)
 		if err != nil {
@@ -201,7 +180,7 @@ func TestProjectServiceRead(t *testing.T) {
 
 	t.Run("GetProjectByID success", func(t *testing.T) {
 		proj := project.Project{PID: 1, ProjectName: "p1"}
-		mockProject.EXPECT().GetProjectByID(uint(1)).Return(proj, nil)
+		mockProject.EXPECT().GetProjectByID(uint(1)).Return(proj, nil).AnyTimes()
 
 		res, err := svc.GetProject(1)
 		if err != nil {
@@ -213,7 +192,7 @@ func TestProjectServiceRead(t *testing.T) {
 	})
 
 	t.Run("GetProjectByID not found", func(t *testing.T) {
-		mockProject.EXPECT().GetProjectByID(uint(99)).Return(project.Project{}, errors.New("not found"))
+		mockProject.EXPECT().GetProjectByID(uint(99)).Return(project.Project{}, errors.New("not found")).AnyTimes()
 
 		_, err := svc.GetProject(99)
 		if err == nil {

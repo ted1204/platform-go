@@ -1,0 +1,98 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: harbor-webhook-secret
+  namespace: harbor
+type: Opaque
+stringData:
+  WEBHOOK_SECRET: "YOUR_CUSTOM_TOKEN"
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: harbor-webhook
+  namespace: harbor
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: harbor-webhook
+  template:
+    metadata:
+      labels:
+        app: harbor-webhook
+    spec:
+      containers:
+        - name: harbor-webhook
+          image: 192.168.110.1:30003/library/harbor-webhook:latest
+          imagePullPolicy: Always
+          command: ["gunicorn", "-w", "4", "--threads", "2", "-b", "0.0.0.0:8080", "app:app"]          
+          ports:
+            - containerPort: 8080
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+
+          env:
+            - name: LOG_LEVEL
+              value: "INFO"
+            - name: ALLOW_TRUSTED_IP_BYPASS
+              value: "false" 
+            
+            - name: WEBHOOK_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: harbor-webhook-secret
+                  key: WEBHOOK_SECRET
+            - name: PG_HOST
+              value: "postgres.default.svc.cluster.local"
+            - name: PG_PORT
+              value: "5432"
+            - name: PG_DB
+              value: "platform"
+            - name: PG_USER
+              valueFrom:
+                secretKeyRef:
+                  name: pg-secret
+                  key: username
+            - name: PG_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: pg-secret
+                  key: password
+      
+      # 如果你的私有倉庫 (192.168.110.1) 需要帳號密碼，請記得加上這一段
+      # imagePullSecrets:
+      #   - name: your-registry-secret
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: harbor-webhook
+  namespace: harbor
+spec:
+  selector:
+    app: harbor-webhook
+  ports:
+    - protocol: TCP
+      port: 8080
+      targetPort: 8080
+  type: ClusterIP

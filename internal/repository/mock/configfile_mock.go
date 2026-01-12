@@ -9,6 +9,8 @@ import (
 
 	gomock "github.com/golang/mock/gomock"
 	configfile "github.com/linskybing/platform-go/internal/domain/configfile"
+	repository "github.com/linskybing/platform-go/internal/repository"
+	"gorm.io/gorm"
 )
 
 // MockConfigFileRepo is a mock of ConfigFileRepo interface.
@@ -119,4 +121,33 @@ func (m *MockConfigFileRepo) GetConfigFilesByProjectID(projectID uint) ([]config
 func (mr *MockConfigFileRepoMockRecorder) GetConfigFilesByProjectID(projectID interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetConfigFilesByProjectID", reflect.TypeOf((*MockConfigFileRepo)(nil).GetConfigFilesByProjectID), projectID)
+}
+
+// GetGroupIDByConfigFileID mocks base method.
+func (m *MockConfigFileRepo) GetGroupIDByConfigFileID(cfID uint) (uint, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetGroupIDByConfigFileID", cfID)
+	ret0, _ := ret[0].(uint)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetGroupIDByConfigFileID indicates an expected call of GetGroupIDByConfigFileID.
+func (mr *MockConfigFileRepoMockRecorder) GetGroupIDByConfigFileID(cfID interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetGroupIDByConfigFileID", reflect.TypeOf((*MockConfigFileRepo)(nil).GetGroupIDByConfigFileID), cfID)
+}
+
+// WithTx mocks base method.
+func (m *MockConfigFileRepo) WithTx(tx *gorm.DB) repository.ConfigFileRepo {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "WithTx", tx)
+	ret0, _ := ret[0].(repository.ConfigFileRepo)
+	return ret0
+}
+
+// WithTx indicates an expected call of WithTx.
+func (mr *MockConfigFileRepoMockRecorder) WithTx(tx interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WithTx", reflect.TypeOf((*MockConfigFileRepo)(nil).WithTx), tx)
 }

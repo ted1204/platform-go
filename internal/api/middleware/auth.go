@@ -143,7 +143,7 @@ func (a *Auth) Admin() gin.HandlerFunc {
 			return
 		}
 
-		isAdmin, err := utils.IsSuperAdmin(claims.UserID, a.repos.View)
+		isAdmin, err := utils.IsSuperAdmin(claims.UserID, a.repos.UserGroup)
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 			return
@@ -184,7 +184,7 @@ func (a *Auth) UserOrAdmin() gin.HandlerFunc {
 			return
 		}
 
-		isAdmin, err := utils.IsSuperAdmin(currentUID, a.repos.View)
+		isAdmin, err := utils.IsSuperAdmin(currentUID, a.repos.UserGroup)
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Internal server error"})
 			return
@@ -227,7 +227,7 @@ func (a *Auth) GroupMember(extractor GIDExtractor) gin.HandlerFunc {
 			return
 		}
 
-		permitted, err := utils.CheckGroupPermission(uid, gid, a.repos.View)
+		permitted, err := utils.CheckGroupPermission(uid, gid, a.repos.UserGroup)
 		if err != nil || !permitted {
 			c.JSON(http.StatusForbidden, response.ErrorResponse{Error: "Permission denied for this group"})
 			c.Abort()
@@ -267,7 +267,7 @@ func (a *Auth) GroupManager(extractor GIDExtractor) gin.HandlerFunc {
 			return
 		}
 
-		permitted, err := utils.CheckGroupManagePermission(uid, gid, a.repos.View)
+		permitted, err := utils.CheckGroupManagePermission(uid, gid, a.repos.UserGroup)
 		if err != nil || !permitted {
 			c.JSON(http.StatusForbidden, response.ErrorResponse{Error: "Permission denied for this group"})
 			c.Abort()
@@ -307,7 +307,7 @@ func (a *Auth) GroupAdmin(extractor GIDExtractor) gin.HandlerFunc {
 			return
 		}
 
-		permitted, err := utils.CheckGroupAdminPermission(uid, gid, a.repos.View)
+		permitted, err := utils.CheckGroupAdminPermission(uid, gid, a.repos.UserGroup)
 		if err != nil || !permitted {
 			c.JSON(http.StatusForbidden, response.ErrorResponse{Error: "Permission denied for this group"})
 			c.Abort()

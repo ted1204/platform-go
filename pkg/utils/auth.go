@@ -13,12 +13,10 @@ import (
 	"gorm.io/gorm"
 )
 
-func IsSuperAdmin(uid uint, repos repository.ViewRepo) (bool, error) {
-	// Fast-path for the reserved admin user used in tests.
+func IsSuperAdmin(uid uint, repos repository.UserGroupRepo) (bool, error) {
 	if uid == 1 {
 		return true, nil
 	}
-
 	return repos.IsSuperAdmin(uid)
 }
 
@@ -57,7 +55,6 @@ func HasGroupRole(userID uint, gid uint, roles []string) (bool, error) {
 		First(&v).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			// Fallback to the base user_group table in case the view is missing entries.
 			var ug group.UserGroup
 			tableErr := db.DB.Where("u_id = ? AND g_id = ? AND role IN ?", userID, gid, roles).First(&ug).Error
 			if tableErr != nil {
@@ -73,8 +70,7 @@ func HasGroupRole(userID uint, gid uint, roles []string) (bool, error) {
 	return true, nil
 }
 
-func CheckGroupPermission(UID uint, GID uint, repos repository.ViewRepo) (bool, error) {
-	// Check if the user is a group manager (admin role in the group)
+func CheckGroupPermission(UID uint, GID uint, repos repository.UserGroupRepo) (bool, error) {
 	isMember, err := HasGroupRole(UID, GID, config.GroupAccessRoles)
 	if err != nil {
 		return false, err
@@ -83,7 +79,6 @@ func CheckGroupPermission(UID uint, GID uint, repos repository.ViewRepo) (bool, 
 		return true, nil
 	}
 
-	// If not group admin, check if the user is a super admin
 	isSuper, err := repos.IsSuperAdmin(UID)
 	if err != nil {
 		return false, err
@@ -95,8 +90,7 @@ func CheckGroupPermission(UID uint, GID uint, repos repository.ViewRepo) (bool, 
 	return false, errors.New("permission denied")
 }
 
-func CheckGroupManagePermission(UID uint, GID uint, repos repository.ViewRepo) (bool, error) {
-	// Check if the user is a group manager (admin role in the group)
+func CheckGroupManagePermission(UID uint, GID uint, repos repository.UserGroupRepo) (bool, error) {
 	isManager, err := HasGroupRole(UID, GID, config.GroupUpdateRoles)
 	if err != nil {
 		return false, err
@@ -105,7 +99,6 @@ func CheckGroupManagePermission(UID uint, GID uint, repos repository.ViewRepo) (
 		return true, nil
 	}
 
-	// If not group admin, check if the user is a super admin
 	isSuper, err := repos.IsSuperAdmin(UID)
 	if err != nil {
 		return false, err
@@ -117,8 +110,7 @@ func CheckGroupManagePermission(UID uint, GID uint, repos repository.ViewRepo) (
 	return false, errors.New("permission denied")
 }
 
-func CheckGroupAdminPermission(UID uint, GID uint, repos repository.ViewRepo) (bool, error) {
-	// Check if the user is a group manager (admin role in the group)
+func CheckGroupAdminPermission(UID uint, GID uint, repos repository.UserGroupRepo) (bool, error) {
 	isManager, err := HasGroupRole(UID, GID, config.GroupAdminRoles)
 	if err != nil {
 		return false, err
@@ -127,7 +119,6 @@ func CheckGroupAdminPermission(UID uint, GID uint, repos repository.ViewRepo) (b
 		return true, nil
 	}
 
-	// If not group admin, check if the user is a super admin
 	isSuper, err := repos.IsSuperAdmin(UID)
 	if err != nil {
 		return false, err

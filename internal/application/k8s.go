@@ -56,7 +56,7 @@ func (s *K8sService) CreateJob(ctx context.Context, userID uint, input job.JobSu
 
 	// Check if image is in allowed list. If so, prepend Harbor private prefix.
 	// If not allowed, we don't block it (non-mandatory), but we don't add the prefix.
-	isAllowed, _ := s.imageService.ValidateImageForProject(imageName, imageTag, projectID)
+	isAllowed, _ := s.imageService.ValidateImageForProject(imageName, imageTag, &projectID)
 	if isAllowed {
 		prefix := config.HarborPrivatePrefix
 		if prefix != "" && !strings.HasPrefix(input.Image, prefix) {
@@ -243,14 +243,6 @@ func (s *K8sService) CountProjectGPUUsage(ctx context.Context, projectID uint) (
 	return totalGPU, nil
 }
 
-func (s *K8sService) GetPVC(ns, name string) (*corev1.PersistentVolumeClaim, error) {
-	return utils.GetPVC(ns, name)
-}
-
-func (s *K8sService) ListPVCs(ns string) ([]corev1.PersistentVolumeClaim, error) {
-	return utils.ListPVCs(ns)
-}
-
 // GetProjectPVCNames returns PVC names within a namespace that are tagged as project storage.
 // Falls back to all PVCs if no labeled ones found for backward compatibility.
 func (s *K8sService) GetProjectPVCNames(ctx context.Context, namespace string) ([]string, error) {
@@ -285,18 +277,6 @@ func (s *K8sService) GetProjectPVCNames(ctx context.Context, namespace string) (
 	return names, nil
 }
 
-func (s *K8sService) CreatePVC(input job.VolumeSpec) error {
-	return utils.CreatePVC(input.Namespace, input.Name, input.StorageClassName, input.Size)
-}
-
-func (s *K8sService) ExpandPVC(input job.VolumeSpec) error {
-	return utils.ExpandPVC(input.Namespace, input.Name, input.Size)
-}
-
-func (s *K8sService) DeletePVC(ns, name string) error {
-	return utils.DeletePVC(ns, name)
-}
-
 // StartFileBrowser provisions a FileBrowser instance with specific access permissions.
 // It mounts all provided PVCs under /srv/<pvcName>.
 func (s *K8sService) StartFileBrowser(ctx context.Context, ns string, pvcNames []string, readOnly bool, baseURL string) (string, error) {
@@ -319,27 +299,21 @@ func (s *K8sService) StartFileBrowser(ctx context.Context, ns string, pvcNames [
 	return nodePort, nil
 }
 
-// EnsureProjectHub creates/ensures the project-level NFS gateway (namespace, PVC, deployment, service).
+// EnsureProjectHub creates/ensures the project-level storage infrastructure.
 func (s *K8sService) EnsureProjectHub(p *project.Project) error {
-	// Derive names
-	ns := utils.GenerateSafeResourceName("project", p.ProjectName, p.PID)
+	ns := k8s.GenerateSafeResourceName("project", p.ProjectName, p.PID)
 	pvcName := fmt.Sprintf("project-%d-disk", p.PID)
 
-	// Namespace
-	if err := utils.CreateNamespace(ns); err != nil {
-		if !strings.Contains(strings.ToLower(err.Error()), "already exist") {
-			return fmt.Errorf("failed to ensure project namespace: %w", err)
-		}
+	if err := k8s.CreateNamespace(ns); err != nil {
+		log.Printf("[ProjectHub] Namespace check: %v", err)
 	}
 
-	// NFS Deployment
-	if err := utils.CreateNFSDeployment(ns, pvcName); err != nil {
-		return fmt.Errorf("failed to ensure project nfs deployment: %w", err)
+	if err := k8s.CreateHubPVC(ns, pvcName, config.DefaultStorageClassName, config.ProjectPVSize); err != nil {
+		return fmt.Errorf("failed to ensure project pvc: %w", err)
 	}
 
-	// NFS Service (ClusterIP with NFS ports)
-	if err := utils.CreateNFSServiceWithName(ns, config.ProjectNfsServiceName); err != nil {
-		return fmt.Errorf("failed to ensure project nfs service: %w", err)
+	if err := k8s.CreateStorageHub(ns, pvcName); err != nil {
+		return fmt.Errorf("failed to ensure project storage hub: %w", err)
 	}
 
 	return nil
@@ -353,61 +327,34 @@ func (s *K8sService) CheckUserStorageExists(ctx context.Context, username string
 	safeUser := strings.ToLower(username)
 	nsName := fmt.Sprintf("user-%s-storage", safeUser)
 
-	return utils.CheckNamespaceExists(nsName)
+	return k8s.CheckNamespaceExists(nsName)
 }
 
-// InitializeUserStorageHub orchestrates the creation of a per-user storage hub.
-// Architecture: Hub-and-Spoke
-// 1. Namespace: Dedicated namespace for the user's storage infrastructure.
-// 2. PVC: A "Real" Longhorn RWO volume (Thin Provisioned).
-// 3. Deployment: An NFS Server pod mounting the Longhorn volume.
-// 4. Service: A stable ClusterIP to act as the gateway for future projects.
+// InitializeUserStorageHub orchestrates the creation of a per-user storage infrastructure.
 func (s *K8sService) InitializeUserStorageHub(username string) error {
-	// 1. Sanitize Username for K8s compliance
-	// K8s resources must consist of lowercase alphanumeric characters or '-'.
-	// We replace underscores with hyphens and remove other special chars.
 	safeUser := strings.ToLower(username)
-	reg, err := regexp.Compile("[^a-z0-9-]+")
-	if err == nil {
+	if reg, err := regexp.Compile("[^a-z0-9-]+"); err == nil {
 		safeUser = reg.ReplaceAllString(safeUser, "-")
 	}
 
-	// Define resource names
 	nsName := fmt.Sprintf("user-%s-storage", safeUser)
 	pvcName := fmt.Sprintf("user-%s-disk", safeUser)
 
-	log.Printf("[StorageHub] Initializing storage hub for user: %s (ns: %s)", username, nsName)
+	log.Printf("[StorageHub] Initializing for user: %s (ns: %s)", username, nsName)
 
-	// 2. Create Namespace
-	// We ignore the error if it implies "AlreadyExists" inside the utils,
-	// but here we just check if it failed critically.
-	if err := utils.CreateNamespace(nsName); err != nil {
-		// In a real scenario, you might want to check if err is "AlreadyExists" and proceed.
-		// Assuming utils handles logging, we just log and continue or return based on policy.
+	if err := k8s.CreateNamespace(nsName); err != nil {
 		log.Printf("[StorageHub] Namespace creation warning: %v", err)
 	}
 
-	// 3. Create the Hub PVC (The "Real" Volume)
-	// StorageClass: "longhorn" (Must match your cluster's SC name)
-	// Size: "50Gi" (This is a thin-provisioned limit, actual usage grows on demand)
-	// Mode: ReadWriteOnce (Handled inside utils.CreateHubPVC)
-	if err := utils.CreateHubPVC(nsName, pvcName, config.DefaultStorageClassName, config.UserPVSize); err != nil {
+	if err := k8s.CreateHubPVC(nsName, pvcName, config.DefaultStorageClassName, config.UserPVSize); err != nil {
 		return fmt.Errorf("failed to create hub pvc: %w", err)
 	}
 
-	// 4. Deploy NFS Server
-	// This pod mounts the pvcName created above.
-	if err := utils.CreateNFSDeployment(nsName, pvcName); err != nil {
-		return fmt.Errorf("failed to create nfs deployment: %w", err)
-	}
+	// if err := utils.CreateStorageHub(nsName, pvcName); err != nil {
+	// 	return fmt.Errorf("failed to create storage hub: %w", err)
+	// }
 
-	// 5. Expose NFS Service (Gateway)
-	// This creates the DNS entry: storage-svc.user-<safeUser>-storage.svc.cluster.local
-	if err := utils.CreateNFSService(nsName); err != nil {
-		return fmt.Errorf("failed to create nfs service: %w", err)
-	}
-
-	log.Printf("[StorageHub] Successfully initialized storage hub for %s", username)
+	log.Printf("[Storage] Successfully initialized resources for %s", username)
 	return nil
 }
 
@@ -416,24 +363,17 @@ func (s *K8sService) ExpandUserStorageHub(username, newSize string) error {
 	nsName := fmt.Sprintf("user-%s-storage", safeUser)
 	pvcName := fmt.Sprintf("user-%s-disk", safeUser)
 
-	return utils.ExpandPVC(nsName, pvcName, newSize)
+	return k8s.ExpandPVC(nsName, pvcName, newSize)
 }
 
 // DeleteUserStorageHub completely removes a user's storage infrastructure.
 // It deletes the dedicated namespace, which automatically cleans up the PVC, NFS Server, and Services inside it.
 func (s *K8sService) DeleteUserStorageHub(ctx context.Context, username string) error {
-	// 1. Sanitize username to match the naming convention used during initialization.
-	// Ensure this matches the logic in InitializeUserStorageHub.
 	safeUser := strings.ToLower(username)
-	// safeUser = regexp.MustCompile("[^a-z0-9-]").ReplaceAllString(safeUser, "-")
 
-	// 2. Define the namespace name.
 	nsName := fmt.Sprintf("user-%s-storage", safeUser)
 
-	// 3. Delete the entire namespace.
-	// This is the cleanest way to decommission a user's storage hub.
-	// It ensures no orphaned resources (like PVCs or Pods) are left behind.
-	if err := utils.DeleteNamespace(nsName); err != nil {
+	if err := k8s.DeleteNamespace(nsName); err != nil {
 		return fmt.Errorf("failed to delete user storage namespace '%s': %w", nsName, err)
 	}
 
@@ -458,26 +398,21 @@ func (s *K8sService) StopUserGlobalFileBrowser(ctx context.Context, username str
 }
 
 func (s *K8sService) CreateProjectPVC(ctx context.Context, req job.VolumeSpec) (*corev1.PersistentVolumeClaim, error) {
-	// If no Kubernetes client is configured, short-circuit for tests.
 	if k8s.Clientset == nil {
 		return &corev1.PersistentVolumeClaim{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "mock-pvc",
-				Namespace: utils.GenerateSafeResourceName("project", req.ProjectName, req.ProjectID),
+				Namespace: k8s.GenerateSafeResourceName("project", req.ProjectName, req.ProjectID),
 			},
 		}, nil
 	}
 
-	// 1. Generate Safe Name (Using Utils)
-	targetNamespace := utils.GenerateSafeResourceName("project", req.ProjectName, req.ProjectID)
-
-	// PVC name convention: allow custom name, else default
+	ns := k8s.GenerateSafeResourceName("project", req.ProjectName, req.ProjectID)
 	pvcName := req.Name
 	if pvcName == "" {
-		pvcName = fmt.Sprintf("pvc-%s", targetNamespace)
+		pvcName = fmt.Sprintf("pvc-%s", ns)
 	}
 
-	// 2. Prepare Labels
 	nsLabels := map[string]string{
 		"managed-by":   "nthucscc",
 		"type":         "project-space",
@@ -485,18 +420,15 @@ func (s *K8sService) CreateProjectPVC(ctx context.Context, req job.VolumeSpec) (
 		"project-name": req.ProjectName,
 	}
 
-	// 3. Ensure Namespace Exists
-	if err := s.ensureNamespaceWithLabels(ctx, targetNamespace, nsLabels); err != nil {
+	if err := s.ensureNamespaceWithLabels(ctx, ns, nsLabels); err != nil {
 		return nil, fmt.Errorf("failed to ensure namespace: %v", err)
 	}
 
-	// 4. Parse Capacity from Size field (already formatted as "XXGi" by handler)
-	storageQty, err := resource.ParseQuantity(req.Size)
+	qty, err := resource.ParseQuantity(req.Size)
 	if err != nil {
 		return nil, fmt.Errorf("invalid capacity: %v", err)
 	}
 
-	// 5. Prepare PVC Labels (Critical for Filtering)
 	pvcLabels := map[string]string{
 		"app.kubernetes.io/name":       "filebrowser-storage",
 		"app.kubernetes.io/managed-by": "nthu-cscc",
@@ -505,69 +437,50 @@ func (s *K8sService) CreateProjectPVC(ctx context.Context, req job.VolumeSpec) (
 		"project-name":                 req.ProjectName,
 	}
 
-	// Config
 	scName := config.DefaultStorageClassName
-	accessMode := corev1.ReadWriteOnce
-
-	// 6. Create PVC Object
 	pvc := &corev1.PersistentVolumeClaim{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      pvcName,
-			Namespace: targetNamespace,
+			Namespace: ns,
 			Labels:    pvcLabels,
 		},
 		Spec: corev1.PersistentVolumeClaimSpec{
-			AccessModes: []corev1.PersistentVolumeAccessMode{accessMode},
-
+			AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteMany},
 			Resources: corev1.VolumeResourceRequirements{
 				Requests: corev1.ResourceList{
-					corev1.ResourceStorage: storageQty,
+					corev1.ResourceStorage: qty,
 				},
 			},
-
 			StorageClassName: &scName,
 		},
 	}
 
-	pvcClaim, err := k8s.Clientset.CoreV1().PersistentVolumeClaims(targetNamespace).Create(context.TODO(), pvc, metav1.CreateOptions{})
-
+	result, err := k8s.Clientset.CoreV1().PersistentVolumeClaims(ns).Create(context.TODO(), pvc, metav1.CreateOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create pvc: %w", err)
 	}
 
-	// Deploy NFS Server
-	// This pod mounts the pvcName created above.
-	if err := utils.CreateNFSDeployment(targetNamespace, pvcName); err != nil {
-		return nil, fmt.Errorf("failed to create nfs deployment: %w", err)
+	if err := k8s.CreateStorageHub(ns, pvcName); err != nil {
+		return nil, fmt.Errorf("failed to create storage hub: %w", err)
 	}
 
-	// Expose NFS Service (Gateway)
-	// This creates the DNS entry: storage-svc.project-<project name>-<unique id>.svc.cluster.local
-	if err := utils.CreateNFSService(targetNamespace); err != nil {
-		return nil, fmt.Errorf("failed to create nfs service: %w", err)
-	}
-
-	return pvcClaim, nil
+	return result, nil
 }
 
-// delete project storage
+// DeleteProjectAllPVC removes the entire project namespace, cleaning up all PVCs and resources inside.
 func (s *K8sService) DeleteProjectAllPVC(ctx context.Context, projectName string, projectID uint) error {
-	ns := utils.GenerateSafeResourceName("project", projectName, projectID)
-	_ = utils.DeleteNamespace(ns)
-	return nil
+	ns := k8s.GenerateSafeResourceName("project", projectName, projectID)
+	// Return the error to the caller instead of ignoring it
+	return k8s.DeleteNamespace(ns)
 }
 
 // ensureNamespaceWithLabels checks if a namespace exists, creates it if not.
-// It's a private helper method for the service.
 func (s *K8sService) ensureNamespaceWithLabels(ctx context.Context, name string, labels map[string]string) error {
 	_, err := k8s.Clientset.CoreV1().Namespaces().Get(ctx, name, metav1.GetOptions{})
 	if err == nil {
-		// Namespace exists.
-		// Future improvement: We could update labels here if they changed.
 		return nil
 	}
 
-	// Create new Namespace
 	newNs := &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:   name,
@@ -578,67 +491,52 @@ func (s *K8sService) ensureNamespaceWithLabels(ctx context.Context, name string,
 	return err
 }
 
-// ListAllProjectStorages retrieves all project-related PVCs using LabelSelectors.
+// ListAllProjectStorages retrieves all project-related PVCs across the cluster.
 func (s *K8sService) ListAllProjectStorages(ctx context.Context) ([]job.VolumeSpec, error) {
-	// Without a Kubernetes client we cannot list PVCs; return empty for tests.
 	if k8s.Clientset == nil {
 		return []job.VolumeSpec{}, nil
 	}
 
-	// 1. Define Filter Options.
-	// We use server-side filtering to only fetch PVCs relevant to projects.
-	listOptions := metav1.ListOptions{
+	// Server-side filtering using labels
+	listOpts := metav1.ListOptions{
 		LabelSelector: "storage-type=project,app.kubernetes.io/managed-by=nthu-cscc",
 	}
 
-	// 2. List PVCs from ALL namespaces.
-	pvcs, err := k8s.Clientset.CoreV1().PersistentVolumeClaims(metav1.NamespaceAll).List(ctx, listOptions)
+	pvcs, err := k8s.Clientset.CoreV1().PersistentVolumeClaims(metav1.NamespaceAll).List(ctx, listOpts)
 	if err != nil {
 		return nil, err
 	}
 
 	var result []job.VolumeSpec
 
-	// 3. Map Kubernetes resources to DTOs.
 	for _, pvc := range pvcs.Items {
-		projectID := pvc.Labels["project-id"]
+		projectIDStr := pvc.Labels["project-id"]
 		projectName := pvc.Labels["project-name"]
 
-		// Skip if essential labels are missing (integrity check)
-		if projectID == "" {
+		if projectIDStr == "" {
 			continue
 		}
 
-		// Convert projectID string to uint
-		projectIDUint, err := strconv.ParseUint(projectID, 10, 32)
-		if err != nil {
-			projectIDUint = 0
-		}
+		projectID, _ := strconv.ParseUint(projectIDStr, 10, 32)
 
-		// Get capacity from PVC spec
-		capacityStr := pvc.Spec.Resources.Requests[corev1.ResourceStorage]
+		// Use K8s native scaling to get accurate GB value
+		qty := pvc.Spec.Resources.Requests[corev1.ResourceStorage]
+		capacityGB := int(qty.ScaledValue(resource.Giga))
 
-		// Convert capacity to int
-		capacityValue := int(capacityStr.Value() / 1e9) // Convert to GB
-		if capacityValue < 0 {
-			capacityValue = 0
-		}
-
-		// Safe check for AccessModes
 		accessMode := ""
 		if len(pvc.Spec.AccessModes) > 0 {
 			accessMode = string(pvc.Spec.AccessModes[0])
 		}
 
 		result = append(result, job.VolumeSpec{
-			ID:          uint(projectIDUint),
-			ProjectID:   uint(projectIDUint),
-			Name:        pvc.Name, // keep legacy json field populated
+			ID:          uint(projectID),
+			ProjectID:   uint(projectID),
+			Name:        pvc.Name,
 			PVCName:     pvc.Name,
 			ProjectName: projectName,
 			Namespace:   pvc.Namespace,
-			Capacity:    capacityValue,
-			Size:        fmt.Sprintf("%dGi", capacityValue),
+			Capacity:    capacityGB,
+			Size:        fmt.Sprintf("%dGi", capacityGB),
 			Status:      string(pvc.Status.Phase),
 			AccessMode:  accessMode,
 			CreatedAt:   pvc.CreationTimestamp.Time,

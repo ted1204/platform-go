@@ -16,7 +16,6 @@ type Handlers struct {
 	User       *UserHandler
 	K8s        *K8sHandler
 	Form       *FormHandler
-	GPURequest *GPURequestHandler
 	Job        *JobHandler
 	Image      *ImageHandler
 	Router     *gin.Engine
@@ -33,12 +32,9 @@ func New(svc *application.Services, repos *repository.Repos, router *gin.Engine)
 		User:       NewUserHandler(svc.User),
 		K8s:        NewK8sHandler(svc.K8s, svc.User, svc.Project),
 		Form:       NewFormHandler(svc.Form),
-		GPURequest: NewGPURequestHandler(svc.GPURequest, svc.Project),
 		Job:        NewJobHandler(svc.Job, repos),
 		Image:      NewImageHandler(svc.Image),
 		Router:     router,
 	}
-	adminHandler := NewAdminHandler(svc.User)
-	h.Router.POST("/admin/ensure-user-pv", adminHandler.EnsureAllUserPV)
 	return h
 }

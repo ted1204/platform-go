@@ -72,7 +72,7 @@ func (s *UserService) LoginUser(username, password string) (user.User, string, b
 		return user.User{}, "", false, errors.New("invalid credentials")
 	}
 
-	token, isAdmin, err := middleware.GenerateToken(usr.UID, usr.Username, 24*time.Hour, s.Repos.View)
+	token, isAdmin, err := middleware.GenerateToken(usr.UID, usr.Username, 24*time.Hour, s.Repos.UserGroup)
 	if err != nil {
 		return user.User{}, "", false, err
 	}
@@ -148,9 +148,4 @@ func (s *UserService) RemoveUser(id uint) error {
 	}
 
 	return s.Repos.User.DeleteUser(id)
-}
-
-func (s *UserService) EnsureAllUserPV() (int, error) {
-	adminSvc := NewAdminService(s.Repos)
-	return adminSvc.EnsureAllUserPV()
 }

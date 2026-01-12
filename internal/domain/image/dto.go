@@ -1,35 +1,24 @@
 package image
 
-// AllowedImageDTO represents allowed image information
-type AllowedImageDTO struct {
-	ID        uint   `json:"id"`
-	Name      string `json:"name"`
-	Tag       string `json:"tag"`
-	ProjectID *uint  `json:"project_id"`
-	IsGlobal  bool   `json:"is_global"`
-}
-
-// ImageRequestDTO represents a request to add an image
-type ImageRequestDTO struct {
-	Name      string `json:"name" binding:"required"`
+type CreateImageRequestDTO struct {
+	Registry  string `json:"registry"`
+	ImageName string `json:"image_name" binding:"required"`
 	Tag       string `json:"tag" binding:"required"`
-	ProjectID *uint  `json:"project_id"` // nil for global request
+	ProjectID *uint  `json:"project_id"`
 }
 
-// CreateProjectImageDTO represents adding image directly to project
-type CreateProjectImageDTO struct {
-	Name string `json:"name" binding:"required"`
-	Tag  string `json:"tag" binding:"required"`
-}
-
-// UpdateImageRequestDTO represents updating an image request
 type UpdateImageRequestDTO struct {
 	Status string `json:"status" binding:"required,oneof=approved rejected"`
 	Note   string `json:"note"`
 }
 
-// HarborImageResponse represents images from Harbor API
-type HarborImageResponse struct {
-	Name string   `json:"name"`
-	Tags []string `json:"tags"`
+type AllowedImageDTO struct {
+	ID        uint   `json:"id"`
+	Registry  string `json:"registry"`
+	ImageName string `json:"image_name"`
+	Tag       string `json:"tag"`
+	Digest    string `json:"digest"`
+	ProjectID *uint  `json:"project_id"`
+	IsGlobal  bool   `json:"is_global"`
+	IsPulled  bool   `json:"is_pulled"`
 }

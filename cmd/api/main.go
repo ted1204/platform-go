@@ -12,7 +12,6 @@ import (
 	"github.com/linskybing/platform-go/internal/domain/audit"
 	"github.com/linskybing/platform-go/internal/domain/configfile"
 	"github.com/linskybing/platform-go/internal/domain/form"
-	"github.com/linskybing/platform-go/internal/domain/gpu"
 	"github.com/linskybing/platform-go/internal/domain/group"
 	"github.com/linskybing/platform-go/internal/domain/image"
 	"github.com/linskybing/platform-go/internal/domain/job"
@@ -34,8 +33,6 @@ func main() {
 
 	// Initialize database connection
 	db.Init()
-
-	// Initialize Kubernetes client
 	k8s.Init()
 
 	// Auto migrate database schemas
@@ -52,15 +49,14 @@ func main() {
 		&form.Form{},
 		&form.FormMessage{},
 		&audit.AuditLog{},
-		&gpu.GPURequest{},
+		&image.ContainerRepository{},
+		&image.ContainerTag{},
+		&image.ImageAllowList{},
 		&image.ImageRequest{},
-		&image.AllowedImage{},
+		&image.ClusterImageStatus{},
 	); err != nil {
 		log.Fatalf("Failed to migrate database: %v", err)
 	}
-
-	// Create database views after tables are created
-	db.CreateViews()
 
 	// Initialize Docker cleanup CronJob
 	if err := cron.CreateDockerCleanupCronJob(); err != nil {
@@ -74,7 +70,7 @@ func main() {
 	router.Use(middleware.CORSMiddleware())
 	router.Use(middleware.LoggingMiddleware())
 
-	routes.RegisterRoutes(router)
+	routes.RegisterRoutes(router, db.DB)
 
 	port := ":" + config.ServerPort
 	log.Printf("Starting API server on %s", port)

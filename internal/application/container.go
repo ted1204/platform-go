@@ -15,7 +15,6 @@ type Services struct {
 	User       *UserService
 	K8s        *K8sService
 	Form       *FormService
-	GPURequest *GPURequestService
 	Job        *job.Service
 	Image      *ImageService
 }
@@ -31,7 +30,6 @@ func New(repos *repository.Repos) *Services {
 		User:       NewUserService(repos),
 		K8s:        NewK8sService(repos),
 		Form:       NewFormService(repos.Form),
-		GPURequest: NewGPURequestService(repos),
 		Job:        job.NewService(repos.Job, repos.User, repos.Project),
 		Image:      NewImageService(repos.Image),
 	}

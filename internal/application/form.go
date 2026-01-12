@@ -8,10 +8,10 @@ import (
 )
 
 type FormService struct {
-	repo *repository.FormRepository
+	repo repository.FormRepo
 }
 
-func NewFormService(repo *repository.FormRepository) *FormService {
+func NewFormService(repo repository.FormRepo) *FormService {
 	return &FormService{repo: repo}
 }
 

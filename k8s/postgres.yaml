@@ -3,7 +3,7 @@ kind: PersistentVolumeClaim
 metadata:
   name: pg-pvc
 spec:
-  storageClassName: nfs-client
+  storageClassName: longhorn
   accessModes:
     - ReadWriteOnce
   resources:
@@ -59,8 +59,10 @@ kind: Service
 metadata:
   name: postgres
 spec:
+  type: NodePort
   ports:
     - port: 5432
+      targetPort: 5432
+      nodePort: 30054
   selector:
     app: postgres
-  clusterIP: None # Headless service (optional)

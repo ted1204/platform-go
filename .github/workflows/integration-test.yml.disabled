@@ -1,0 +1,10 @@
+name: Integration Tests (DISABLED)
+
+# This workflow has been temporarily disabled by renaming the file to
+# `integration-test.yml.disabled`. To re-enable, rename back to
+# `integration-test.yml` or revert this change.
+
+on: {}
+
+# Original content moved here for reference.
+# See the original `.github/workflows/integration-test.yml` in commit history.

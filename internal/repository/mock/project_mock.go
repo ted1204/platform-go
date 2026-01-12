@@ -9,6 +9,9 @@ import (
 
 	gomock "github.com/golang/mock/gomock"
 	project "github.com/linskybing/platform-go/internal/domain/project"
+	view "github.com/linskybing/platform-go/internal/domain/view"
+	repository "github.com/linskybing/platform-go/internal/repository"
+	"gorm.io/gorm"
 )
 
 // MockProjectRepo is a mock of ProjectRepo interface.
@@ -134,4 +137,48 @@ func (m *MockProjectRepo) UpdateProject(p *project.Project) error {
 func (mr *MockProjectRepoMockRecorder) UpdateProject(p interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateProject", reflect.TypeOf((*MockProjectRepo)(nil).UpdateProject), p)
+}
+
+// GetAllProjectGroupViews mocks base method.
+func (m *MockProjectRepo) GetAllProjectGroupViews() ([]view.ProjectGroupView, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetAllProjectGroupViews")
+	ret0, _ := ret[0].([]view.ProjectGroupView)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetAllProjectGroupViews indicates an expected call of GetAllProjectGroupViews.
+func (mr *MockProjectRepoMockRecorder) GetAllProjectGroupViews() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAllProjectGroupViews", reflect.TypeOf((*MockProjectRepo)(nil).GetAllProjectGroupViews))
+}
+
+// WithTx mocks base method.
+func (m *MockProjectRepo) WithTx(tx *gorm.DB) repository.ProjectRepo {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "WithTx", tx)
+	ret0, _ := ret[0].(repository.ProjectRepo)
+	return ret0
+}
+
+// WithTx indicates an expected call of WithTx.
+func (mr *MockProjectRepoMockRecorder) WithTx(tx interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WithTx", reflect.TypeOf((*MockProjectRepo)(nil).WithTx), tx)
+}
+
+// ListProjectsByUserID mocks base method.
+func (m *MockProjectRepo) ListProjectsByUserID(userID uint) ([]view.ProjectUserView, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListProjectsByUserID", userID)
+	ret0, _ := ret[0].([]view.ProjectUserView)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListProjectsByUserID indicates an expected call of ListProjectsByUserID.
+func (mr *MockProjectRepoMockRecorder) ListProjectsByUserID(userID interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListProjectsByUserID", reflect.TypeOf((*MockProjectRepo)(nil).ListProjectsByUserID), userID)
 }

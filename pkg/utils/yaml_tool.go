@@ -99,21 +99,23 @@ func replaceInInterface(v interface{}, values map[string]string) interface{} {
 	}
 }
 
-var YAMLToJSON = func(yamlContent string) (string, error) {
+// YAMLToJSON converts a YAML document (bytes) to JSON bytes.
+var YAMLToJSON = func(yamlContent []byte) ([]byte, error) {
 	var yamlObj interface{}
-	err := yaml.Unmarshal([]byte(yamlContent), &yamlObj)
-	if err != nil {
-		return "", err
+
+	if err := yaml.Unmarshal(yamlContent, &yamlObj); err != nil {
+		return nil, fmt.Errorf("invalid YAML content: %w", err)
 	}
 
-	jsonReady := convertToStringKeys(yamlObj)
+	// Convert map[interface{}]interface{} to map[string]interface{}
+	yamlObj = convertToStringKeys(yamlObj)
 
-	jsonBytes, err := json.MarshalIndent(jsonReady, "", "  ")
+	jsonBytes, err := json.MarshalIndent(yamlObj, "", "  ")
 	if err != nil {
-		return "", err
+		return nil, fmt.Errorf("failed to marshal to JSON: %w", err)
 	}
 
-	return string(jsonBytes), nil
+	return jsonBytes, nil
 }
 
 func convertToStringKeys(v interface{}) interface{} {

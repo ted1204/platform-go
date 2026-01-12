@@ -1,0 +1,55 @@
+openapi: 3.0.0
+info:
+  title: Platform API
+  version: 1.0.0
+  description: OpenAPI spec (subset) for image request endpoints
+paths:
+  /image-requests:
+    post:
+      summary: Submit an image request
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ImageRequestInput'
+      responses:
+        '201':
+          description: Created
+  /image-requests/{id}/approve:
+    put:
+      summary: Approve an image request
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                note:
+                  type: string
+                is_global:
+                  type: boolean
+      responses:
+        '200':
+          description: OK
+components:
+  schemas:
+    ImageRequestInput:
+      type: object
+      required:
+        - name
+        - tag
+      properties:
+        name:
+          type: string
+        tag:
+          type: string
+        project_id:
+          type: integer

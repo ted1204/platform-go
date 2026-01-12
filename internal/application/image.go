@@ -19,23 +19,23 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// PullJobStatus represents the status of an image pull job
+func ptrTime(t time.Time) *time.Time { return &t }
+
 type PullJobStatus struct {
 	JobID     string    `json:"job_id"`
 	ImageName string    `json:"image_name"`
 	ImageTag  string    `json:"image_tag"`
-	Status    string    `json:"status"`   // pending, pulling, completed, failed
-	Progress  int       `json:"progress"` // 0-100
+	Status    string    `json:"status"`
+	Progress  int       `json:"progress"`
 	Message   string    `json:"message"`
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
-// PullJobTracker holds active pull jobs and their status
 type PullJobTracker struct {
 	mu         sync.RWMutex
 	jobs       map[string]*PullJobStatus
 	chans      map[string][]chan *PullJobStatus
-	failedJobs []*PullJobStatus // Keep history of failed jobs
+	failedJobs []*PullJobStatus
 	maxHistory int
 }
 
@@ -75,7 +75,6 @@ func (pt *PullJobTracker) UpdateJob(jobID string, status string, progress int, m
 		job.Message = message
 		job.UpdatedAt = time.Now()
 
-		// Notify all subscribers
 		if chans, ok := pt.chans[jobID]; ok {
 			for _, ch := range chans {
 				select {
@@ -100,10 +99,8 @@ func (pt *PullJobTracker) RemoveJob(jobID string) {
 	pt.mu.Lock()
 	defer pt.mu.Unlock()
 
-	// Save failed job to history before removing
 	if job, ok := pt.jobs[jobID]; ok && job.Status == "failed" {
 		pt.failedJobs = append(pt.failedJobs, job)
-		// Keep only recent failed jobs
 		if len(pt.failedJobs) > pt.maxHistory {
 			pt.failedJobs = pt.failedJobs[len(pt.failedJobs)-pt.maxHistory:]
 		}
@@ -120,7 +117,6 @@ func (pt *PullJobTracker) GetFailedJobs(limit int) []*PullJobStatus {
 		limit = len(pt.failedJobs)
 	}
 
-	// Return most recent first
 	result := make([]*PullJobStatus, 0, limit)
 	for i := len(pt.failedJobs) - 1; i >= len(pt.failedJobs)-limit && i >= 0; i-- {
 		result = append(result, pt.failedJobs[i])
@@ -147,150 +143,190 @@ func NewImageService(repo repository.ImageRepo) *ImageService {
 	return &ImageService{repo: repo}
 }
 
-func (s *ImageService) SubmitRequest(userID uint, name, tag string, projectID *uint) (*image.ImageRequest, error) {
-	req := &image.ImageRequest{
-		UserID:    userID,
-		Name:      name,
-		Tag:       tag,
-		ProjectID: projectID,
-		Status:    "pending",
+func (s *ImageService) SubmitRequest(userID uint, registry, name, tag string, projectID *uint) (*image.ImageRequest, error) {
+	if registry == "" {
+		registry = "docker.io"
 	}
+
+	req := &image.ImageRequest{
+		UserID:         userID,
+		ProjectID:      projectID,
+		InputRegistry:  registry,
+		InputImageName: name,
+		InputTag:       tag,
+		Status:         "pending",
+	}
+
 	if warn := s.validateNameAndTag(name, tag); warn != "" {
 		log.Printf("[image-validate] warning: %s", warn)
-		req.Note = warn
 	}
 	return req, s.repo.CreateRequest(req)
 }
 
-func (s *ImageService) ListRequests(status string) ([]image.ImageRequest, error) {
-	return s.repo.ListRequests(status)
+func (s *ImageService) ListRequests(projectID *uint, status string) ([]image.ImageRequest, error) {
+	return s.repo.ListRequests(projectID, status)
 }
 
-func (s *ImageService) ApproveRequest(id uint, note string, isGlobal bool) (*image.ImageRequest, error) {
+func (s *ImageService) ApproveRequest(id uint, note string, approverID uint) error {
 	req, err := s.repo.FindRequestByID(id)
 	if err != nil {
-		return nil, err
-	}
-	if warn := s.validateNameAndTag(req.Name, req.Tag); warn != "" && req.Note == "" {
-		log.Printf("[image-validate] warning on approve: %s", warn)
-		req.Note = warn
-	}
-	req.Status = "approved"
-	req.Note = note
-	if err := s.repo.UpdateRequest(req); err != nil {
-		return nil, err
+		return err
 	}
 
-	// Add to allowed images
-	allowedImg := &image.AllowedImage{
-		Name:      req.Name,
-		Tag:       req.Tag,
-		ProjectID: req.ProjectID,
-		IsGlobal:  isGlobal,
-		CreatedBy: req.UserID,
+	req.Status = "approved"
+	req.ReviewerNote = note
+	req.ReviewerID = &approverID
+	req.ReviewedAt = ptrTime(time.Now())
+
+	if err := s.repo.UpdateRequest(req); err != nil {
+		return err
 	}
-	_ = s.repo.CreateAllowed(allowedImg)
-	return req, nil
+
+	return s.createCoreAndPolicyFromRequest(req, approverID)
 }
 
-func (s *ImageService) RejectRequest(id uint, note string) (*image.ImageRequest, error) {
+func (s *ImageService) createCoreAndPolicyFromRequest(req *image.ImageRequest, adminID uint) error {
+	fullName := req.InputImageName
+	if req.InputRegistry != "" && req.InputRegistry != "docker.io" {
+		fullName = fmt.Sprintf("%s/%s", req.InputRegistry, req.InputImageName)
+	}
+
+	parts := strings.Split(req.InputImageName, "/")
+	var namespace, name string
+	if len(parts) >= 2 {
+		namespace = parts[0]
+		name = strings.Join(parts[1:], "/")
+	} else {
+		namespace = "library"
+		name = req.InputImageName
+	}
+
+	repoEntity := &image.ContainerRepository{
+		Registry:  req.InputRegistry,
+		Namespace: namespace,
+		Name:      name,
+		FullName:  fullName,
+	}
+	if err := s.repo.FindOrCreateRepository(repoEntity); err != nil {
+		return err
+	}
+
+	tagEntity := &image.ContainerTag{
+		RepositoryID: repoEntity.ID,
+		Name:         req.InputTag,
+	}
+	if err := s.repo.FindOrCreateTag(tagEntity); err != nil {
+		return err
+	}
+
+	rule := &image.ImageAllowList{
+		ProjectID:    req.ProjectID,
+		RepositoryID: repoEntity.ID,
+		TagID:        &tagEntity.ID,
+		RequestID:    &req.ID,
+		CreatedBy:    adminID,
+		IsEnabled:    true,
+	}
+
+	return s.repo.CreateAllowListRule(rule)
+}
+
+func (s *ImageService) RejectRequest(id uint, note string, approverID uint) (*image.ImageRequest, error) {
 	req, err := s.repo.FindRequestByID(id)
 	if err != nil {
 		return nil, err
 	}
 	req.Status = "rejected"
-	req.Note = note
+	req.ReviewerNote = note
+	req.ReviewerID = &approverID
+	req.ReviewedAt = ptrTime(time.Now())
+
 	if err := s.repo.UpdateRequest(req); err != nil {
 		return nil, err
 	}
 	return req, nil
 }
 
-func (s *ImageService) ListAllowed() ([]image.AllowedImage, error) {
-	return s.repo.ListAllowed()
-}
-
-// ListAllowedForProject returns global + project-specific images
-func (s *ImageService) ListAllowedForProject(projectID uint) ([]image.AllowedImage, error) {
-	return s.repo.FindAllowedImagesForProject(projectID)
-}
-
-// AddProjectImage directly adds an image to a project (for project managers)
-func (s *ImageService) AddProjectImage(userID, projectID uint, name, tag string) (*image.AllowedImage, error) {
-	if warn := s.validateNameAndTag(name, tag); warn != "" {
-		return nil, fmt.Errorf("invalid image format: %s", warn)
-	}
-
-	img := &image.AllowedImage{
-		Name:      name,
-		Tag:       tag,
-		ProjectID: &projectID,
-		IsGlobal:  false,
-		CreatedBy: userID,
-	}
-
-	if err := s.repo.CreateAllowed(img); err != nil {
+func (s *ImageService) GetAllowedImage(name, tag string, projectID uint) (*image.AllowedImageDTO, error) {
+	rule, err := s.repo.FindAllowListRule(&projectID, name, tag)
+	if err != nil {
 		return nil, err
 	}
-	return img, nil
-}
 
-// ValidateImageForProject checks if image is allowed for a project
-func (s *ImageService) ValidateImageForProject(name, tag string, projectID uint) (bool, error) {
-	return s.repo.ValidateImageForProject(name, tag, projectID)
-}
-
-// GetAllowedImage retrieves an allowed image by name, tag, and project
-func (s *ImageService) GetAllowedImage(name, tag string, projectID uint) (*image.AllowedImage, error) {
-	return s.repo.FindAllowedImage(name, tag, projectID)
-}
-
-func (s *ImageService) PullImage(name, tag string) error {
-	if warn := s.validateNameAndTag(name, tag); warn != "" {
-		log.Printf("[image-validate] warning on pull: %s", warn)
+	status, _ := s.repo.GetClusterStatus(rule.Tag.ID)
+	isPulled := false
+	if status != nil {
+		isPulled = status.IsPulled
 	}
 
-	fullImage := fmt.Sprintf("%s:%s", name, tag)
-	ttl := int32(300) // Clean up job 5 minutes after completion
+	return &image.AllowedImageDTO{
+		ID:        rule.ID,
+		Registry:  rule.Repository.Registry,
+		ImageName: rule.Repository.Name,
+		Tag:       rule.Tag.Name,
+		Digest:    rule.Tag.Digest,
+		ProjectID: rule.ProjectID,
+		IsGlobal:  rule.ProjectID == nil,
+		IsPulled:  isPulled,
+	}, nil
+}
 
-	// Create a Job to pull the image
-	job := &batchv1.Job{
-		ObjectMeta: metav1.ObjectMeta{
-			GenerateName: "image-puller-",
-			Namespace:    "default", // Using default namespace for admin tasks
-		},
-		Spec: batchv1.JobSpec{
-			TTLSecondsAfterFinished: &ttl,
-			Template: corev1.PodTemplateSpec{
-				Spec: corev1.PodSpec{
-					RestartPolicy: corev1.RestartPolicyOnFailure,
-					Containers: []corev1.Container{
-						{
-							Name:            "puller",
-							Image:           fullImage,
-							ImagePullPolicy: corev1.PullAlways, // Force pull
-							// We try to run a harmless command.
-							// If the image lacks sh, it will fail, but the image will be pulled.
-							Command: []string{"/bin/sh", "-c", "echo Image pulled successfully"},
-						},
-					},
-				},
-			},
-		},
-	}
-
-	_, err := k8s.Clientset.BatchV1().Jobs("default").Create(context.TODO(), job, metav1.CreateOptions{})
+func (s *ImageService) ListAllowedImages(projectID *uint) ([]image.AllowedImageDTO, error) {
+	rules, err := s.repo.ListAllowedImages(projectID)
 	if err != nil {
-		log.Printf("Failed to create image pull job: %v", err)
-		return err
+		return nil, err
 	}
 
-	log.Printf("Created job to pull image: %s", fullImage)
-	return nil
+	var dtos []image.AllowedImageDTO
+	for _, rule := range rules {
+		isGlobal := rule.ProjectID == nil
+
+		status, _ := s.repo.GetClusterStatus(rule.Tag.ID)
+		isPulled := false
+		if status != nil {
+			isPulled = status.IsPulled
+		}
+
+		dtos = append(dtos, image.AllowedImageDTO{
+			ID:        rule.ID,
+			Registry:  rule.Repository.Registry,
+			ImageName: rule.Repository.Name,
+			Tag:       rule.Tag.Name,
+			Digest:    rule.Tag.Digest,
+			ProjectID: rule.ProjectID,
+			IsGlobal:  isGlobal,
+			IsPulled:  isPulled,
+		})
+	}
+	return dtos, nil
 }
 
-// PullImageAsync creates a Kubernetes Job to pull an image, push to Harbor, and returns the job ID
-// The actual pull happens asynchronously, with status updates sent via WebSocket
+func (s *ImageService) AddProjectImage(userID uint, projectID uint, name, tag string) error {
+	if warn := s.validateNameAndTag(name, tag); warn != "" {
+		return fmt.Errorf("invalid image format: %s", warn)
+	}
+
+	req := &image.ImageRequest{
+		UserID:         userID,
+		ProjectID:      &projectID,
+		InputImageName: name,
+		InputTag:       tag,
+		Status:         "pending", // Needs approval
+	}
+
+	return s.repo.CreateRequest(req)
+}
+
+func (s *ImageService) ValidateImageForProject(name, tag string, projectID *uint) (bool, error) {
+	fullName := name
+	if !strings.Contains(name, "/") {
+		// handle simple names like "nginx" implying "docker.io/library/nginx" logic handling or partial match
+		// For simplicity, we assume repo.FullName is stored fully.
+		// A robust implementation needs to normalize input name to match DB FullName.
+	}
+	return s.repo.CheckImageAllowed(projectID, fullName, tag)
+}
+
 func (s *ImageService) PullImageAsync(name, tag string) (string, error) {
 	if warn := s.validateNameAndTag(name, tag); warn != "" {
 		log.Printf("[image-validate] warning on pull: %s", warn)
@@ -298,9 +334,8 @@ func (s *ImageService) PullImageAsync(name, tag string) (string, error) {
 
 	fullImage := fmt.Sprintf("%s:%s", name, tag)
 	harborImage := fmt.Sprintf("%s%s:%s", cfg.HarborPrivatePrefix, name, tag)
-	ttl := int32(300) // Clean up job 5 minutes after completion
+	ttl := int32(300)
 
-	// Create a Job to pull the image, tag it, and push to Harbor
 	k8sJob := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			GenerateName: "image-puller-",
@@ -372,19 +407,17 @@ func (s *ImageService) PullImageAsync(name, tag string) (string, error) {
 	pullTracker.AddJob(jobID, name, tag)
 	pullTracker.UpdateJob(jobID, "pulling", 10, "Starting image pull...")
 
-	// Start background monitoring goroutine
 	go s.monitorPullJob(jobID, name, tag)
 
 	log.Printf("Created pull job %s for image: %s", jobID, fullImage)
 	return jobID, nil
 }
 
-// monitorPullJob watches a pull job and updates status when complete
 func (s *ImageService) monitorPullJob(jobID, imageName, imageTag string) {
 	ticker := time.NewTicker(2 * time.Second)
 	defer ticker.Stop()
 
-	maxRetries := 600 // 20 minutes max wait time
+	maxRetries := 600
 	retries := 0
 
 	for range ticker.C {
@@ -403,7 +436,6 @@ func (s *ImageService) monitorPullJob(jobID, imageName, imageTag string) {
 			continue
 		}
 
-		// Get pod status for real-time updates
 		labelSelector := fmt.Sprintf("job-name=%s", jobID)
 		pods, err := k8s.Clientset.CoreV1().Pods("default").List(context.TODO(), metav1.ListOptions{
 			LabelSelector: labelSelector,
@@ -415,7 +447,6 @@ func (s *ImageService) monitorPullJob(jobID, imageName, imageTag string) {
 		if err == nil && len(pods.Items) > 0 {
 			pod := &pods.Items[0]
 
-			// Check init container status (pulling source image)
 			if len(pod.Status.InitContainerStatuses) > 0 {
 				initStatus := pod.Status.InitContainerStatuses[0]
 				if initStatus.State.Running != nil {
@@ -438,7 +469,6 @@ func (s *ImageService) monitorPullJob(jobID, imageName, imageTag string) {
 				}
 			}
 
-			// Check main container status (pushing to Harbor)
 			if len(pod.Status.ContainerStatuses) > 0 {
 				containerStatus := pod.Status.ContainerStatuses[0]
 				if containerStatus.State.Running != nil {
@@ -452,7 +482,6 @@ func (s *ImageService) monitorPullJob(jobID, imageName, imageTag string) {
 				}
 			}
 
-			// Check pod phase
 			switch pod.Status.Phase {
 			case corev1.PodPending:
 				if statusMsg == "" {
@@ -476,22 +505,15 @@ func (s *ImageService) monitorPullJob(jobID, imageName, imageTag string) {
 			progress = 5
 		}
 
-		// Check if job succeeded
 		if k8sJob.Status.Succeeded > 0 {
 			pullTracker.UpdateJob(jobID, "completed", 100, "Image pushed to Harbor successfully")
 
-			// Update database: mark image as pulled
-			if err := s.repo.UpdateImagePulledStatus(imageName, imageTag, true); err != nil {
-				log.Printf("Failed to update image pulled status: %v", err)
-			} else {
-				log.Printf("Image %s:%s pushed to Harbor and marked as pulled", imageName, imageTag)
-			}
+			s.markImageAsPulled(imageName, imageTag)
 
 			pullTracker.RemoveJob(jobID)
 			return
 		}
 
-		// Check if job failed
 		if k8sJob.Status.Failed > 0 {
 			logs := s.getPodLogsForJob(jobID)
 			errMsg := fmt.Sprintf("Job failed. Logs: %s", logs)
@@ -500,12 +522,53 @@ func (s *ImageService) monitorPullJob(jobID, imageName, imageTag string) {
 			return
 		}
 
-		// Update with real status
 		pullTracker.UpdateJob(jobID, "pulling", progress, statusMsg)
 	}
 }
 
-// getPodLogsForJob retrieves the logs from all pods associated with a job
+func (s *ImageService) markImageAsPulled(name, tag string) {
+	parts := strings.Split(name, "/")
+	var namespace, repoName string
+	if len(parts) >= 2 {
+		namespace = parts[0]
+		repoName = strings.Join(parts[1:], "/")
+	} else {
+		namespace = "library"
+		repoName = name
+	}
+
+	repo := &image.ContainerRepository{
+		Namespace: namespace,
+		Name:      repoName,
+		FullName:  name,
+	}
+	if err := s.repo.FindOrCreateRepository(repo); err != nil {
+		log.Printf("Failed to find repo for status update: %v", err)
+		return
+	}
+
+	tagEntity := &image.ContainerTag{
+		RepositoryID: repo.ID,
+		Name:         tag,
+	}
+	if err := s.repo.FindOrCreateTag(tagEntity); err != nil {
+		log.Printf("Failed to find tag for status update: %v", err)
+		return
+	}
+
+	status := &image.ClusterImageStatus{
+		TagID:        tagEntity.ID,
+		IsPulled:     true,
+		LastPulledAt: ptrTime(time.Now()),
+	}
+
+	if err := s.repo.UpdateClusterStatus(status); err != nil {
+		log.Printf("Failed to update cluster status: %v", err)
+	} else {
+		log.Printf("Cluster status updated for %s:%s", name, tag)
+	}
+}
+
 func (s *ImageService) getPodLogsForJob(jobName string) string {
 	ctx := context.TODO()
 	labelSelector := fmt.Sprintf("job-name=%s", jobName)
@@ -527,7 +590,7 @@ func (s *ImageService) getPodLogsForJob(jobName string) string {
 		logBuilder.WriteString(fmt.Sprintf("=== Pod: %s ===\n", pod.Name))
 
 		req := k8s.Clientset.CoreV1().Pods(pod.Namespace).GetLogs(pod.Name, &corev1.PodLogOptions{
-			TailLines: func() *int64 { i := int64(100); return &i }(), // Last 100 lines
+			TailLines: func() *int64 { i := int64(100); return &i }(),
 		})
 
 		stream, err := req.Stream(ctx)
@@ -550,27 +613,22 @@ func (s *ImageService) getPodLogsForJob(jobName string) string {
 	return logBuilder.String()
 }
 
-// GetPullJobStatus returns the current status of a pull job
 func (s *ImageService) GetPullJobStatus(jobID string) *PullJobStatus {
 	return pullTracker.GetJob(jobID)
 }
 
-// SubscribeToPullJob returns a channel that receives status updates for a pull job
 func (s *ImageService) SubscribeToPullJob(jobID string) <-chan *PullJobStatus {
 	return pullTracker.Subscribe(jobID)
 }
 
-// GetFailedPullJobs returns recent failed pull jobs
 func (s *ImageService) GetFailedPullJobs(limit int) []*PullJobStatus {
 	return pullTracker.GetFailedJobs(limit)
 }
 
-// GetActivePullJobs returns currently active pull jobs
 func (s *ImageService) GetActivePullJobs() []*PullJobStatus {
 	return pullTracker.GetActiveJobs()
 }
 
-// validateNameAndTag performs lightweight format checks; returns warning string but does not block.
 func (s *ImageService) validateNameAndTag(name, tag string) string {
 	name = strings.TrimSpace(name)
 	tag = strings.TrimSpace(tag)
@@ -591,43 +649,6 @@ func (s *ImageService) validateNameAndTag(name, tag string) string {
 	return ""
 }
 
-func (s *ImageService) RemoveProjectImage(projectID, imageID uint) error {
-	img, err := s.repo.FindAllowedByID(imageID)
-	if err != nil {
-		return err
-	}
-	if img.ProjectID == nil || *img.ProjectID != projectID {
-		return fmt.Errorf("image does not belong to this project")
-	}
-	return s.repo.DeleteAllowedImage(imageID)
-}
-
-func (s *ImageService) DeleteAllowedImage(id uint) error {
-	// Find the allowed image to determine name/tag
-	img, err := s.repo.FindAllowedByID(id)
-	if err != nil {
-		return err
-	}
-
-	// Cancel any active pull jobs for this image
-	active := pullTracker.GetActiveJobs()
-	for _, job := range active {
-		if job.ImageName == img.Name && job.ImageTag == img.Tag {
-			// Try to delete k8s job (best-effort)
-			if k8s.Clientset != nil {
-				propagation := metav1.DeletePropagationForeground
-				if err := k8s.Clientset.BatchV1().Jobs("default").Delete(context.TODO(), job.JobID, metav1.DeleteOptions{PropagationPolicy: &propagation}); err != nil {
-					log.Printf("Failed to delete k8s job %s: %v", job.JobID, err)
-				} else {
-					log.Printf("Deleted k8s job %s for image %s:%s", job.JobID, job.ImageName, job.ImageTag)
-				}
-			}
-
-			// Remove from tracker
-			pullTracker.RemoveJob(job.JobID)
-		}
-	}
-
-	// Finally delete the allowed image record from DB
-	return s.repo.DeleteAllowedImage(id)
+func (s *ImageService) DisableAllowListRule(id uint) error {
+	return s.repo.DisableAllowListRule(id)
 }

@@ -152,7 +152,7 @@ func (h *UserGroupHandler) CreateUserGroup(c *gin.Context) {
 
 	if input.Role == "admin" {
 		// Only super admin can elevate to admin role.
-		isSuper, superErr := utils.IsSuperAdmin(requesterID, h.svc.Repos.View)
+		isSuper, superErr := utils.IsSuperAdmin(requesterID, h.svc.Repos.UserGroup)
 		if superErr != nil {
 			c.JSON(http.StatusInternalServerError, response.ErrorResponse{Error: "internal error"})
 			return
@@ -202,7 +202,7 @@ func (h *UserGroupHandler) UpdateUserGroup(c *gin.Context) {
 	}
 
 	if input.Role == "admin" {
-		isSuper, superErr := utils.IsSuperAdmin(requesterID, h.svc.Repos.View)
+		isSuper, superErr := utils.IsSuperAdmin(requesterID, h.svc.Repos.UserGroup)
 		if superErr != nil {
 			c.JSON(http.StatusInternalServerError, response.ErrorResponse{Error: "internal error"})
 			return

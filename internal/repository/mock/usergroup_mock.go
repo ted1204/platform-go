@@ -9,6 +9,8 @@ import (
 
 	gomock "github.com/golang/mock/gomock"
 	group "github.com/linskybing/platform-go/internal/domain/group"
+	repository "github.com/linskybing/platform-go/internal/repository"
+	"gorm.io/gorm"
 )
 
 // MockUserGroupRepo is a mock of UserGroupRepo interface.
@@ -119,4 +121,48 @@ func (m *MockUserGroupRepo) GetUserGroup(uid, gid uint) (group.UserGroup, error)
 func (mr *MockUserGroupRepoMockRecorder) GetUserGroup(uid, gid interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetUserGroup", reflect.TypeOf((*MockUserGroupRepo)(nil).GetUserGroup), uid, gid)
+}
+
+// GetUserRoleInGroup mocks base method.
+func (m *MockUserGroupRepo) GetUserRoleInGroup(uid uint, gid uint) (string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetUserRoleInGroup", uid, gid)
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetUserRoleInGroup indicates an expected call of GetUserRoleInGroup.
+func (mr *MockUserGroupRepoMockRecorder) GetUserRoleInGroup(uid, gid interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetUserRoleInGroup", reflect.TypeOf((*MockUserGroupRepo)(nil).GetUserRoleInGroup), uid, gid)
+}
+
+// WithTx mocks base method.
+func (m *MockUserGroupRepo) WithTx(tx *gorm.DB) repository.UserGroupRepo {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "WithTx", tx)
+	ret0, _ := ret[0].(repository.UserGroupRepo)
+	return ret0
+}
+
+// WithTx indicates an expected call of WithTx.
+func (mr *MockUserGroupRepoMockRecorder) WithTx(tx interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WithTx", reflect.TypeOf((*MockUserGroupRepo)(nil).WithTx), tx)
+}
+
+// IsSuperAdmin mocks base method.
+func (m *MockUserGroupRepo) IsSuperAdmin(uid uint) (bool, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "IsSuperAdmin", uid)
+	ret0, _ := ret[0].(bool)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// IsSuperAdmin indicates an expected call of IsSuperAdmin.
+func (mr *MockUserGroupRepoMockRecorder) IsSuperAdmin(uid interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsSuperAdmin", reflect.TypeOf((*MockUserGroupRepo)(nil).IsSuperAdmin), uid)
 }

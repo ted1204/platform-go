@@ -9,6 +9,7 @@ import (
 	"github.com/linskybing/platform-go/internal/config"
 	"github.com/linskybing/platform-go/internal/domain/group"
 	"github.com/linskybing/platform-go/internal/repository"
+	"github.com/linskybing/platform-go/pkg/k8s"
 	"github.com/linskybing/platform-go/pkg/utils"
 )
 
@@ -36,8 +37,8 @@ func (s *UserGroupService) AllocateGroupResource(gid uint, userName string) erro
 	}
 
 	for _, project := range projects {
-		ns := utils.FormatNamespaceName(project.PID, userName)
-		if err := utils.CreateNamespace(ns); err != nil {
+		ns := k8s.FormatNamespaceName(project.PID, userName)
+		if err := k8s.CreateNamespace(ns); err != nil {
 			return err
 		}
 		// if err := utils.CreatePVC(ns, config.DefaultStorageName, config.DefaultStorageClassName, config.DefaultStorageSize); err != nil {
@@ -56,8 +57,8 @@ func (s *UserGroupService) RemoveGroupResource(gid uint, userName string) error 
 	}
 
 	for _, project := range projects {
-		ns := utils.FormatNamespaceName(project.PID, userName)
-		if err := utils.DeleteNamespace(ns); err != nil {
+		ns := k8s.FormatNamespaceName(project.PID, userName)
+		if err := k8s.DeleteNamespace(ns); err != nil {
 			return err
 		}
 	}

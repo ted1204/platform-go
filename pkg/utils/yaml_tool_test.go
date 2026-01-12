@@ -282,7 +282,7 @@ spec:
 `
 
 	expectedContains := `"kind": "Pod"`
-	jsonStr, err := YAMLToJSON(yamlContent)
+	jsonBytes, err := YAMLToJSON([]byte(yamlContent))
 	assert.NoError(t, err)
-	assert.Contains(t, jsonStr, expectedContains)
+	assert.Contains(t, string(jsonBytes), expectedContains)
 }

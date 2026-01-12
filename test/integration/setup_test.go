@@ -1,3 +1,6 @@
+//go:build integration
+// +build integration
+
 package integration
 
 import (
@@ -29,6 +32,7 @@ import (
 	"github.com/linskybing/platform-go/internal/domain/project"
 	"github.com/linskybing/platform-go/internal/domain/resource"
 	"github.com/linskybing/platform-go/internal/domain/user"
+	"github.com/linskybing/platform-go/internal/migrations"
 	"github.com/linskybing/platform-go/pkg/k8s"
 	"github.com/linskybing/platform-go/pkg/types"
 )
@@ -130,6 +134,11 @@ func setupTestEnvironment() error {
 		return fmt.Errorf("failed to migrate database: %v", err)
 	}
 	log.Println("AutoMigrate completed")
+
+	// Run raw SQL migrations (if any) to ensure normalized tables and schema changes are applied
+	if err := migrations.RunMigrations(); err != nil {
+		return fmt.Errorf("failed to run SQL migrations: %v", err)
+	}
 
 	// Create database views after tables are created
 	db.CreateViews()

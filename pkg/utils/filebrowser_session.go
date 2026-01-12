@@ -3,9 +3,9 @@ package utils
 import (
 	"context"
 	"fmt"
+	"log"
 	"time"
 
-	"github.com/linskybing/platform-go/internal/config"
 	"github.com/linskybing/platform-go/pkg/k8s" // 假設這是你的 k8s client wrapper
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -47,8 +47,6 @@ func CreateFileBrowserPod(ctx context.Context, ns string, pvcName string) (*core
 				{
 					Name:  "filebrowser",
 					Image: "filebrowser/filebrowser:v2",
-					// --noauth: 依賴前端或 Nginx 驗證，或是用於暫時性 Session
-					// --root=/srv: 鎖定在掛載點
 					Args:  []string{"--noauth", "--root=/srv", "--address=0.0.0.0"},
 					Ports: []corev1.ContainerPort{{ContainerPort: 80}},
 					VolumeMounts: []corev1.VolumeMount{
@@ -180,19 +178,10 @@ func StartUserHubBrowser(ctx context.Context, username string) (string, error) {
 	}
 
 	ns := fmt.Sprintf("user-%s-storage", username)
+	pvcName := fmt.Sprintf("user-%s-disk", username)
 	appName := fmt.Sprintf("fb-hub-%s", username)
 	svcName := fmt.Sprintf("fb-hub-svc-%s", username)
-	nfsServiceName := config.PersonalStorageServiceName
 
-	nfsSvc, err := k8s.Clientset.CoreV1().Services(ns).Get(ctx, nfsServiceName, metav1.GetOptions{})
-	if err != nil {
-		return "", fmt.Errorf("failed to get nfs service IP: %w", err)
-	}
-	nfsClusterIP := nfsSvc.Spec.ClusterIP
-
-	nfsPath := "/"
-
-	// 1. 建立 Pod (Mount NFS)
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      appName,
@@ -200,11 +189,10 @@ func StartUserHubBrowser(ctx context.Context, username string) (string, error) {
 			Labels:    map[string]string{"app": appName},
 		},
 		Spec: corev1.PodSpec{
-			// Set pod-level security context for consistent file permissions across all pods
 			SecurityContext: &corev1.PodSecurityContext{
-				RunAsUser:  int64Ptr(1000), // Non-root user (matches training pods)
-				RunAsGroup: int64Ptr(1000), // Non-root group
-				FSGroup:    int64Ptr(1000), // All files created will belong to this group
+				RunAsUser:  int64Ptr(0),
+				RunAsGroup: int64Ptr(0),
+				FSGroup:    int64Ptr(0),
 			},
 			Containers: []corev1.Container{
 				{
@@ -214,7 +202,7 @@ func StartUserHubBrowser(ctx context.Context, username string) (string, error) {
 					Ports: []corev1.ContainerPort{{ContainerPort: 80}},
 					VolumeMounts: []corev1.VolumeMount{
 						{
-							Name:      "nfs-data",
+							Name:      "user-data",
 							MountPath: "/srv",
 						},
 					},
@@ -222,29 +210,23 @@ func StartUserHubBrowser(ctx context.Context, username string) (string, error) {
 			},
 			Volumes: []corev1.Volume{
 				{
-					Name: "nfs-data",
+					Name: "user-data",
 					VolumeSource: corev1.VolumeSource{
-						NFS: &corev1.NFSVolumeSource{
-							Server: nfsClusterIP,
-							Path:   nfsPath,
+						PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+							ClaimName: pvcName,
 						},
 					},
 				},
 			},
-			RestartPolicy: corev1.RestartPolicyNever,
+			RestartPolicy: corev1.RestartPolicyOnFailure,
 		},
 	}
 
-	// 先嘗試刪除舊的 Pod (如果處於錯誤狀態) 以免名稱衝突
-	// k8s.Clientset.CoreV1().Pods(ns).Delete(ctx, appName, metav1.DeleteOptions{})
-	// time.Sleep(1 * time.Second) // 稍微等一下
-
-	_, err = k8s.Clientset.CoreV1().Pods(ns).Create(ctx, pod, metav1.CreateOptions{})
+	_, err := k8s.Clientset.CoreV1().Pods(ns).Create(ctx, pod, metav1.CreateOptions{})
 	if err != nil && !apierrors.IsAlreadyExists(err) {
 		return "", fmt.Errorf("failed to create Hub FB pod: %w", err)
 	}
 
-	// 2. 建立 NodePort Service (保持不變)
 	svc := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      svcName,
@@ -263,10 +245,8 @@ func StartUserHubBrowser(ctx context.Context, username string) (string, error) {
 	}
 
 	_, err = k8s.Clientset.CoreV1().Services(ns).Create(ctx, svc, metav1.CreateOptions{})
-	if err != nil {
-		if !apierrors.IsAlreadyExists(err) {
-			return "", fmt.Errorf("failed to create Hub FB service: %w", err)
-		}
+	if err != nil && !apierrors.IsAlreadyExists(err) {
+		return "", fmt.Errorf("failed to create Hub FB service: %w", err)
 	}
 
 	return "80", nil
@@ -278,27 +258,24 @@ func StopUserHubBrowser(ctx context.Context, username string) error {
 		return nil
 	}
 
-	// 1. 重組名稱 (必須與 StartUserHubBrowser 的命名邏輯完全一致)
 	ns := fmt.Sprintf("user-%s-storage", username)
-	podName := fmt.Sprintf("fb-hub-%s", username)
+	appName := fmt.Sprintf("fb-hub-%s", username)
 	svcName := fmt.Sprintf("fb-hub-svc-%s", username)
 
-	gracePeriod := int64(0) // 強制刪除，加快釋放速度
+	gracePeriod := int64(0)
 
-	// 2. 刪除 Service
 	err := k8s.Clientset.CoreV1().Services(ns).Delete(ctx, svcName, metav1.DeleteOptions{})
 	if err != nil && !apierrors.IsNotFound(err) {
 		return fmt.Errorf("failed to delete hub service: %w", err)
 	}
 
-	// 3. 刪除 Pod
-	err = k8s.Clientset.CoreV1().Pods(ns).Delete(ctx, podName, metav1.DeleteOptions{
+	err = k8s.Clientset.CoreV1().Pods(ns).Delete(ctx, appName, metav1.DeleteOptions{
 		GracePeriodSeconds: &gracePeriod,
 	})
 	if err != nil && !apierrors.IsNotFound(err) {
 		return fmt.Errorf("failed to delete hub pod: %w", err)
 	}
 
-	fmt.Printf("[Info] Stopped Hub Browser for user: %s\n", username)
+	log.Printf("[StorageHub] Browser stopped and disk unmounted for user: %s", username)
 	return nil
 }

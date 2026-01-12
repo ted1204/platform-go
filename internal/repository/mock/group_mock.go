@@ -9,6 +9,8 @@ import (
 
 	gomock "github.com/golang/mock/gomock"
 	group "github.com/linskybing/platform-go/internal/domain/group"
+	repository "github.com/linskybing/platform-go/internal/repository"
+	"gorm.io/gorm"
 )
 
 // MockGroupRepo is a mock of GroupRepo interface.
@@ -104,4 +106,18 @@ func (m *MockGroupRepo) UpdateGroup(group *group.Group) error {
 func (mr *MockGroupRepoMockRecorder) UpdateGroup(group interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateGroup", reflect.TypeOf((*MockGroupRepo)(nil).UpdateGroup), group)
+}
+
+// WithTx mocks base method.
+func (m *MockGroupRepo) WithTx(tx *gorm.DB) repository.GroupRepo {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "WithTx", tx)
+	ret0, _ := ret[0].(repository.GroupRepo)
+	return ret0
+}
+
+// WithTx indicates an expected call of WithTx.
+func (mr *MockGroupRepoMockRecorder) WithTx(tx interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WithTx", reflect.TypeOf((*MockGroupRepo)(nil).WithTx), tx)
 }

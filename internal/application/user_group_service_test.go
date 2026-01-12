@@ -2,7 +2,6 @@ package application
 
 import (
 	"errors"
-	"fmt"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -43,16 +42,10 @@ func setupUserGroupMocks(t *testing.T) (*UserGroupService,
 	service := NewUserGroupService(repos)
 	ctx, _ := gin.CreateTestContext(nil)
 
-	// override utils
+	// override utils (k8s package uses mock behavior when Clientset is nil)
 	utils.LogAuditWithConsole = func(ctx *gin.Context, action, resourceType, resourceID string,
 		oldData, newData interface{}, msg string, repos repository.AuditRepo) {
 	}
-	utils.FormatNamespaceName = func(pid uint, username string) string {
-		return fmt.Sprintf("ns-%d-%s", pid, username)
-	}
-	utils.CreateNamespace = func(ns string) error { return nil }
-	utils.CreatePVC = func(ns, name, class, size string) error { return nil }
-	utils.DeleteNamespace = func(ns string) error { return nil }
 
 	return service, mockUG, mockUser, mockProject, mockGroup, mockAudit, ctx
 }

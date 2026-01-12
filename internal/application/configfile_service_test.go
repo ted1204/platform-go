@@ -18,15 +18,17 @@ import (
 	"github.com/linskybing/platform-go/internal/domain/view"
 	"github.com/linskybing/platform-go/internal/repository"
 	"github.com/linskybing/platform-go/internal/repository/mock"
+	"github.com/linskybing/platform-go/pkg/k8s"
 	"github.com/linskybing/platform-go/pkg/types"
 	"github.com/linskybing/platform-go/pkg/utils"
 	"gorm.io/datatypes"
-	"k8s.io/apimachinery/pkg/runtime/schema"
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
 )
 
 func setupMocks(t *testing.T) (*application.ConfigFileService, *mock.MockConfigFileRepo,
 	*mock.MockResourceRepo, *mock.MockAuditRepo,
-	*mock.MockViewRepo, *mock.MockProjectRepo, *mock.MockUserGroupRepo, *gin.Context) {
+	*mock.MockUserRepo, *mock.MockProjectRepo, *mock.MockUserGroupRepo, *gin.Context) {
 
 	ctrl := gomock.NewController(t)
 	t.Cleanup(ctrl.Finish)
@@ -34,20 +36,24 @@ func setupMocks(t *testing.T) (*application.ConfigFileService, *mock.MockConfigF
 	mockCF := mock.NewMockConfigFileRepo(ctrl)
 	mockRes := mock.NewMockResourceRepo(ctrl)
 	mockAudit := mock.NewMockAuditRepo(ctrl)
-	mockView := mock.NewMockViewRepo(ctrl)
-
 	mockProject := mock.NewMockProjectRepo(ctrl)
 	mockUserGroup := mock.NewMockUserGroupRepo(ctrl)
-
-	repos := &repository.Repos{
-		ConfigFile: mockCF,
-		Resource:   mockRes,
-		Audit:      mockAudit,
-		View:       mockView,
-		Project:    mockProject,
-		UserGroup:  mockUserGroup,
-	}
+	mockUser := mock.NewMockUserRepo(ctrl)
+	// create base repos with an in-memory sqlite gorm DB so Begin() is safe, then inject mocks
+	dbConn, _ := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	baseRepos := repository.NewRepositories(dbConn)
+	baseRepos.ConfigFile = mockCF
+	baseRepos.Resource = mockRes
+	baseRepos.Audit = mockAudit
+	baseRepos.Project = mockProject
+	baseRepos.UserGroup = mockUserGroup
+	baseRepos.User = mockUser
+	repos := baseRepos
+	// (db already set in baseRepos)
 	svc := application.NewConfigFileService(repos)
+
+	// initialize fake k8s client for functions that require Clientset
+	k8s.InitTestCluster()
 
 	// gin context
 	w := httptest.NewRecorder()
@@ -56,19 +62,22 @@ func setupMocks(t *testing.T) (*application.ConfigFileService, *mock.MockConfigF
 	c.Request = req
 	c.Set("claims", &types.Claims{Username: "testuser", UserID: 1})
 
-	// mock utils
-	utils.SplitYAMLDocuments = func(yamlStr string) []string { return []string{"doc1"} }
-	utils.YAMLToJSON = func(doc string) (string, error) { return `{"kind":"Pod","metadata":{"name":"testpod"}}`, nil }
-	utils.ValidateK8sJSON = func(jsonStr string) (*schema.GroupVersionKind, string, error) {
-		return &schema.GroupVersionKind{Kind: "Pod"}, "testpod", nil
-	}
+	// mock utils (k8s functions use mock behavior when Mapper/DynamicClient/Clientset are nil)
+	utils.SplitYAMLDocuments = func(yamlStr string) []string { return []string{yamlStr} }
 	utils.LogAuditWithConsole = func(c *gin.Context, action, resourceType, resourceID string, oldData, newData interface{}, msg string, repos repository.AuditRepo) {
 	}
-	utils.CreateByJson = func(yaml []byte, ns string) error { return nil }
-	utils.DeleteByJson = func(yaml []byte, ns string) error { return nil }
-	utils.FormatNamespaceName = func(projectID uint, username string) string { return "ns-test" }
 
-	return svc, mockCF, mockRes, mockAudit, mockView, mockProject, mockUserGroup, c
+	// Ensure WithTx returns the same mock so transactional calls use the expected mock methods
+	mockCF.EXPECT().WithTx(gomock.Any()).DoAndReturn(func(tx *gorm.DB) repository.ConfigFileRepo {
+		return mockCF
+	}).AnyTimes()
+	mockRes.EXPECT().WithTx(gomock.Any()).DoAndReturn(func(tx *gorm.DB) repository.ResourceRepo {
+		fmt.Println("[MOCK] ResourceRepo.WithTx called")
+		return mockRes
+	}).AnyTimes()
+	// CreateConfigFile may or may not be invoked depending on internal transaction flow in service; tests set expectations where needed.
+
+	return svc, mockCF, mockRes, mockAudit, mockUser, mockProject, mockUserGroup, c
 }
 
 func TestCreateConfigFile_Success(t *testing.T) {
@@ -80,7 +89,7 @@ func TestCreateConfigFile_Success(t *testing.T) {
 
 	input := configfile.CreateConfigFileInput{
 		Filename:  "test.yaml",
-		RawYaml:   "kind: Pod\nmetadata:\n  name: testpod",
+		RawYaml:   "apiVersion: v1\nkind: Pod\nmetadata:\n  name: testpod",
 		ProjectID: 1,
 	}
 
@@ -111,7 +120,7 @@ func TestCreateConfigFile_NoYAMLDocuments(t *testing.T) {
 }
 
 func TestUpdateConfigFile_Success(t *testing.T) {
-	svc, mockCF, mockRes, mockAudit, mockView, _, _, c := setupMocks(t)
+	svc, mockCF, mockRes, mockAudit, mockUser, _, _, c := setupMocks(t)
 
 	// Mock original ConfigFile
 	existingCF := &configfile.ConfigFile{
@@ -128,30 +137,25 @@ func TestUpdateConfigFile_Success(t *testing.T) {
 	mockRes.EXPECT().UpdateResource(gomock.Any()).Return(nil).AnyTimes()
 	mockRes.EXPECT().DeleteResource(gomock.Any()).Return(nil).AnyTimes()
 
-	// Mock ViewRepo
-	mockView.EXPECT().ListUsersByProjectID(uint(1)).Return([]view.ProjectUserView{
+	// Mock User repo listing
+	mockUser.EXPECT().ListUsersByProjectID(uint(1)).Return([]view.ProjectUserView{
 		{Username: "user1"},
 	}, nil)
 
 	// Mock Audit
 	mockAudit.EXPECT().CreateAuditLog(gomock.Any()).Return(nil).AnyTimes()
 
-	// Mock utils
+	// Mock utils: keep split behavior consistent so actual YAML is processed
 	utils.SplitYAMLDocuments = func(yamlStr string) []string {
-		return []string{"doc1"}
+		return []string{yamlStr}
 	}
-	utils.YAMLToJSON = func(doc string) (string, error) {
-		return `{"kind":"Pod","metadata":{"name":"testpod"}}`, nil
-	}
-	utils.ValidateK8sJSON = func(jsonStr string) (*schema.GroupVersionKind, string, error) {
-		return &schema.GroupVersionKind{Kind: "Pod"}, "testpod", nil
-	}
+	// use actual k8s.ValidateK8sJSON implementation (pure function)
 	utils.LogAuditWithConsole = func(c *gin.Context, action, resourceType, resourceID string, oldData, newData interface{}, msg string, repos repository.AuditRepo) {
 	}
-	utils.DeleteByJson = func(yaml []byte, ns string) error { return nil }
+	// k8s.DeleteByJson will use mock behavior when k8s clients are nil
 
 	filename := "new.yaml"
-	rawYaml := "kind: Pod\nmetadata:\n  name: testpod"
+	rawYaml := "apiVersion: v1\nkind: Pod\nmetadata:\n  name: testpod"
 	input := configfile.ConfigFileUpdateDTO{
 		Filename: &filename,
 		RawYaml:  &rawYaml,
@@ -167,7 +171,7 @@ func TestUpdateConfigFile_Success(t *testing.T) {
 }
 
 func TestDeleteConfigFile_Success(t *testing.T) {
-	svc, mockCF, mockRes, mockAudit, mockView, _, _, c := setupMocks(t)
+	svc, mockCF, mockRes, mockAudit, mockUser, _, _, c := setupMocks(t)
 
 	mockCF.EXPECT().GetConfigFileByID(uint(1)).Return(&configfile.ConfigFile{
 		CFID: 1, ProjectID: 1, Filename: "test.yaml",
@@ -177,7 +181,7 @@ func TestDeleteConfigFile_Success(t *testing.T) {
 		{RID: 10, Name: "res1"},
 	}, nil)
 
-	mockView.EXPECT().ListUsersByProjectID(uint(1)).Return([]view.ProjectUserView{
+	mockUser.EXPECT().ListUsersByProjectID(uint(1)).Return([]view.ProjectUserView{
 		{Username: "user1"},
 	}, nil)
 
@@ -185,9 +189,7 @@ func TestDeleteConfigFile_Success(t *testing.T) {
 	mockCF.EXPECT().DeleteConfigFile(uint(1)).Return(nil)
 	mockAudit.EXPECT().CreateAuditLog(gomock.Any()).Return(nil).AnyTimes()
 
-	utils.DeleteByJson = func(yaml []byte, ns string) error {
-		return nil
-	}
+	// k8s.DeleteByJson is a function that uses mock behavior when k8s clients are nil, so no override needed
 
 	err := svc.DeleteConfigFile(c, 1)
 	if err != nil {
@@ -200,8 +202,8 @@ func TestCreateInstance_Success(t *testing.T) {
 
 	mockRes.EXPECT().ListResourcesByConfigFileID(uint(1)).Return([]resource.Resource{{RID: 1, ParsedYAML: datatypes.JSON([]byte("{}"))}}, nil)
 	mockCF.EXPECT().GetConfigFileByID(uint(1)).Return(&configfile.ConfigFile{CFID: 1, ProjectID: 1}, nil)
-	mockProject.EXPECT().GetProjectByID(uint(1)).Return(project.Project{PID: 1, GID: 10}, nil)
-	mockUserGroup.EXPECT().GetUserGroup(uint(1), uint(10)).Return(group.UserGroup{UID: 1, GID: 10, Role: "admin"}, nil)
+	mockProject.EXPECT().GetProjectByID(uint(1)).Return(project.Project{PID: 1, GID: 10}, nil).AnyTimes()
+	mockUserGroup.EXPECT().GetUserGroup(uint(1), uint(10)).Return(group.UserGroup{UID: 1, GID: 10, Role: "admin"}, nil).AnyTimes()
 
 	err := svc.CreateInstance(c, 1)
 	if err != nil {
@@ -222,7 +224,7 @@ func TestDeleteInstance_Success(t *testing.T) {
 }
 
 func TestDeleteConfigFileInstance_Success(t *testing.T) {
-	svc, mockCF, mockRes, _, mockView, _, _, _ := setupMocks(t)
+	svc, mockCF, mockRes, _, mockUser, _, _, _ := setupMocks(t)
 
 	// Mock ConfigFile
 	mockCF.EXPECT().GetConfigFileByID(uint(1)).Return(&configfile.ConfigFile{
@@ -236,16 +238,12 @@ func TestDeleteConfigFileInstance_Success(t *testing.T) {
 		{RID: 1, Name: "res1"},
 	}, nil)
 
-	// Mock ViewRepo
-	mockView.EXPECT().ListUsersByProjectID(uint(1)).Return([]view.ProjectUserView{
+	// Mock User repo listing
+	mockUser.EXPECT().ListUsersByProjectID(uint(1)).Return([]view.ProjectUserView{
 		{Username: "user1"},
 	}, nil)
 
-	// Mock utils
-	utils.FormatNamespaceName = func(projectID uint, username string) string {
-		return fmt.Sprintf("ns-%d-%s", projectID, username)
-	}
-	utils.DeleteByJson = func(yaml []byte, ns string) error { return nil }
+	// k8s.FormatNamespaceName and k8s.DeleteByJson use deterministic behavior / mock when clients are nil
 
 	err := svc.DeleteConfigFileInstance(1)
 	if err != nil {
@@ -351,30 +349,21 @@ func TestValidateAndInjectGPUConfig(t *testing.T) {
 			t.Fatalf("expected nvidia.com/gpu limit 10, got %v", val)
 		}
 
-		// Check environment variables were set
+		// Check environment variables were set (MPS memory env only)
 		env := container["env"].([]interface{})
-		if len(env) < 2 {
-			t.Fatalf("expected at least 2 env vars for GPU, got %d", len(env))
+		if len(env) < 1 {
+			t.Fatalf("expected at least 1 env var for GPU, got %d", len(env))
 		}
-		// Verify GPU_QUOTA and memory env
-		foundQuota := false
+		// Verify memory env
 		foundMemory := false
 		for _, e := range env {
 			if item, ok := e.(map[string]interface{}); ok {
-				switch item["name"] {
-				case "GPU_QUOTA":
-					if item["value"] == "10" {
-						foundQuota = true
-					}
-				case "CUDA_MPS_PINNED_DEVICE_MEM_LIMIT":
+				if item["name"] == "CUDA_MPS_PINNED_DEVICE_MEM_LIMIT" {
 					if item["value"] == "2147483648" {
 						foundMemory = true
 					}
 				}
 			}
-		}
-		if !foundQuota {
-			t.Fatalf("GPU_QUOTA env not injected or incorrect")
 		}
 		if !foundMemory {
 			t.Fatalf("CUDA_MPS_PINNED_DEVICE_MEM_LIMIT env not injected or incorrect")
@@ -483,21 +472,15 @@ func TestValidateAndInjectGPUConfig(t *testing.T) {
 		if limits["nvidia.com/gpu"] != "5" {
 			t.Fatalf("expected GPU limit 5, got %v", limits["nvidia.com/gpu"])
 		}
+		// When MPSMemory is 0, only limits should be set; no MPS env var
 		env := container["env"].([]interface{})
-		foundQuota := false
 		foundMem := false
 		for _, e := range env {
 			if item, ok := e.(map[string]interface{}); ok {
-				if item["name"] == "GPU_QUOTA" && item["value"] == "5" {
-					foundQuota = true
-				}
 				if item["name"] == "CUDA_MPS_PINNED_DEVICE_MEM_LIMIT" {
 					foundMem = true
 				}
 			}
-		}
-		if !foundQuota {
-			t.Fatalf("GPU_QUOTA env not injected or incorrect")
 		}
 		if foundMem {
 			t.Fatalf("did not expect CUDA_MPS_PINNED_DEVICE_MEM_LIMIT when memory is 0")

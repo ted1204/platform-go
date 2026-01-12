@@ -9,6 +9,9 @@ import (
 
 	gomock "github.com/golang/mock/gomock"
 	resource "github.com/linskybing/platform-go/internal/domain/resource"
+	view "github.com/linskybing/platform-go/internal/domain/view"
+	repository "github.com/linskybing/platform-go/internal/repository"
+	"gorm.io/gorm"
 )
 
 // MockResourceRepo is a mock of ResourceRepo interface.
@@ -134,4 +137,63 @@ func (m *MockResourceRepo) UpdateResource(resource *resource.Resource) error {
 func (mr *MockResourceRepoMockRecorder) UpdateResource(resource interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateResource", reflect.TypeOf((*MockResourceRepo)(nil).UpdateResource), resource)
+}
+
+// GetGroupIDByResourceID mocks base method.
+func (m *MockResourceRepo) GetGroupIDByResourceID(rID uint) (uint, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetGroupIDByResourceID", rID)
+	ret0, _ := ret[0].(uint)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetGroupIDByResourceID indicates an expected call of GetGroupIDByResourceID.
+func (mr *MockResourceRepoMockRecorder) GetGroupIDByResourceID(rID interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetGroupIDByResourceID", reflect.TypeOf((*MockResourceRepo)(nil).GetGroupIDByResourceID), rID)
+}
+
+// WithTx mocks base method.
+func (m *MockResourceRepo) WithTx(tx *gorm.DB) repository.ResourceRepo {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "WithTx", tx)
+	ret0, _ := ret[0].(repository.ResourceRepo)
+	return ret0
+}
+
+// WithTx indicates an expected call of WithTx.
+func (mr *MockResourceRepoMockRecorder) WithTx(tx interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WithTx", reflect.TypeOf((*MockResourceRepo)(nil).WithTx), tx)
+}
+
+// GetGroupResourcesByGroupID mocks base method.
+func (m *MockResourceRepo) GetGroupResourcesByGroupID(groupID uint) ([]view.GroupResourceView, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetGroupResourcesByGroupID", groupID)
+	ret0, _ := ret[0].([]view.GroupResourceView)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetGroupResourcesByGroupID indicates an expected call of GetGroupResourcesByGroupID.
+func (mr *MockResourceRepoMockRecorder) GetGroupResourcesByGroupID(groupID interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetGroupResourcesByGroupID", reflect.TypeOf((*MockResourceRepo)(nil).GetGroupResourcesByGroupID), groupID)
+}
+
+// GetProjectResourcesByGroupID mocks base method.
+func (m *MockResourceRepo) GetProjectResourcesByGroupID(groupID uint) ([]view.ProjectResourceView, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetProjectResourcesByGroupID", groupID)
+	ret0, _ := ret[0].([]view.ProjectResourceView)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetProjectResourcesByGroupID indicates an expected call of GetProjectResourcesByGroupID.
+func (mr *MockResourceRepoMockRecorder) GetProjectResourcesByGroupID(groupID interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetProjectResourcesByGroupID", reflect.TypeOf((*MockResourceRepo)(nil).GetProjectResourcesByGroupID), groupID)
 }

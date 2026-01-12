@@ -4,8 +4,7 @@ import (
 	"time"
 
 	"github.com/linskybing/platform-go/internal/domain/audit"
-
-	"github.com/linskybing/platform-go/internal/config/db"
+	"gorm.io/gorm"
 )
 
 type AuditQueryParams struct {
@@ -22,18 +21,27 @@ type AuditRepo interface {
 	GetAuditLogs(params AuditQueryParams) ([]audit.AuditLog, error)
 	CreateAuditLog(audit *audit.AuditLog) error
 	DeleteOldAuditLogs(retentionDays int) error
+	WithTx(tx *gorm.DB) AuditRepo
 }
 
-type DBAuditRepo struct{}
+type DBAuditRepo struct {
+	db *gorm.DB
+}
+
+func NewAuditRepo(db *gorm.DB) *DBAuditRepo {
+	return &DBAuditRepo{
+		db: db,
+	}
+}
 
 func (r *DBAuditRepo) DeleteOldAuditLogs(retentionDays int) error {
 	cutoff := time.Now().AddDate(0, 0, -retentionDays)
-	return db.DB.Where("created_at < ?", cutoff).Delete(&audit.AuditLog{}).Error
+	return r.db.Where("created_at < ?", cutoff).Delete(&audit.AuditLog{}).Error
 }
 
 func (r *DBAuditRepo) GetAuditLogs(params AuditQueryParams) ([]audit.AuditLog, error) {
 	var logs []audit.AuditLog
-	query := db.DB.Model(&audit.AuditLog{})
+	query := r.db.Model(&audit.AuditLog{})
 
 	if params.UserID != nil {
 		query = query.Where("user_id = ?", *params.UserID)
@@ -64,5 +72,14 @@ func (r *DBAuditRepo) GetAuditLogs(params AuditQueryParams) ([]audit.AuditLog, e
 }
 
 func (r *DBAuditRepo) CreateAuditLog(audit *audit.AuditLog) error {
-	return db.DB.Create(audit).Error
+	return r.db.Create(audit).Error
+}
+
+func (r *DBAuditRepo) WithTx(tx *gorm.DB) AuditRepo {
+	if tx == nil {
+		return r
+	}
+	return &DBAuditRepo{
+		db: tx,
+	}
 }

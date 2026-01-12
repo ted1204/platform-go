@@ -1,8 +1,9 @@
 package repository
 
 import (
-	"github.com/linskybing/platform-go/internal/config/db"
 	"github.com/linskybing/platform-go/internal/domain/user"
+	"github.com/linskybing/platform-go/internal/domain/view"
+	"gorm.io/gorm"
 )
 
 type UserRepo interface {
@@ -14,21 +15,38 @@ type UserRepo interface {
 	GetUserRawByID(id uint) (user.User, error)
 	SaveUser(user *user.User) error
 	DeleteUser(id uint) error
+	ListUsersByProjectID(projectID uint) ([]view.ProjectUserView, error)
+	WithTx(tx *gorm.DB) UserRepo
 }
 
-type DBUserRepo struct{}
+type DBUserRepo struct {
+	db *gorm.DB
+}
+
+func NewUserRepo(db *gorm.DB) *DBUserRepo {
+	return &DBUserRepo{
+		db: db,
+	}
+}
 
 func (r *DBUserRepo) GetAllUsers() ([]user.UserWithSuperAdmin, error) {
 	var users []user.UserWithSuperAdmin
-	if err := db.DB.Find(&users).Error; err != nil {
-		return nil, err
-	}
-	return users, nil
+
+	err := r.db.Table("users u").
+		Select(`
+			u.*,
+			CASE WHEN ug.role = 'admin' THEN true ELSE false END AS is_super_admin
+		`).
+		Joins("LEFT JOIN user_group ug ON u.u_id = ug.u_id AND ug.role = 'admin'").
+		Joins("LEFT JOIN group_list g ON ug.g_id = g.g_id AND g.group_name = 'super'").
+		Scan(&users).Error
+
+	return users, err
 }
 
 func (r *DBUserRepo) GetUserByUsername(username string) (user.User, error) {
 	var u user.User
-	if err := db.DB.Where("username = ?", username).First(&u).Error; err != nil {
+	if err := r.db.Where("username = ?", username).First(&u).Error; err != nil {
 		return u, err
 	}
 	return u, nil
@@ -46,7 +64,7 @@ func (r *DBUserRepo) ListUsersPaging(page, limit int) ([]user.UserWithSuperAdmin
 
 	offset := (page - 1) * limit
 
-	if err := db.DB.Offset(int(offset)).Limit(int(limit)).Find(&users).Error; err != nil {
+	if err := r.db.Offset(int(offset)).Limit(int(limit)).Find(&users).Error; err != nil {
 		return nil, err
 	}
 	return users, nil
@@ -54,7 +72,7 @@ func (r *DBUserRepo) ListUsersPaging(page, limit int) ([]user.UserWithSuperAdmin
 
 func (r *DBUserRepo) GetUserByID(id uint) (user.UserWithSuperAdmin, error) {
 	var u user.UserWithSuperAdmin
-	if err := db.DB.Table("users").Where("u_id = ?", id).First(&u).Error; err != nil {
+	if err := r.db.Table("users").Where("u_id = ?", id).First(&u).Error; err != nil {
 		return u, err
 	}
 	return u, nil
@@ -62,7 +80,7 @@ func (r *DBUserRepo) GetUserByID(id uint) (user.UserWithSuperAdmin, error) {
 
 func (r *DBUserRepo) GetUsernameByID(id uint) (string, error) {
 	var username string
-	err := db.DB.Model(&user.User{}).Select("username").Where("u_id = ?", id).First(&username).Error
+	err := r.db.Model(&user.User{}).Select("username").Where("u_id = ?", id).First(&username).Error
 	if err != nil {
 		return "", err
 	}
@@ -71,16 +89,43 @@ func (r *DBUserRepo) GetUsernameByID(id uint) (string, error) {
 
 func (r *DBUserRepo) GetUserRawByID(id uint) (user.User, error) {
 	var u user.User
-	if err := db.DB.First(&u, id).Error; err != nil {
+	if err := r.db.First(&u, id).Error; err != nil {
 		return u, err
 	}
 	return u, nil
 }
 
 func (r *DBUserRepo) SaveUser(user *user.User) error {
-	return db.DB.Save(user).Error
+	return r.db.Save(user).Error
 }
 
 func (r *DBUserRepo) DeleteUser(id uint) error {
-	return db.DB.Delete(&user.User{}, id).Error
+	return r.db.Delete(&user.User{}, id).Error
+}
+
+func (r *DBUserRepo) ListUsersByProjectID(projectID uint) ([]view.ProjectUserView, error) {
+	var results []view.ProjectUserView
+
+	err := r.db.Table("users u").
+		Select(`
+            p.p_id, p.project_name, 
+            g.g_id, g.group_name, 
+            u.u_id, u.username, ug.role
+        `).
+		Joins("JOIN user_group ug ON ug.u_id = u.u_id").
+		Joins("JOIN group_list g ON g.g_id = ug.g_id").
+		Joins("JOIN project_list p ON p.g_id = g.g_id").
+		Where("p.p_id = ?", projectID).
+		Scan(&results).Error
+
+	return results, err
+}
+
+func (r *DBUserRepo) WithTx(tx *gorm.DB) UserRepo {
+	if tx == nil {
+		return r
+	}
+	return &DBUserRepo{
+		db: tx,
+	}
 }

@@ -1,27 +1,58 @@
 package image
 
-import "gorm.io/gorm"
+import (
+	"time"
 
-// ImageRequest is a user-submitted request to allow/pull an image.
-type ImageRequest struct {
+	"gorm.io/gorm"
+)
+
+type ContainerRepository struct {
 	gorm.Model
-	UserID    uint   `json:"user_id"`
-	ProjectID *uint  `json:"project_id"` // nil for global request
-	Name      string `json:"name"`       // e.g. registry/project/repo
-	Tag       string `json:"tag"`        // e.g. v1.2.3
-	Status    string `json:"status"`     // pending/approved/rejected
-	Note      string `json:"note"`       // admin note
+	Registry  string         `gorm:"size:255;default:'docker.io'"`
+	Namespace string         `gorm:"size:255"`
+	Name      string         `gorm:"size:255;index"`
+	FullName  string         `gorm:"uniqueIndex;size:512"`
+	Tags      []ContainerTag `gorm:"foreignKey:RepositoryID"`
 }
 
-// AllowedImage stores images approved for use.
-// IsGlobal=true means admin-approved and visible to all
-// IsGlobal=false means project-scoped, only visible to that project
-type AllowedImage struct {
+type ContainerTag struct {
 	gorm.Model
-	Name      string `json:"name"` // e.g. registry/project/repo
-	Tag       string `json:"tag"`
-	ProjectID *uint  `json:"project_id"`                     // nil if global
-	IsGlobal  bool   `json:"is_global" gorm:"default:false"` // true if admin-approved for all
-	IsPulled  bool   `json:"is_pulled" gorm:"default:false"` // true if image has been pulled to cluster
-	CreatedBy uint   `json:"created_by"`                     // user who added this image
+	RepositoryID uint   `gorm:"index;not null"`
+	Name         string `gorm:"size:128;index"`
+	Digest       string `gorm:"size:255"`
+	Size         int64
+	PushedAt     *time.Time
+}
+
+type ImageAllowList struct {
+	gorm.Model
+	ProjectID    *uint `gorm:"index"`
+	TagID        *uint `gorm:"index"`
+	RepositoryID uint  `gorm:"index;not null"`
+	RequestID    *uint
+	CreatedBy    uint
+	IsEnabled    bool                `gorm:"default:true"`
+	Repository   ContainerRepository `gorm:"foreignKey:RepositoryID"`
+	Tag          ContainerTag        `gorm:"foreignKey:TagID"`
+}
+
+type ImageRequest struct {
+	gorm.Model
+	UserID         uint  `gorm:"index"`
+	ProjectID      *uint `gorm:"index"`
+	InputRegistry  string
+	InputImageName string
+	InputTag       string
+	Status         string `gorm:"size:32;default:'pending';index"`
+	ReviewerID     *uint
+	ReviewedAt     *time.Time
+	ReviewerNote   string
+}
+
+type ClusterImageStatus struct {
+	gorm.Model
+	TagID        uint `gorm:"uniqueIndex"`
+	IsPulled     bool `gorm:"default:false"`
+	LastPulledAt *time.Time
+	PullError    string
 }

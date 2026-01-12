@@ -32,14 +32,18 @@ var (
 	MinioBucket             string
 	Scheme                  = runtime.NewScheme()
 	DefaultStorageName      = "project"
-	DefaultStorageClassName = "nfs-client"
+	DefaultStorageClassName = "longhorn"
 	DefaultStorageSize      = "3Gi"
-	UserPVSize              = "50Gi"
+	UserPVSize              = "10Gi"
+	ProjectPVSize           = "10Gi"
 	// Environment
 	IsProduction bool
 	// Reserved names that cannot be deleted or downgraded
 	ReservedGroupName     = "super"
 	ReservedAdminUsername = "admin"
+	// Storage Pattern
+	UserStorageNs  = "user-%s-storage" // user-{username}-storage
+	UserStoragePVC = "user-%s-disk"    // user-{username}-disk
 	// K8s Service Names
 	PersonalStorageServiceName   string
 	ProjectStorageServiceName    string
@@ -69,7 +73,7 @@ func LoadConfig() {
 	MinioBucket = getEnv("MINIO_BUCKET", "platform-bucket")
 	MinioUseSSL, _ = strconv.ParseBool(getEnv("MINIO_USE_SSL", "true"))
 
-	DefaultStorageClassName = getEnv("DEFAULT_STORAGE_CLASS_NAME", "nfs-client")
+	DefaultStorageClassName = getEnv("DEFAULT_STORAGE_CLASS_NAME", "longhorn")
 
 	// Environment
 	env := getEnv("GO_ENV", "development")

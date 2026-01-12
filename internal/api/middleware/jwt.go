@@ -21,7 +21,7 @@ func Init() {
 }
 
 // GenerateToken issues a signed token and reports admin status.
-var GenerateToken = func(userID uint, username string, expireDuration time.Duration, repos repository.ViewRepo) (string, bool, error) {
+var GenerateToken = func(userID uint, username string, expireDuration time.Duration, repos repository.UserGroupRepo) (string, bool, error) {
 	isAdmin, err := utils.IsSuperAdmin(userID, repos)
 	if err != nil {
 		return "", false, err

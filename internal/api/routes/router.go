@@ -9,14 +9,15 @@ import (
 	"github.com/linskybing/platform-go/internal/domain/configfile"
 	"github.com/linskybing/platform-go/internal/domain/group"
 	"github.com/linskybing/platform-go/internal/repository"
+	"gorm.io/gorm"
 )
 
-func RegisterRoutes(r *gin.Engine) {
+func RegisterRoutes(r *gin.Engine, db *gorm.DB) {
 	// --- JWT-protected routes ---
 	// Token status check endpoint (no group, but with JWT middleware)
 	r.GET("/auth/status", middleware.JWTAuthMiddleware(), handlers.AuthStatusHandler)
 	// init
-	repos_instance := repository.New()
+	repos_instance := repository.NewRepositories(db)
 	services_instance := application.New(repos_instance)
 	handlers_instance := handlers.New(services_instance, repos_instance, r)
 	authMiddleware := middleware.NewAuth(repos_instance)
@@ -81,8 +82,6 @@ func RegisterRoutes(r *gin.Engine) {
 			projects.POST("", authMiddleware.Admin(), handlers_instance.Project.CreateProject)
 			projects.PUT("/:id", authMiddleware.GroupManager(middleware.FromIDParam(repos_instance.Project.GetGroupIDByProjectID)), handlers_instance.Project.UpdateProject)
 			projects.DELETE("/:id", authMiddleware.GroupAdmin(middleware.FromIDParam(repos_instance.Project.GetGroupIDByProjectID)), handlers_instance.Project.DeleteProject)
-			projects.POST("/:id/gpu-requests", handlers_instance.GPURequest.CreateRequest)
-			projects.GET("/:id/gpu-requests", handlers_instance.GPURequest.ListRequestsByProject)
 
 			// Project-level image management (for project managers)
 			projects.GET("/:id/images", authMiddleware.GroupMember(middleware.FromIDParam(repos_instance.Project.GetGroupIDByProjectID)), handlers_instance.Image.ListAllowed)
@@ -99,22 +98,17 @@ func RegisterRoutes(r *gin.Engine) {
 		JobRoutes(auth, handlers_instance.Job)
 		instances := auth.Group("/instance")
 		{
-			instances.POST("/:id", authMiddleware.GroupMember(middleware.FromIDParam(repos_instance.View.GetGroupIDByConfigFileID)), handlers_instance.ConfigFile.CreateInstanceHandler)
-			instances.DELETE("/:id", authMiddleware.GroupMember(middleware.FromIDParam(repos_instance.View.GetGroupIDByConfigFileID)), handlers_instance.ConfigFile.DestructInstanceHandler)
+			instances.POST("/:id", authMiddleware.GroupMember(middleware.FromIDParam(repos_instance.ConfigFile.GetGroupIDByConfigFileID)), handlers_instance.ConfigFile.CreateInstanceHandler)
+			instances.DELETE("/:id", authMiddleware.GroupMember(middleware.FromIDParam(repos_instance.ConfigFile.GetGroupIDByConfigFileID)), handlers_instance.ConfigFile.DestructInstanceHandler)
 		}
 		configFiles := auth.Group("/config-files")
 		{
 			configFiles.GET("", authMiddleware.Admin(), handlers_instance.ConfigFile.ListConfigFilesHandler)
-			configFiles.GET("/:id", authMiddleware.GroupMember(middleware.FromIDParam(repos_instance.View.GetGroupIDByConfigFileID)), handlers_instance.ConfigFile.GetConfigFileHandler)
-			configFiles.GET("/:id/resources", authMiddleware.GroupMember(middleware.FromIDParam(repos_instance.View.GetGroupIDByConfigFileID)), handlers_instance.Resource.ListResourcesByConfigFileID)
+			configFiles.GET("/:id", authMiddleware.GroupMember(middleware.FromIDParam(repos_instance.ConfigFile.GetGroupIDByConfigFileID)), handlers_instance.ConfigFile.GetConfigFileHandler)
+			configFiles.GET("/:id/resources", authMiddleware.GroupMember(middleware.FromIDParam(repos_instance.ConfigFile.GetGroupIDByConfigFileID)), handlers_instance.Resource.ListResourcesByConfigFileID)
 			configFiles.POST("", authMiddleware.GroupManager(middleware.FromProjectIDInPayload(configfile.CreateConfigFileInput{})), handlers_instance.ConfigFile.CreateConfigFileHandler)
-			configFiles.PUT("/:id", authMiddleware.GroupManager(middleware.FromIDParam(repos_instance.View.GetGroupIDByConfigFileID)), handlers_instance.ConfigFile.UpdateConfigFileHandler)
-			configFiles.DELETE("/:id", authMiddleware.GroupManager(middleware.FromIDParam(repos_instance.View.GetGroupIDByConfigFileID)), handlers_instance.ConfigFile.DeleteConfigFileHandler)
-		}
-		admin := auth.Group("/admin")
-		{
-			admin.GET("/gpu-requests", authMiddleware.Admin(), handlers_instance.GPURequest.ListPendingRequests)
-			admin.PUT("/gpu-requests/:id/status", authMiddleware.Admin(), handlers_instance.GPURequest.ProcessRequest)
+			configFiles.PUT("/:id", authMiddleware.GroupManager(middleware.FromIDParam(repos_instance.ConfigFile.GetGroupIDByConfigFileID)), handlers_instance.ConfigFile.UpdateConfigFileHandler)
+			configFiles.DELETE("/:id", authMiddleware.GroupManager(middleware.FromIDParam(repos_instance.ConfigFile.GetGroupIDByConfigFileID)), handlers_instance.ConfigFile.DeleteConfigFileHandler)
 		}
 		users := auth.Group("/users")
 		{
@@ -137,18 +131,6 @@ func RegisterRoutes(r *gin.Engine) {
 			k8s.POST("/jobs", authMiddleware.Admin(), handlers_instance.K8s.CreateJob)
 			k8s.GET("/jobs", handlers_instance.K8s.ListJobs)
 			k8s.GET("/jobs/:id", handlers_instance.K8s.GetJob)
-
-			// PVC routes moved here
-			pvc := k8s.Group("/pvc")
-			{
-				pvc.GET("/:namespace/:name", authMiddleware.Admin(), handlers_instance.K8s.GetPVC)
-				pvc.GET("/list/:namespace", authMiddleware.Admin(), handlers_instance.K8s.ListPVCs)
-				pvc.GET("/by-project/:id", authMiddleware.GroupMember(middleware.FromIDParam(repos_instance.Project.GetGroupIDByProjectID)), handlers_instance.K8s.ListPVCsByProject)
-				pvc.POST("", authMiddleware.Admin(), handlers_instance.K8s.CreatePVC)
-				pvc.POST("/project/:id", authMiddleware.GroupMember(middleware.FromIDParam(repos_instance.Project.GetGroupIDByProjectID)), handlers_instance.Project.CreateProjectPVC)
-				pvc.PUT("/expand", authMiddleware.Admin(), handlers_instance.K8s.ExpandPVC)
-				pvc.DELETE("/:namespace/:name", authMiddleware.Admin(), handlers_instance.K8s.DeletePVC)
-			}
 
 			// [NEW] Project Storage Management & Proxy
 			// Base URL: /k8s/storage/projects

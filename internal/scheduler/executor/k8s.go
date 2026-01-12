@@ -49,7 +49,7 @@ func (e *K8sExecutor) Execute(ctx context.Context, j *job.Job) error {
 		if len(parts) == 2 {
 			name := parts[0]
 			tag := parts[1]
-			isAllowed, _ := e.imageService.ValidateImageForProject(name, tag, *j.ProjectID)
+			isAllowed, _ := e.imageService.ValidateImageForProject(name, tag, j.ProjectID)
 			if isAllowed {
 				prefix := config.HarborPrivatePrefix
 				if prefix != "" && !strings.HasPrefix(j.Image, prefix) {

@@ -10,6 +10,7 @@ import (
 	gomock "github.com/golang/mock/gomock"
 	audit "github.com/linskybing/platform-go/internal/domain/audit"
 	repository "github.com/linskybing/platform-go/internal/repository"
+	"gorm.io/gorm"
 )
 
 // MockAuditRepo is a mock of AuditRepo interface.
@@ -76,4 +77,18 @@ func (m *MockAuditRepo) DeleteOldAuditLogs(retentionDays int) error {
 func (mr *MockAuditRepoMockRecorder) DeleteOldAuditLogs(retentionDays interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteOldAuditLogs", reflect.TypeOf((*MockAuditRepo)(nil).DeleteOldAuditLogs), retentionDays)
+}
+
+// WithTx mocks base method.
+func (m *MockAuditRepo) WithTx(tx *gorm.DB) repository.AuditRepo {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "WithTx", tx)
+	ret0, _ := ret[0].(repository.AuditRepo)
+	return ret0
+}
+
+// WithTx indicates an expected call of WithTx.
+func (mr *MockAuditRepoMockRecorder) WithTx(tx interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WithTx", reflect.TypeOf((*MockAuditRepo)(nil).WithTx), tx)
 }

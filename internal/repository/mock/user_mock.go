@@ -9,6 +9,9 @@ import (
 
 	gomock "github.com/golang/mock/gomock"
 	user "github.com/linskybing/platform-go/internal/domain/user"
+	view "github.com/linskybing/platform-go/internal/domain/view"
+	repository "github.com/linskybing/platform-go/internal/repository"
+	"gorm.io/gorm"
 )
 
 // MockUserRepo is a mock of UserRepo interface.
@@ -150,4 +153,33 @@ func (m *MockUserRepo) SaveUser(user *user.User) error {
 func (mr *MockUserRepoMockRecorder) SaveUser(user interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SaveUser", reflect.TypeOf((*MockUserRepo)(nil).SaveUser), user)
+}
+
+// ListUsersByProjectID mocks base method.
+func (m *MockUserRepo) ListUsersByProjectID(projectID uint) ([]view.ProjectUserView, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListUsersByProjectID", projectID)
+	ret0, _ := ret[0].([]view.ProjectUserView)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListUsersByProjectID indicates an expected call of ListUsersByProjectID.
+func (mr *MockUserRepoMockRecorder) ListUsersByProjectID(projectID interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListUsersByProjectID", reflect.TypeOf((*MockUserRepo)(nil).ListUsersByProjectID), projectID)
+}
+
+// WithTx mocks base method.
+func (m *MockUserRepo) WithTx(tx *gorm.DB) repository.UserRepo {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "WithTx", tx)
+	ret0, _ := ret[0].(repository.UserRepo)
+	return ret0
+}
+
+// WithTx indicates an expected call of WithTx.
+func (mr *MockUserRepoMockRecorder) WithTx(tx interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WithTx", reflect.TypeOf((*MockUserRepo)(nil).WithTx), tx)
 }

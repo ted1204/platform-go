@@ -67,7 +67,7 @@ func TestLoginUser_Success(t *testing.T) {
 	mockUser.EXPECT().GetUserByUsername("bob").Return(usr, nil)
 
 	oldGen := middleware.GenerateToken
-	middleware.GenerateToken = func(uid uint, username string, exp time.Duration, view repository.ViewRepo) (string, bool, error) {
+	middleware.GenerateToken = func(uid uint, username string, exp time.Duration, view repository.UserGroupRepo) (string, bool, error) {
 		return "token123", true, nil
 	}
 	defer func() { middleware.GenerateToken = oldGen }()

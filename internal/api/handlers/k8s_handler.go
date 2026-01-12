@@ -18,7 +18,6 @@ import (
 	"github.com/linskybing/platform-go/pkg/response"
 	"github.com/linskybing/platform-go/pkg/types"
 	"github.com/linskybing/platform-go/pkg/utils"
-	corev1 "k8s.io/api/core/v1"
 )
 
 type K8sHandler struct {
@@ -123,219 +122,6 @@ func (h *K8sHandler) GetJob(c *gin.Context) {
 		Code:    0,
 		Message: "success",
 		Data:    job,
-	})
-}
-
-// @Summary Get single PVC
-// @Tags k8s
-// @Produce json
-// @Param namespace path string true "namespace"
-// @Param name path string true "PVC name"
-// @Success 200 {object} response.SuccessResponse
-// @Failure 404 {object} response.ErrorResponse
-// @Router /k8s/pvc/{namespace}/{name} [get]
-func (h *K8sHandler) GetPVC(c *gin.Context) {
-	ns := c.Param("namespace")
-	name := c.Param("name")
-
-	pvc, err := h.K8sService.GetPVC(ns, name)
-	if err != nil {
-		c.JSON(http.StatusNotFound, response.ErrorResponse{Error: err.Error()})
-		return
-	}
-
-	size := ""
-	if q, ok := pvc.Spec.Resources.Requests[corev1.ResourceStorage]; ok {
-		size = q.String()
-	}
-
-	pvcDTO := job.PVC{
-		Name:      pvc.Name,
-		Namespace: pvc.Namespace,
-		Status:    string(pvc.Status.Phase),
-		Size:      size,
-	}
-
-	c.JSON(http.StatusOK, response.SuccessResponse{
-		Code:    0,
-		Message: "success",
-		Data:    pvcDTO,
-	})
-}
-
-// @Summary List all PVC in Namespace
-// @Tags k8s
-// @Produce json
-// @Param namespace path string true "namespace"
-// @Success 200 {object} response.SuccessResponse
-// @Failure 500 {object} response.ErrorResponse
-// @Router /k8s/pvc/list/{namespace} [get]
-func (h *K8sHandler) ListPVCs(c *gin.Context) {
-	ns := c.Param("namespace")
-
-	pvcs, err := h.K8sService.ListPVCs(ns)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, response.ErrorResponse{Error: err.Error()})
-		return
-	}
-
-	var pvcDTOs []job.PVC
-	for _, pvc := range pvcs {
-		size := ""
-		if q, ok := pvc.Spec.Resources.Requests[corev1.ResourceStorage]; ok {
-			size = q.String()
-		}
-		pvcDTOs = append(pvcDTOs, job.PVC{
-			Name:      pvc.Name,
-			Namespace: pvc.Namespace,
-			Status:    string(pvc.Status.Phase),
-			Size:      size,
-		})
-	}
-
-	c.JSON(http.StatusOK, response.SuccessResponse{
-		Code:    0,
-		Message: "success",
-		Data:    pvcDTOs,
-	})
-}
-
-// @Summary List all PVC in Project
-// @Tags k8s
-// @Produce json
-// @Param id path string true "Project ID"
-// @Success 200 {object} response.SuccessResponse
-// @Failure 500 {object} response.ErrorResponse
-// @Router /k8s/pvc/by-project/{id} [get]
-func (h *K8sHandler) ListPVCsByProject(c *gin.Context) {
-	pid := c.Param("id")
-
-	username, err := utils.GetUserNameFromContext(c)
-	if err != nil {
-		c.JSON(http.StatusUnauthorized, response.ErrorResponse{Error: "Unauthorized"})
-		return
-	}
-
-	ns := fmt.Sprintf("proj-%s-%s", pid, username)
-
-	pvcs, err := h.K8sService.ListPVCs(ns)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, response.ErrorResponse{Error: err.Error()})
-		return
-	}
-
-	globalPVCName := fmt.Sprintf("user-%s-pv", username)
-
-	var pvcDTOs []job.PVC
-	for _, pvc := range pvcs {
-		size := ""
-		if q, ok := pvc.Spec.Resources.Requests[corev1.ResourceStorage]; ok {
-			size = q.String()
-		}
-		isGlobal := pvc.Name == globalPVCName
-		pvcDTOs = append(pvcDTOs, job.PVC{
-			Name:      pvc.Name,
-			Namespace: pvc.Namespace,
-			Status:    string(pvc.Status.Phase),
-			Size:      size,
-			IsGlobal:  isGlobal,
-		})
-	}
-
-	c.JSON(http.StatusOK, pvcDTOs)
-}
-
-// @Summary Create PVC
-// @Tags k8s
-// @Accept x-www-form-urlencoded
-// @Produce json
-// @Param namespace formData string true "namespace"
-// @Param name formData string true "PVC name"
-// @Param storageClassName formData string true "Storage Class Name"
-// @Param size formData string true "Size (e.g. 1Gi)"
-// @Success 201 {object} response.SuccessResponse
-// @Failure 400 {object} response.ErrorResponse
-// @Failure 500 {object} response.ErrorResponse
-// @Router /k8s/pvc [post]
-func (h *K8sHandler) CreatePVC(c *gin.Context) {
-	var input job.CreatePVCDTO
-	if err := c.ShouldBind(&input); err != nil {
-		c.JSON(http.StatusBadRequest, response.ErrorResponse{Error: "invalid request: " + err.Error()})
-		return
-	}
-
-	// Convert DTO to VolumeSpec
-	spec := job.VolumeSpec{
-		Name:             input.Name,
-		Namespace:        input.Namespace,
-		Size:             input.Capacity,
-		StorageClassName: input.StorageClass,
-	}
-
-	if err := h.K8sService.CreatePVC(spec); err != nil {
-		c.JSON(http.StatusInternalServerError, response.ErrorResponse{Error: err.Error()})
-		return
-	}
-	c.JSON(http.StatusCreated, response.SuccessResponse{
-		Code:    0,
-		Message: "PVC created",
-	})
-}
-
-// @Summary Expand PVC
-// @Tags k8s
-// @Accept x-www-form-urlencoded
-// @Produce json
-// @Param namespace formData string true "namespace"
-// @Param name formData string true "PVC name"
-// @Param size formData string true "New Size (e.g. 2Gi)"
-// @Success 200 {object} response.SuccessResponse
-// @Failure 400 {object} response.ErrorResponse
-// @Failure 500 {object} response.ErrorResponse
-// @Router /k8s/pvc/expand [put]
-func (h *K8sHandler) ExpandPVC(c *gin.Context) {
-	var input job.ExpandPVCDTO
-	if err := c.ShouldBind(&input); err != nil {
-		c.JSON(http.StatusBadRequest, response.ErrorResponse{Error: "invalid request: " + err.Error()})
-		return
-	}
-
-	// Convert DTO to VolumeSpec
-	spec := job.VolumeSpec{
-		Name:      input.Name,
-		Namespace: input.Namespace,
-		Size:      input.Capacity,
-	}
-
-	if err := h.K8sService.ExpandPVC(spec); err != nil {
-		c.JSON(http.StatusInternalServerError, response.ErrorResponse{Error: err.Error()})
-		return
-	}
-	c.JSON(http.StatusOK, response.SuccessResponse{
-		Code:    0,
-		Message: "PVC expanded",
-	})
-}
-
-// @Summary Delete PVC
-// @Tags k8s
-// @Produce json
-// @Param namespace path string true "namespace"
-// @Param name path string true "PVC name"
-// @Success 200 {object} response.SuccessResponse
-// @Failure 500 {object} response.ErrorResponse
-// @Router /k8s/pvc/{namespace}/{name} [delete]
-func (h *K8sHandler) DeletePVC(c *gin.Context) {
-	ns := c.Param("namespace")
-	name := c.Param("name")
-
-	if err := h.K8sService.DeletePVC(ns, name); err != nil {
-		c.JSON(http.StatusInternalServerError, response.ErrorResponse{Error: err.Error()})
-		return
-	}
-	c.JSON(http.StatusOK, response.SuccessResponse{
-		Code:    0,
-		Message: "PVC deleted",
 	})
 }
 
@@ -801,7 +587,7 @@ func (h *K8sHandler) ProjectStorageProxy(c *gin.Context) {
 	}
 
 	// 1. Reconstruct Namespace (Matches your previous logic)
-	targetNamespace := utils.GenerateSafeResourceName("project", project.ProjectName, project.PID)
+	targetNamespace := k8s.GenerateSafeResourceName("project", project.ProjectName, project.PID)
 
 	// 2. Use the new shared service name (PVC-agnostic)
 	serviceName := config.ProjectStorageBrowserSVCName
@@ -878,7 +664,7 @@ func (h *K8sHandler) StartProjectFileBrowser(c *gin.Context) {
 		return
 	}
 
-	targetNamespace := utils.GenerateSafeResourceName("project", project.ProjectName, project.PID)
+	targetNamespace := k8s.GenerateSafeResourceName("project", project.ProjectName, project.PID)
 
 	// 4. Collect all project PVCs in this namespace for multi-mount gateway
 	pvcNames, err := h.K8sService.GetProjectPVCNames(c.Request.Context(), targetNamespace)
@@ -939,7 +725,7 @@ func (h *K8sHandler) StopProjectFileBrowser(c *gin.Context) {
 		return
 	}
 
-	targetNamespace := utils.GenerateSafeResourceName("project", project.ProjectName, project.PID)
+	targetNamespace := k8s.GenerateSafeResourceName("project", project.ProjectName, project.PID)
 
 	err = h.K8sService.StopFileBrowser(c.Request.Context(), targetNamespace)
 	if err != nil {

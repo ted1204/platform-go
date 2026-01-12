@@ -1,7 +1,6 @@
 package application
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -16,16 +15,17 @@ import (
 	"github.com/linskybing/platform-go/pkg/k8s"
 	"github.com/linskybing/platform-go/pkg/types"
 	"github.com/linskybing/platform-go/pkg/utils"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
 	"gorm.io/datatypes"
+	k8sRes "k8s.io/apimachinery/pkg/api/resource"
+	"sigs.k8s.io/yaml"
 )
 
 var (
-	ErrConfigFileNotFound  = errors.New("config file not found")
-	ErrYAMLParsingFailed   = errors.New("YAML parsing failed")
-	ErrNoValidYAMLDocument = errors.New("no valid YAML documents found")
-	ErrUploadYAMLFailed    = errors.New("failed to upload YAML file")
+	ErrConfigFileNotFound   = errors.New("config file not found")
+	ErrYAMLParsingFailed    = errors.New("YAML parsing failed")
+	ErrNoValidYAMLDocument  = errors.New("no valid YAML documents found")
+	ErrUploadYAMLFailed     = errors.New("failed to upload YAML file")
+	ErrInvalidResourceLimit = errors.New("invalid resource limit specified in YAML")
 )
 
 type ConfigFileService struct {
@@ -71,33 +71,31 @@ func (s *ConfigFileService) extractAndValidateImages(jsonBytes []byte, projectID
 		return nil // If not valid JSON, let k8s handle the error
 	}
 
-	// Extract images from common locations
 	images := []string{}
+
+	// Helper to collect images
+	collectImages := func(containers []interface{}) {
+		for _, c := range containers {
+			if cont, ok := c.(map[string]interface{}); ok {
+				if img, ok := cont["image"].(string); ok {
+					images = append(images, img)
+				}
+			}
+		}
+	}
 
 	// Check spec.containers (Pod/Deployment)
 	if spec, ok := obj["spec"].(map[string]interface{}); ok {
 		// Direct containers (Pod)
 		if containers, ok := spec["containers"].([]interface{}); ok {
-			for _, c := range containers {
-				if cont, ok := c.(map[string]interface{}); ok {
-					if img, ok := cont["image"].(string); ok {
-						images = append(images, img)
-					}
-				}
-			}
+			collectImages(containers)
 		}
 
 		// Deployment template
 		if template, ok := spec["template"].(map[string]interface{}); ok {
 			if tSpec, ok := template["spec"].(map[string]interface{}); ok {
 				if containers, ok := tSpec["containers"].([]interface{}); ok {
-					for _, c := range containers {
-						if cont, ok := c.(map[string]interface{}); ok {
-							if img, ok := cont["image"].(string); ok {
-								images = append(images, img)
-							}
-						}
-					}
+					collectImages(containers)
 				}
 			}
 		}
@@ -113,7 +111,7 @@ func (s *ConfigFileService) extractAndValidateImages(jsonBytes []byte, projectID
 		imageName := parts[0]
 		imageTag := parts[1]
 
-		allowed, err := s.imageService.ValidateImageForProject(imageName, imageTag, projectID)
+		allowed, err := s.imageService.ValidateImageForProject(imageName, imageTag, &projectID)
 		if err != nil || !allowed {
 			return fmt.Errorf("image %s is not allowed for this project. Please add it first via project settings", img)
 		}
@@ -126,10 +124,9 @@ func (s *ConfigFileService) extractAndValidateImages(jsonBytes []byte, projectID
 func (s *ConfigFileService) injectHarborPrefix(jsonBytes []byte, projectID uint) ([]byte, error) {
 	var obj map[string]interface{}
 	if err := json.Unmarshal(jsonBytes, &obj); err != nil {
-		return jsonBytes, nil // If not valid JSON, let k8s handle the error
+		return jsonBytes, nil
 	}
 
-	// Helper function to check if image has been pulled
 	isImagePulled := func(imageName, imageTag string) bool {
 		allowed, err := s.imageService.GetAllowedImage(imageName, imageTag, projectID)
 		if err != nil || allowed == nil {
@@ -138,25 +135,20 @@ func (s *ConfigFileService) injectHarborPrefix(jsonBytes []byte, projectID uint)
 		return allowed.IsPulled
 	}
 
-	// Helper function to process container images
 	processContainers := func(containers []interface{}) {
 		for _, c := range containers {
 			if cont, ok := c.(map[string]interface{}); ok {
 				if img, ok := cont["image"].(string); ok {
-					// Skip if already has Harbor prefix
 					if strings.HasPrefix(img, config.HarborPrivatePrefix) {
 						continue
 					}
-
 					parts := strings.Split(img, ":")
 					if len(parts) != 2 {
-						continue // Skip malformed images
+						continue
 					}
-
 					imageName := parts[0]
 					imageTag := parts[1]
 
-					// If image is pulled, inject Harbor prefix
 					if isImagePulled(imageName, imageTag) {
 						cont["image"] = config.HarborPrivatePrefix + img
 					}
@@ -165,14 +157,10 @@ func (s *ConfigFileService) injectHarborPrefix(jsonBytes []byte, projectID uint)
 		}
 	}
 
-	// Check spec.containers (Pod/Deployment)
 	if spec, ok := obj["spec"].(map[string]interface{}); ok {
-		// Direct containers (Pod)
 		if containers, ok := spec["containers"].([]interface{}); ok {
 			processContainers(containers)
 		}
-
-		// Deployment template
 		if template, ok := spec["template"].(map[string]interface{}); ok {
 			if tSpec, ok := template["spec"].(map[string]interface{}); ok {
 				if containers, ok := tSpec["containers"].([]interface{}); ok {
@@ -199,44 +187,176 @@ func (s *ConfigFileService) CreateConfigFile(c *gin.Context, cf configfile.Creat
 		return nil, ErrNoValidYAMLDocument
 	}
 
-	var resources []*resource.Resource
+	var resourcesToCreate []*resource.Resource
+
 	for i, doc := range yamlArray {
-		jsonContent, err := utils.YAMLToJSON(doc)
+		jsonBytes, err := yaml.YAMLToJSON([]byte(doc))
 		if err != nil {
 			return nil, fmt.Errorf("failed to convert YAML to JSON for document %d: %w", i+1, err)
 		}
 
-		gvk, name, err := utils.ValidateK8sJSON(jsonContent)
-		if err != nil {
-			return nil, fmt.Errorf("failed to validate YAML document %d: %w", i+1, err)
+		var obj map[string]interface{}
+		if err := json.Unmarshal(jsonBytes, &obj); err != nil {
+			return nil, fmt.Errorf("failed to parse JSON for validation in document %d: %w", i+1, err)
 		}
 
-		resources = append(resources, &resource.Resource{
+		if err := validateContainerLimits(obj); err != nil {
+			return nil, fmt.Errorf("validation failed in document %d: %w", i+1, err)
+		}
+
+		gvk, name, err := k8s.ValidateK8sJSON(jsonBytes)
+		if err != nil {
+			return nil, fmt.Errorf("failed to validate K8s spec for document %d: %w", i+1, err)
+		}
+
+		resourcesToCreate = append(resourcesToCreate, &resource.Resource{
 			Type:       resource.ResourceType(normalizeResourceKind(gvk.Kind)),
 			Name:       name,
-			ParsedYAML: datatypes.JSON([]byte(jsonContent)),
+			ParsedYAML: datatypes.JSON(jsonBytes),
 		})
 	}
+
+	tx := s.Repos.Begin()
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
 
 	createdCF := &configfile.ConfigFile{
 		Filename:  cf.Filename,
 		Content:   cf.RawYaml,
 		ProjectID: cf.ProjectID,
 	}
-	if err := s.Repos.ConfigFile.CreateConfigFile(createdCF); err != nil {
+
+	if err := s.Repos.ConfigFile.WithTx(tx).CreateConfigFile(createdCF); err != nil {
+		tx.Rollback()
 		return nil, err
 	}
-	utils.LogAuditWithConsole(c, "create", "config_file", fmt.Sprintf("cf_id=%d", createdCF.CFID), nil, *createdCF, "", s.Repos.Audit)
 
-	for _, res := range resources {
+	for _, res := range resourcesToCreate {
 		res.CFID = createdCF.CFID
-		if err := s.Repos.Resource.CreateResource(res); err != nil {
+		if err := s.Repos.Resource.WithTx(tx).CreateResource(res); err != nil {
+			tx.Rollback()
 			return nil, fmt.Errorf("failed to create resource %s/%s: %w", res.Type, res.Name, err)
 		}
-		utils.LogAuditWithConsole(c, "create", "resource", fmt.Sprintf("r_id=%d", res.RID), nil, *res, "", s.Repos.Audit)
 	}
 
+	if res := tx.Commit(); res.Error != nil {
+		return nil, fmt.Errorf("transaction commit failed: %w", res.Error)
+	}
+
+	go func() {
+		utils.LogAuditWithConsole(c, "create", "config_file", fmt.Sprintf("cf_id=%d", createdCF.CFID), nil, *createdCF, "", s.Repos.Audit)
+	}()
+
 	return createdCF, nil
+}
+
+func validateContainerLimits(obj map[string]interface{}) error {
+	if obj == nil {
+		return nil
+	}
+
+	kind, _ := obj["kind"].(string)
+	var podSpec map[string]interface{}
+
+	if spec, ok := obj["spec"].(map[string]interface{}); ok {
+		switch kind {
+		case "Pod":
+			podSpec = spec
+		case "Deployment", "StatefulSet", "DaemonSet", "Job", "ReplicaSet", "ReplicationController":
+			if template, ok := spec["template"].(map[string]interface{}); ok {
+				if tSpec, ok := template["spec"].(map[string]interface{}); ok {
+					podSpec = tSpec
+				}
+			}
+		case "CronJob":
+			if jobTemplate, ok := spec["jobTemplate"].(map[string]interface{}); ok {
+				if jobSpec, ok := jobTemplate["spec"].(map[string]interface{}); ok {
+					if template, ok := jobSpec["template"].(map[string]interface{}); ok {
+						if tSpec, ok := template["spec"].(map[string]interface{}); ok {
+							podSpec = tSpec
+						}
+					}
+				}
+			}
+		}
+	}
+
+	if podSpec == nil {
+		return nil
+	}
+
+	var containers []interface{}
+	if c, ok := podSpec["containers"].([]interface{}); ok {
+		containers = append(containers, c...)
+	}
+
+	for _, c := range containers {
+		container, ok := c.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		containerName, _ := container["name"].(string)
+
+		resources, ok := container["resources"].(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		requests, _ := resources["requests"].(map[string]interface{})
+		limits, _ := resources["limits"].(map[string]interface{})
+
+		if requests == nil || limits == nil {
+			continue
+		}
+
+		checkResource := func(resName string) error {
+			reqStr, hasReq := getStringValue(requests, resName)
+			limStr, hasLim := getStringValue(limits, resName)
+
+			if hasReq && hasLim {
+				reqQ, err1 := k8sRes.ParseQuantity(reqStr)
+				limQ, err2 := k8sRes.ParseQuantity(limStr)
+
+				if err1 == nil && err2 == nil {
+					if limQ.Cmp(reqQ) < 0 {
+						return fmt.Errorf("container '%s': %s limit (%s) cannot be less than request (%s)",
+							containerName, resName, limStr, reqStr)
+					}
+				}
+			}
+			return nil
+		}
+
+		if err := checkResource("cpu"); err != nil {
+			return err
+		}
+		if err := checkResource("memory"); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func getStringValue(m map[string]interface{}, key string) (string, bool) {
+	val, ok := m[key]
+	if !ok {
+		return "", false
+	}
+
+	switch v := val.(type) {
+	case string:
+		return v, true
+	case float64:
+		return fmt.Sprintf("%g", v), true
+	case int, int64, int32:
+		return fmt.Sprintf("%d", v), true
+	default:
+		return fmt.Sprintf("%v", v), true
+	}
 }
 
 func (s *ConfigFileService) updateYamlContent(c *gin.Context, cf *configfile.ConfigFile, rawYaml string, resources []resource.Resource) error {
@@ -252,12 +372,12 @@ func (s *ConfigFileService) updateYamlContent(c *gin.Context, cf *configfile.Con
 		usedKeys[r.Name] = false
 	}
 	for i, doc := range yamlArray {
-		jsonContent, err := utils.YAMLToJSON(doc)
+		jsonContent, err := yaml.YAMLToJSON([]byte(doc))
 		if err != nil {
 			return fmt.Errorf("failed to convert YAML to JSON for document %d: %w", i+1, err)
 		}
 
-		gvk, name, err := utils.ValidateK8sJSON(jsonContent)
+		gvk, name, err := k8s.ValidateK8sJSON(jsonContent)
 		if err != nil {
 			return fmt.Errorf("failed to validate YAML document %d: %w", i+1, err)
 		}
@@ -270,7 +390,7 @@ func (s *ConfigFileService) updateYamlContent(c *gin.Context, cf *configfile.Con
 				Name:       name,
 				ParsedYAML: datatypes.JSON([]byte(jsonContent)),
 			}
-			fmt.Printf("update resource for ccc document %d: %s", i+1, name)
+			fmt.Printf("update resource for ccc document %d: %s\n", i+1, name)
 			if err := s.Repos.Resource.CreateResource(res); err != nil {
 				return fmt.Errorf("failed to create resource for document %d: %w", i+1, err)
 			}
@@ -280,7 +400,7 @@ func (s *ConfigFileService) updateYamlContent(c *gin.Context, cf *configfile.Con
 			oldTarget := val
 			val.Name = name
 			val.ParsedYAML = datatypes.JSON([]byte(jsonContent))
-			fmt.Printf("update resource for document %d: %s", i+1, name)
+			fmt.Printf("update resource for document %d: %s\n", i+1, name)
 			if err := s.Repos.Resource.UpdateResource(&val); err != nil {
 				return fmt.Errorf("failed to update resource for document %d: %w", i+1, err)
 			}
@@ -316,6 +436,7 @@ func (s *ConfigFileService) UpdateConfigFile(c *gin.Context, id uint, input conf
 		if err != nil {
 			return nil, err
 		}
+
 		if err = s.updateYamlContent(c, existing, *input.RawYaml, resources); err != nil {
 			return nil, err
 		}
@@ -343,16 +464,18 @@ func (s *ConfigFileService) DeleteConfigFile(c *gin.Context, id uint) error {
 		return err
 	}
 
-	users, err := s.Repos.View.ListUsersByProjectID(cf.ProjectID)
+	users, err := s.Repos.User.ListUsersByProjectID(cf.ProjectID)
 	if err != nil {
 		return err
 	}
 
+	// Clean up K8s resources for all users
 	for _, user := range users {
-		ns := utils.FormatNamespaceName(cf.ProjectID, user.Username)
+		ns := k8s.FormatNamespaceName(cf.ProjectID, user.Username)
 		for _, val := range resources {
-			if err := utils.DeleteByJson(val.ParsedYAML, ns); err != nil {
-				return err
+			// Best effort deletion
+			if err := k8s.DeleteByJson(val.ParsedYAML, ns); err != nil {
+				fmt.Printf("[Warning] Failed to delete resource in ns %s: %v\n", ns, err)
 			}
 		}
 	}
@@ -377,8 +500,15 @@ func (s *ConfigFileService) ListConfigFilesByProjectID(projectID uint) ([]config
 	return s.Repos.ConfigFile.GetConfigFilesByProjectID(projectID)
 }
 
+// CreateInstance deploys the config file resources to the Kubernetes cluster.
+// It handles:
+// 1. Longhorn Volume Binding (User & Project)
+// 2. Permission checks (ReadOnly enforcement)
+// 3. Template replacement
+// 4. Image Validation & Harbor Injection
+// 5. GPU Configuration
+// 6. Security Context Injection
 func (s *ConfigFileService) CreateInstance(c *gin.Context, id uint) error {
-	// 1. Retrieve config file data and raw YAML resources
 	data, err := s.Repos.Resource.ListResourcesByConfigFileID(id)
 	if err != nil {
 		return err
@@ -388,132 +518,63 @@ func (s *ConfigFileService) CreateInstance(c *gin.Context, id uint) error {
 		return err
 	}
 
-	// 2. Get user claims from context
 	claims, _ := c.MustGet("claims").(*types.Claims)
+	safeUsername := k8s.ToSafeK8sName(claims.Username)
+	targetNs := k8s.FormatNamespaceName(configfile.ProjectID, safeUsername)
 
-	// -------------------------------------------------------------------------
-	// CORE FIX 1: Sanitize Username for Kubernetes
-	// -------------------------------------------------------------------------
-	// Convert the raw username (e.g., "John_Doe") to a valid Kubernetes resource name
-	// (e.g., "john-doe") to comply with RFC 1123 standards.
-	// This prevents errors when creating Namespaces or Services.
-	safeUsername := utils.ToSafeK8sName(claims.Username)
-
-	// Generate the target project namespace using the sanitized username.
-	// Example: "proj-1-john-doe"
-	ns := utils.FormatNamespaceName(configfile.ProjectID, safeUsername)
-
-	// Fetch project info early for namespace derivation and permission checks
 	project, err := s.Repos.Project.GetProjectByID(configfile.ProjectID)
 	if err != nil {
 		return err
 	}
 
-	// Calculate the user's storage namespace where the NFS service resides.
-	// Example: "user-john-doe-storage"
-	userStorageNamespace := fmt.Sprintf("user-%s-storage", safeUsername)
+	// Prepare Source Namespaces/PVCs
+	userStorageNs := fmt.Sprintf(config.UserStorageNs, safeUsername)
+	userPvcName := fmt.Sprintf(config.UserStoragePVC, safeUsername)
 
-	// -------------------------------------------------------------------------
-	// CORE FIX 2: Resolve NFS Service IP (Bypassing DNS)
-	// -------------------------------------------------------------------------
-	// Default to the internal DNS name. This acts as a fallback if the lookup fails
-	// or if the service is in a different cluster.
-	nfsServerAddress := fmt.Sprintf("%s.%s.svc.cluster.local", config.PersonalStorageServiceName, userStorageNamespace)
+	projectStorageNs := k8s.GenerateSafeResourceName("project", project.ProjectName, project.PID)
+	projectPvcName := fmt.Sprintf("project-%d-disk", project.PID)
 
-	// Attempt to resolve the ClusterIP of the NFS service directly.
-	// This is critical for environments like Docker Desktop where internal K8s DNS
-	// resolution might be flaky or unsupported from the host/node level.
-	if k8s.Clientset != nil {
-		// We use context.TODO() here, or you can inherit context from gin if available.
-		svc, err := k8s.Clientset.CoreV1().Services(userStorageNamespace).Get(
-			context.TODO(),
-			config.PersonalStorageServiceName, // The configured name of your NFS service
-			metav1.GetOptions{},
-		)
-
-		// If the service is found and has a valid ClusterIP, use it.
-		if err == nil && svc.Spec.ClusterIP != "" {
-			nfsServerAddress = svc.Spec.ClusterIP
-		}
+	// 1. Bind User Volume (Personal Data)
+	targetUserPvcName := userPvcName
+	if err := k8s.MountExistingVolumeToProject(userStorageNs, userPvcName, targetNs, targetUserPvcName); err != nil {
+		// Log warning: User might be new and has no storage yet
+		fmt.Printf("[Warning] Failed to bind user volume: %v\n", err)
 	}
 
-	// -------------------------------------------------------------------------
-	// Project Storage: Resolve Project NFS Service IP
-	// -------------------------------------------------------------------------
-	// For project storage, the NFS service resides in the project namespace.
-	// Use the same namespace scheme as project resources (e.g., GenerateSafeResourceName).
-	projectNamespace := utils.GenerateSafeResourceName("project", project.ProjectName, project.PID)
-	projectNfsServerAddress := ""
-
-	// Prefer direct ClusterIP lookup (same pattern as personal NFS)
-	if k8s.Clientset != nil {
-		svc, err := k8s.Clientset.CoreV1().Services(projectNamespace).Get(
-			context.TODO(),
-			config.ProjectNfsServiceName, // The configured name of your project NFS service
-			metav1.GetOptions{},
-		)
-
-		if err == nil && svc.Spec.ClusterIP != "" {
-			projectNfsServerAddress = svc.Spec.ClusterIP
-		}
+	// 2. Bind Project Volume (Shared Data)
+	targetProjectPvcName := projectPvcName
+	if err := k8s.MountExistingVolumeToProject(projectStorageNs, projectPvcName, targetNs, targetProjectPvcName); err != nil {
+		fmt.Printf("[Warning] Failed to bind project volume: %v\n", err)
 	}
 
-	// Fallback to cluster DNS name if ClusterIP not resolved
-	if projectNfsServerAddress == "" {
-		projectNfsServerAddress = fmt.Sprintf("%s.%s.svc.cluster.local", config.ProjectNfsServiceName, projectNamespace)
-	}
-
-	// 3. Check Project Permissions & ReadOnly Enforcement
+	// 3. Determine Permission (ReadOnly Check)
 	shouldEnforceRO := false
 	if !claims.IsAdmin {
 		ug, err := s.Repos.UserGroup.GetUserGroup(claims.UserID, project.GID)
 		if err != nil {
 			return err
 		}
-		// Only enforce readonly if user is NOT manager/admin/owner
-		// Manager and above can write to project storage
-		if ug.Role != "manager" && ug.Role != "admin" && ug.Role != "owner" {
+		if ug.Role != "manager" && ug.Role != "admin" {
 			shouldEnforceRO = true
 		}
 	}
 
-	// -------------------------------------------------------------------------
-	// Prepare Template Variables
-	// -------------------------------------------------------------------------
-	// Inject the resolved variables into the map. These will replace placeholders
-	// like {{username}} or {{nfsServer}} in the YAML files.
+	// 4. Template Variables
 	templateValues := map[string]string{
-		// "username" is now the safe version to ensure resource names in YAML are valid.
-		"username": safeUsername,
-
-		// Provide the original username in case it's needed for labels/annotations.
+		"username":         safeUsername,
 		"originalUsername": claims.Username,
+		"safeUsername":     safeUsername,
+		"namespace":        targetNs,
+		"projectId":        fmt.Sprintf("%d", configfile.ProjectID),
 
-		// Explicit safe username variable.
-		"safeUsername": safeUsername,
-
-		// The target namespace for deployment.
-		"namespace": ns,
-
-		// The resolved NFS server address (IP or DNS) for personal storage.
-		"nfsServer": nfsServerAddress,
-
-		// The resolved NFS server address (IP or DNS) for project storage.
-		"projectNfsServer": projectNfsServerAddress,
-
-		// The namespace where user storage is located.
-		"userStorageNamespace": userStorageNamespace,
-
-		// Project ID as a string.
-		"projectId": fmt.Sprintf("%d", configfile.ProjectID),
+		"userVolume":    targetUserPvcName,    // e.g. "user-john-doe-disk"
+		"projectVolume": targetProjectPvcName, // e.g. "project-101-disk"
 	}
 
-	// 4. Iterate and Create Resources
+	// 5. Iterate and Create Resources
 	for _, val := range data {
-		// Convert YAML content to string
 		jsonStr := string(val.ParsedYAML)
 
-		// Perform variable replacement
 		replacedJSON, err := utils.ReplacePlaceholdersInJSON(jsonStr, templateValues)
 		if err != nil {
 			return fmt.Errorf("failed to replace placeholders: %w", err)
@@ -521,62 +582,50 @@ func (s *ConfigFileService) CreateInstance(c *gin.Context, id uint) error {
 
 		jsonBytes := []byte(replacedJSON)
 
-		// Validate images in the resource
 		if err := s.extractAndValidateImages(jsonBytes, configfile.ProjectID, claims.IsAdmin); err != nil {
 			return err
 		}
 
-		// Inject Harbor prefix for pulled images
 		jsonBytes, err = s.injectHarborPrefix(jsonBytes, configfile.ProjectID)
 		if err != nil {
 			return err
 		}
 
-		// // Normalize NFS servers: if path points to project storage (/srv/...), force project NFS server
-		// jsonBytes, err = s.rewriteNfsServers(jsonBytes, nfsServerAddress, projectNfsServerAddress)
-		// if err != nil {
-		// 	return err
-		// }
-
-		// Apply ReadOnly restrictions if necessary
+		// Enforce ReadOnly on Project Volume if needed
 		if shouldEnforceRO {
-			// Pass projectNfsServerAddress to specifically target project volumes
-			jsonBytes, err = s.enforceReadOnly(jsonBytes, projectNfsServerAddress)
+			jsonBytes, err = s.enforceReadOnlyPVC(jsonBytes, targetProjectPvcName)
 			if err != nil {
 				return err
 			}
 		}
-		// Validate and inject GPU configurations if GPU resources are requested
+
 		jsonBytes, err = s.ValidateAndInjectGPUConfig(jsonBytes, project)
 		if err != nil {
 			return err
 		}
-
-		// Inject fsGroup to ensure consistent file permissions for mounted volumes
 		jsonBytes, err = s.injectGeneralPodConfig(jsonBytes)
 		if err != nil {
 			return err
 		}
 
-		// Finally, apply the resource to the Kubernetes cluster
-		if err := utils.CreateByJson(datatypes.JSON(jsonBytes), ns); err != nil {
+		if err := k8s.CreateByJson(datatypes.JSON(jsonBytes), targetNs); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (s *ConfigFileService) enforceReadOnly(jsonBytes []byte, targetNfsServer string) ([]byte, error) {
+// enforceReadOnlyPVC parses the JSON resource and sets "readOnly: true"
+// for any volume mount that points to the specified PVC name.
+func (s *ConfigFileService) enforceReadOnlyPVC(jsonBytes []byte, targetPvcName string) ([]byte, error) {
 	var obj map[string]interface{}
 	if err := json.Unmarshal(jsonBytes, &obj); err != nil {
 		return nil, err
 	}
 
-	// Identify resource kind
 	kind, _ := obj["kind"].(string)
 	var podSpec map[string]interface{}
 
-	// Extract PodSpec based on resource Kind
 	switch kind {
 	case "Pod":
 		if spec, ok := obj["spec"].(map[string]interface{}); ok {
@@ -596,48 +645,37 @@ func (s *ConfigFileService) enforceReadOnly(jsonBytes []byte, targetNfsServer st
 		return jsonBytes, nil
 	}
 
-	// 1. Identify volumes pointing to the target Project NFS Server
-	// map[volumeName] -> isTargetProjectVolume
+	// Identify volumes pointing to the restricted PVC
 	targetVolumes := make(map[string]bool)
 
 	if volumes, ok := podSpec["volumes"].([]interface{}); ok {
 		for _, v := range volumes {
 			if vol, ok := v.(map[string]interface{}); ok {
-				name, _ := vol["name"].(string)
-
-				// Check for NFS configuration
-				if nfs, ok := vol["nfs"].(map[string]interface{}); ok {
-					server, _ := nfs["server"].(string)
-					// Mark as target if the NFS server matches the Project NFS IP
-					if server == targetNfsServer {
-						targetVolumes[name] = true
-					}
-				}
-
-				// Keep PVC logic if you still support PVCs for projects
-				if pvc, ok := vol["persistentVolumeClaim"].(map[string]interface{}); ok {
-					if claimName, ok := pvc["claimName"].(string); ok {
-						// Add logic here if specific PVC names imply project storage
-						if claimName != config.DefaultStorageName {
-							targetVolumes[name] = true
-						}
+				volName, _ := vol["name"].(string)
+				if pvcSource, ok := vol["persistentVolumeClaim"].(map[string]interface{}); ok {
+					claimName, _ := pvcSource["claimName"].(string)
+					// Check if this volume uses the Target PVC
+					if claimName == targetPvcName {
+						targetVolumes[volName] = true
 					}
 				}
 			}
 		}
 	}
 
-	// 2. Iterate containers and enforce ReadOnly on matched volumes
+	if len(targetVolumes) == 0 {
+		return jsonBytes, nil
+	}
+
+	// Enforce ReadOnly on matched matched volume mounts
 	if containers, ok := podSpec["containers"].([]interface{}); ok {
 		for _, c := range containers {
 			if container, ok := c.(map[string]interface{}); ok {
 				if mounts, ok := container["volumeMounts"].([]interface{}); ok {
 					for _, m := range mounts {
 						if mount, ok := m.(map[string]interface{}); ok {
-							volName, _ := mount["name"].(string)
-
-							// If this mount points to Project Storage, force ReadOnly
-							if targetVolumes[volName] {
+							mountName, _ := mount["name"].(string)
+							if targetVolumes[mountName] {
 								mount["readOnly"] = true
 							}
 						}
@@ -650,9 +688,6 @@ func (s *ConfigFileService) enforceReadOnly(jsonBytes []byte, targetNfsServer st
 	return json.Marshal(obj)
 }
 
-// ValidateAndInjectGPUConfig checks if GPU resources are requested and validates against project MPS limits.
-// Only injects GPU configuration when nvidia.com/gpu request is present in container spec.
-// This implements the dual-validation pattern: first check at config parsing, second check at instance creation.
 func (s *ConfigFileService) ValidateAndInjectGPUConfig(jsonBytes []byte, project project.Project) ([]byte, error) {
 	var obj map[string]interface{}
 	if err := json.Unmarshal(jsonBytes, &obj); err != nil {
@@ -666,7 +701,6 @@ func (s *ConfigFileService) ValidateAndInjectGPUConfig(jsonBytes []byte, project
 
 	var podSpec map[string]interface{}
 
-	// Extract pod spec from different resource kinds
 	switch kind {
 	case "Pod":
 		if spec, ok := obj["spec"].(map[string]interface{}); ok {
@@ -688,23 +722,19 @@ func (s *ConfigFileService) ValidateAndInjectGPUConfig(jsonBytes []byte, project
 		return jsonBytes, nil
 	}
 
-	// Check if any container requests GPU resources
 	hasGPURequest, err := s.containerHasGPURequest(podSpec)
 	if err != nil {
 		return nil, fmt.Errorf("failed to check GPU requests: %w", err)
 	}
 
-	// Only inject GPU config if GPU resources are actually requested
 	if !hasGPURequest {
 		return jsonBytes, nil
 	}
 
-	// First validation: Check project MPS configuration is properly set
 	if err := s.validateProjectMPSConfig(project); err != nil {
 		return nil, err
 	}
 
-	// Second validation & injection: Inject GPU configuration (memory limit, env vars, etc.)
 	if err := s.injectMPSConfig(podSpec, project); err != nil {
 		return nil, fmt.Errorf("failed to inject MPS configuration: %w", err)
 	}
@@ -712,8 +742,6 @@ func (s *ConfigFileService) ValidateAndInjectGPUConfig(jsonBytes []byte, project
 	return json.Marshal(obj)
 }
 
-// containerHasGPURequest checks if any container in the pod spec requests nvidia.com/gpu resources.
-// Returns true only if at least one container has an explicit GPU request.
 func (s *ConfigFileService) containerHasGPURequest(podSpec map[string]interface{}) (bool, error) {
 	containers, ok := podSpec["containers"].([]interface{})
 	if !ok {
@@ -735,16 +763,12 @@ func (s *ConfigFileService) containerHasGPURequest(podSpec map[string]interface{
 	return false, nil
 }
 
-// validateProjectMPSConfig validates that the project has proper GPU configuration.
-// This is the first validation point before resource creation.
 func (s *ConfigFileService) validateProjectMPSConfig(project project.Project) error {
-	// Check if project has GPU quota defined for GPU resources
 	if project.GPUQuota <= 0 {
 		return fmt.Errorf("project GPU configuration invalid: GPUQuota=%d. Must be greater than 0",
 			project.GPUQuota)
 	}
 
-	// Optional: validate MPS memory if configured (at least 512MB if set)
 	if project.MPSMemory > 0 && project.MPSMemory < 512 {
 		return fmt.Errorf("MPS memory limit too low: %dMB. Must be at least 512MB or 0 (disabled)", project.MPSMemory)
 	}
@@ -752,10 +776,6 @@ func (s *ConfigFileService) validateProjectMPSConfig(project project.Project) er
 	return nil
 }
 
-// injectMPSConfig injects GPU quota configuration into the pod spec.
-// This modifies container resource limits for GPU quota.
-// Note: CUDA_MPS_ACTIVE_THREAD_PERCENTAGE is auto-injected by the system.
-// This is the second validation/injection point during instance creation.
 func (s *ConfigFileService) injectMPSConfig(podSpec map[string]interface{}, project project.Project) error {
 	containers, ok := podSpec["containers"].([]interface{})
 	if !ok {
@@ -794,11 +814,6 @@ func (s *ConfigFileService) injectMPSConfig(podSpec map[string]interface{}, proj
 			env = make([]interface{}, 0)
 		}
 
-		env = append(env, map[string]interface{}{
-			"name":  "GPU_QUOTA",
-			"value": fmt.Sprintf("%d", project.GPUQuota),
-		})
-
 		if project.MPSMemory > 0 {
 			memoryBytes := int64(project.MPSMemory) * 1024 * 1024
 			env = append(env, map[string]interface{}{
@@ -813,6 +828,7 @@ func (s *ConfigFileService) injectMPSConfig(podSpec map[string]interface{}, proj
 	return nil
 }
 
+// DeleteInstance removes the deployed resources for the calling user.
 func (s *ConfigFileService) DeleteInstance(c *gin.Context, id uint) error {
 	data, err := s.Repos.Resource.ListResourcesByConfigFileID(id)
 	if err != nil {
@@ -823,15 +839,20 @@ func (s *ConfigFileService) DeleteInstance(c *gin.Context, id uint) error {
 		return err
 	}
 	claims, _ := c.MustGet("claims").(*types.Claims)
-	ns := utils.FormatNamespaceName(configfile.ProjectID, claims.Username)
+
+	// Format Namespace for deletion
+	safeUsername := k8s.ToSafeK8sName(claims.Username)
+	ns := k8s.FormatNamespaceName(configfile.ProjectID, safeUsername)
+
 	for _, val := range data {
-		if err := utils.DeleteByJson(val.ParsedYAML, ns); err != nil {
+		if err := k8s.DeleteByJson(val.ParsedYAML, ns); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
+// DeleteConfigFileInstance removes resources for ALL users in the project (Admin/Cleanup).
 func (s *ConfigFileService) DeleteConfigFileInstance(id uint) error {
 	configfile, err := s.Repos.ConfigFile.GetConfigFileByID(id)
 	if err != nil {
@@ -843,16 +864,18 @@ func (s *ConfigFileService) DeleteConfigFileInstance(id uint) error {
 		return err
 	}
 
-	users, err := s.Repos.View.ListUsersByProjectID(configfile.ProjectID)
+	users, err := s.Repos.User.ListUsersByProjectID(configfile.ProjectID)
 	if err != nil {
 		return err
 	}
 
 	for _, user := range users {
-		ns := utils.FormatNamespaceName(configfile.ProjectID, user.Username)
+		safeUsername := k8s.ToSafeK8sName(user.Username)
+		ns := k8s.FormatNamespaceName(configfile.ProjectID, safeUsername)
 		for _, res := range resources {
-			if err := utils.DeleteByJson(res.ParsedYAML, ns); err != nil {
-				return err
+			// Best effort deletion
+			if err := k8s.DeleteByJson(res.ParsedYAML, ns); err != nil {
+				fmt.Printf("[Warning] Failed to delete instance for user %s: %v\n", user.Username, err)
 			}
 		}
 	}
@@ -860,21 +883,23 @@ func (s *ConfigFileService) DeleteConfigFileInstance(id uint) error {
 	return nil
 }
 
+// deleteConfigFileInstance is a private helper for updating config files
 func (s *ConfigFileService) deleteConfigFileInstance(configfile *configfile.ConfigFile) ([]resource.Resource, error) {
 	resources, err := s.Repos.Resource.ListResourcesByConfigFileID(configfile.CFID)
 	if err != nil {
 		return nil, err
 	}
 
-	users, err := s.Repos.View.ListUsersByProjectID(configfile.ProjectID)
+	users, err := s.Repos.User.ListUsersByProjectID(configfile.ProjectID)
 	if err != nil {
 		return nil, err
 	}
 
 	for _, user := range users {
-		ns := utils.FormatNamespaceName(configfile.ProjectID, user.Username)
+		safeUsername := k8s.ToSafeK8sName(user.Username)
+		ns := k8s.FormatNamespaceName(configfile.ProjectID, safeUsername)
 		for _, res := range resources {
-			if err := utils.DeleteByJson(res.ParsedYAML, ns); err != nil {
+			if err := k8s.DeleteByJson(res.ParsedYAML, ns); err != nil {
 				return nil, err
 			}
 		}
@@ -884,7 +909,6 @@ func (s *ConfigFileService) deleteConfigFileInstance(configfile *configfile.Conf
 }
 
 // injectGeneralPodConfig injects general Pod infrastructure settings (permissions and base paths).
-// It does NOT contain any application-specific logic (like ROS 2), making it universal.
 func (s *ConfigFileService) injectGeneralPodConfig(jsonBytes []byte) ([]byte, error) {
 	var obj map[string]interface{}
 	if err := json.Unmarshal(jsonBytes, &obj); err != nil {
@@ -897,60 +921,25 @@ func (s *ConfigFileService) injectGeneralPodConfig(jsonBytes []byte) ([]byte, er
 	}
 
 	// ================= Configuration Section =================
-	// Define infrastructure-level parameters here.
 	const targetUID int64 = 0
 	const targetGID int64 = 0
-
-	// Set the common working directory (HOME).
-	// This is usually where your NFS/PVC is mounted.
-	// Setting HOME is crucial for most Linux apps (including ROS) to store configs/logs.
 	// =========================================================
 
 	for _, podSpec := range podSpecs {
-		// 1. SecurityContext: Resolves NFS write permissions and "I have no name!" issues.
+		// 1. SecurityContext: Resolves PVC write permissions
 		secContext, ok := podSpec["securityContext"].(map[string]interface{})
 		if !ok {
 			secContext = make(map[string]interface{})
 			podSpec["securityContext"] = secContext
 		}
 
-		// Enforce consistent User/Group IDs.
 		secContext["runAsUser"] = targetUID
 		secContext["runAsGroup"] = targetGID
 
 		// If volumes are mounted, inject fsGroup to ensure file ownership.
 		if _, hasVolumes := podSpec["volumes"]; hasVolumes {
 			secContext["fsGroup"] = targetUID
-
-			// Optimization: Only recursively change file permissions if the root directory
-			// permissions do not match. This significantly speeds up Pod startup for large volumes.
 			secContext["fsGroupChangePolicy"] = "OnRootMismatch"
-		}
-
-		// 2. Inject Base Environment Variables (HOME).
-		// We avoid injecting ROS-specific variables here; let ConfigMap handle them.
-		containers := getContainers(podSpec)
-		for _, c := range containers {
-			container, ok := c.(map[string]interface{})
-			if !ok {
-				continue
-			}
-
-			// Retrieve existing environment variables.
-			existingEnv, _ := container["env"].([]interface{})
-
-			// // Only inject HOME, which is required by almost all applications.
-			// baseEnvs := []map[string]interface{}{
-			// 	{"name": "HOME", "value": userHome},
-			// }
-
-			// for _, ne := range baseEnvs {
-			// 	// Prevent overwriting if HOME is already manually set in the YAML.
-			// 	if !envExists(existingEnv, ne["name"].(string)) {
-			// 		existingEnv = append(existingEnv, ne)
-			// 	}
-			// }
-			container["env"] = existingEnv
 		}
 	}
 
@@ -959,21 +948,16 @@ func (s *ConfigFileService) injectGeneralPodConfig(jsonBytes []byte) ([]byte, er
 
 // --- Helper Functions ---
 
-// findPodSpecs recursively searches for PodSpecs within the JSON object.
-// It handles Pods, Deployments, StatefulSets, Jobs, and nested CronJobs.
 func findPodSpecs(obj map[string]interface{}) []map[string]interface{} {
 	var results []map[string]interface{}
 
-	// Identify PodSpec by checking for the "containers" field.
 	if _, hasContainers := obj["containers"]; hasContainers {
 		results = append(results, obj)
 		return results
 	}
 
-	// Recursive search for nested specs.
 	for key, value := range obj {
 		if subMap, ok := value.(map[string]interface{}); ok {
-			// Traverse down common Kubernetes spec paths.
 			if key == "spec" || key == "template" || key == "jobTemplate" {
 				results = append(results, findPodSpecs(subMap)...)
 			}
@@ -982,12 +966,9 @@ func findPodSpecs(obj map[string]interface{}) []map[string]interface{} {
 	return results
 }
 
-// getContainers safely retrieves the containers list from a PodSpec.
 func getContainers(podSpec map[string]interface{}) []interface{} {
 	if containers, ok := podSpec["containers"].([]interface{}); ok {
 		return containers
 	}
 	return []interface{}{}
 }
-
-// (removed) envExists was only used in commented-out code; function removed to avoid unused symbol

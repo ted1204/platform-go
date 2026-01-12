@@ -56,7 +56,7 @@ func (h *JobHandler) ListJobs(c *gin.Context) {
 		return
 	}
 
-	isAdmin, err := utils.IsSuperAdmin(uid, h.repos.View)
+	isAdmin, err := utils.IsSuperAdmin(uid, h.repos.UserGroup)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, response.ErrorResponse{Error: "failed to check role"})
 		return
@@ -102,7 +102,7 @@ func (h *JobHandler) CancelJob(c *gin.Context) {
 		return
 	}
 
-	isAdmin, err := utils.IsSuperAdmin(uid, h.repos.View)
+	isAdmin, err := utils.IsSuperAdmin(uid, h.repos.UserGroup)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, response.ErrorResponse{Error: "failed to check role"})
 		return
@@ -202,7 +202,7 @@ func (h *JobHandler) StreamJobs(c *gin.Context) {
 		return
 	}
 
-	isAdmin, err := utils.IsSuperAdmin(uid, h.repos.View)
+	isAdmin, err := utils.IsSuperAdmin(uid, h.repos.UserGroup)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, response.ErrorResponse{Error: "failed to check role"})
 		return
