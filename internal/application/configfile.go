@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -60,64 +61,73 @@ func NewConfigFileService(repos *repository.Repos) *ConfigFileService {
 	}
 }
 
-// extractAndValidateImages extracts all images from JSON and validates them for a project
 func (s *ConfigFileService) extractAndValidateImages(jsonBytes []byte, projectID uint, userIsAdmin bool) error {
 	if userIsAdmin {
-		return nil // Skip validation for admin
+		return nil
 	}
 
 	var obj map[string]interface{}
-	if err := json.Unmarshal(jsonBytes, &obj); err != nil {
-		return nil // If not valid JSON, let k8s handle the error
+	if err := yaml.Unmarshal(jsonBytes, &obj); err != nil {
+		return fmt.Errorf("failed to parse resource definition: %w", err)
 	}
 
 	images := []string{}
 
-	// Helper to collect images
-	collectImages := func(containers []interface{}) {
-		for _, c := range containers {
-			if cont, ok := c.(map[string]interface{}); ok {
-				if img, ok := cont["image"].(string); ok {
-					images = append(images, img)
+	collectFromList := func(list interface{}) {
+		if containers, ok := list.([]interface{}); ok {
+			for _, c := range containers {
+				if cont, ok := c.(map[string]interface{}); ok {
+					if img, ok := cont["image"].(string); ok && img != "" {
+						images = append(images, img)
+					}
 				}
 			}
 		}
 	}
 
-	// Check spec.containers (Pod/Deployment)
-	if spec, ok := obj["spec"].(map[string]interface{}); ok {
-		// Direct containers (Pod)
-		if containers, ok := spec["containers"].([]interface{}); ok {
-			collectImages(containers)
+	checkPodSpec := func(spec map[string]interface{}) {
+		if spec == nil {
+			return
 		}
+		collectFromList(spec["containers"])
+		collectFromList(spec["initContainers"])
+	}
 
-		// Deployment template
+	if spec, ok := obj["spec"].(map[string]interface{}); ok {
+		checkPodSpec(spec)
+
 		if template, ok := spec["template"].(map[string]interface{}); ok {
 			if tSpec, ok := template["spec"].(map[string]interface{}); ok {
-				if containers, ok := tSpec["containers"].([]interface{}); ok {
-					collectImages(containers)
-				}
+				checkPodSpec(tSpec)
 			}
 		}
 	}
 
-	// Validate each image
 	for _, img := range images {
-		parts := strings.Split(img, ":")
-		if len(parts) != 2 {
-			continue // Skip malformed images, let k8s handle it
-		}
-
-		imageName := parts[0]
-		imageTag := parts[1]
+		imageName, imageTag := parseImageNameTag(img)
 
 		allowed, err := s.imageService.ValidateImageForProject(imageName, imageTag, &projectID)
-		if err != nil || !allowed {
-			return fmt.Errorf("image %s is not allowed for this project. Please add it first via project settings", img)
+		log.Printf("Validating image: %s:%s, Allowed: %v, Error: %v", imageName, imageTag, allowed, err)
+		if err != nil {
+			return fmt.Errorf("failed to validate image %s: %v", img, err)
+		}
+		if !allowed {
+			return fmt.Errorf("Image '%s:%s' is not allowed for this project.", imageName, imageTag)
 		}
 	}
 
 	return nil
+}
+
+func parseImageNameTag(img string) (name string, tag string) {
+	lastColon := strings.LastIndex(img, ":")
+	lastSlash := strings.LastIndex(img, "/")
+
+	if lastColon == -1 || lastColon < lastSlash {
+		return img, "latest"
+	}
+
+	return img[:lastColon], img[lastColon+1:]
 }
 
 // injectHarborPrefix modifies image references to use Harbor registry for pulled images
@@ -521,7 +531,9 @@ func (s *ConfigFileService) CreateInstance(c *gin.Context, id uint) error {
 	claims, _ := c.MustGet("claims").(*types.Claims)
 	safeUsername := k8s.ToSafeK8sName(claims.Username)
 	targetNs := k8s.FormatNamespaceName(configfile.ProjectID, safeUsername)
-
+	if err := k8s.EnsureNamespaceExists(targetNs); err != nil {
+		return fmt.Errorf("failed to ensure namespace %s: %w", targetNs, err)
+	}
 	project, err := s.Repos.Project.GetProjectByID(configfile.ProjectID)
 	if err != nil {
 		return err
@@ -571,45 +583,59 @@ func (s *ConfigFileService) CreateInstance(c *gin.Context, id uint) error {
 		"projectVolume": targetProjectPvcName, // e.g. "project-101-disk"
 	}
 
-	// 5. Iterate and Create Resources
+	// 5. Prepare and Validate all resources first
+	var processedResources [][]byte
+
 	for _, val := range data {
 		jsonStr := string(val.ParsedYAML)
 
+		// A. Template replacement
 		replacedJSON, err := utils.ReplacePlaceholdersInJSON(jsonStr, templateValues)
 		if err != nil {
 			return fmt.Errorf("failed to replace placeholders: %w", err)
 		}
 
-		jsonBytes := []byte(replacedJSON)
+		currentBytes := []byte(replacedJSON)
 
-		if err := s.extractAndValidateImages(jsonBytes, configfile.ProjectID, claims.IsAdmin); err != nil {
+		// B. Validation: Image Whitelist
+		if err := s.extractAndValidateImages(currentBytes, configfile.ProjectID, claims.IsAdmin); err != nil {
 			return err
 		}
 
-		jsonBytes, err = s.injectHarborPrefix(jsonBytes, configfile.ProjectID)
+		// C. Injection: Harbor Prefix
+		currentBytes, err = s.injectHarborPrefix(currentBytes, configfile.ProjectID)
 		if err != nil {
 			return err
 		}
 
-		// Enforce ReadOnly on Project Volume if needed
+		// D. Enforcement: ReadOnly PVC
 		if shouldEnforceRO {
-			jsonBytes, err = s.enforceReadOnlyPVC(jsonBytes, targetProjectPvcName)
+			currentBytes, err = s.enforceReadOnlyPVC(currentBytes, targetProjectPvcName)
 			if err != nil {
 				return err
 			}
 		}
 
-		jsonBytes, err = s.ValidateAndInjectGPUConfig(jsonBytes, project)
-		if err != nil {
-			return err
-		}
-		jsonBytes, err = s.injectGeneralPodConfig(jsonBytes)
+		// E. Injection: GPU Config
+		currentBytes, err = s.ValidateAndInjectGPUConfig(currentBytes, project)
 		if err != nil {
 			return err
 		}
 
-		if err := k8s.CreateByJson(datatypes.JSON(jsonBytes), targetNs); err != nil {
+		// F. Injection: General Pod Config (SecurityContext, etc.)
+		currentBytes, err = s.injectGeneralPodConfig(currentBytes)
+		if err != nil {
 			return err
+		}
+
+		processedResources = append(processedResources, currentBytes)
+	}
+
+	log.Printf("All %d resources validated. Starting creation in namespace %s", len(processedResources), targetNs)
+
+	for _, jsonBytes := range processedResources {
+		if err := k8s.CreateByJson(datatypes.JSON(jsonBytes), targetNs); err != nil {
+			return fmt.Errorf("failed to create resource: %w", err)
 		}
 	}
 	return nil

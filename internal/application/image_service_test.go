@@ -129,7 +129,7 @@ func TestApproveRequest(t *testing.T) {
 
 	approver := uint(99)
 
-	err := svc.ApproveRequest(1, "ok", approver)
+	err := svc.ApproveRequest(1, "ok", false, approver)
 	if err != nil {
 		t.Fatalf("ApproveRequest returned error: %v", err)
 	}

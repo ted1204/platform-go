@@ -408,7 +408,8 @@ func (s *K8sService) CreateProjectPVC(ctx context.Context, req job.VolumeSpec) (
 	}
 
 	ns := k8s.GenerateSafeResourceName("project", req.ProjectName, req.ProjectID)
-	pvcName := req.Name
+	// [TODO] Enable multiple PVCs per project
+	pvcName := fmt.Sprintf("project-%d-disk", req.ProjectID)
 	if pvcName == "" {
 		pvcName = fmt.Sprintf("pvc-%s", ns)
 	}
@@ -460,9 +461,9 @@ func (s *K8sService) CreateProjectPVC(ctx context.Context, req job.VolumeSpec) (
 		return nil, fmt.Errorf("failed to create pvc: %w", err)
 	}
 
-	if err := k8s.CreateStorageHub(ns, pvcName); err != nil {
-		return nil, fmt.Errorf("failed to create storage hub: %w", err)
-	}
+	// if err := k8s.CreateStorageHub(ns, pvcName); err != nil {
+	// 	return nil, fmt.Errorf("failed to create storage hub: %w", err)
+	// }
 
 	return result, nil
 }

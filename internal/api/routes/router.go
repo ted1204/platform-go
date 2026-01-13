@@ -87,6 +87,8 @@ func RegisterRoutes(r *gin.Engine, db *gorm.DB) {
 			projects.GET("/:id/images", authMiddleware.GroupMember(middleware.FromIDParam(repos_instance.Project.GetGroupIDByProjectID)), handlers_instance.Image.ListAllowed)
 			projects.POST("/:id/images", authMiddleware.GroupManager(middleware.FromIDParam(repos_instance.Project.GetGroupIDByProjectID)), handlers_instance.Image.AddProjectImage)
 			projects.DELETE("/:id/images/:image_id", authMiddleware.GroupManager(middleware.FromIDParam(repos_instance.Project.GetGroupIDByProjectID)), handlers_instance.Image.RemoveProjectImage)
+			// Project-scoped image requests (list requests for a specific project)
+			projects.GET("/:id/image-requests", authMiddleware.GroupMember(middleware.FromIDParam(repos_instance.Project.GetGroupIDByProjectID)), handlers_instance.Image.ListRequestsByProject)
 		}
 
 		audit := auth.Group("/audit/logs")

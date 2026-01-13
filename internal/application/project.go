@@ -3,6 +3,7 @@ package application
 import (
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"strconv"
 
@@ -101,7 +102,7 @@ func (s *ProjectService) CreateProject(c *gin.Context, input project.CreateProje
 		return nil, errors.New("failed to get project ID from database")
 	}
 
-	utils.LogAuditWithConsole(c, "create", "project", fmt.Sprintf("p_id=%d", p.PID), nil, p, "", s.Repos.Audit)
+	go utils.LogAuditWithConsole(c, "create", "project", fmt.Sprintf("p_id=%d", p.PID), nil, p, "", s.Repos.Audit)
 
 	return p, nil
 }
@@ -161,17 +162,30 @@ func (s *ProjectService) ListProjects() ([]project.Project, error) {
 }
 
 func (s *ProjectService) RemoveProjectResources(projectID uint) error {
+	project, err := s.Repos.Project.GetProjectByID(projectID)
+	if err != nil {
+		return fmt.Errorf("failed to get project info: %w", err)
+	}
+
 	users, err := s.Repos.User.ListUsersByProjectID(projectID)
 	if err != nil {
 		return err
 	}
 
 	for _, user := range users {
-		ns := k8s.FormatNamespaceName(projectID, user.Username)
+		safeUsername := k8s.ToSafeK8sName(user.Username)
+		ns := k8s.FormatNamespaceName(projectID, safeUsername)
 
 		if err := k8s.DeleteNamespace(ns); err != nil {
-			return fmt.Errorf("failed to delete namespace %s: %w", ns, err)
+			log.Printf("[Error] Failed to delete user instance namespace %s: %v", ns, err)
 		}
+	}
+
+	projectStorageNs := k8s.GenerateSafeResourceName("project", project.ProjectName, project.PID)
+
+	log.Printf("Cleaning up project storage namespace: %s", projectStorageNs)
+	if err := k8s.DeleteNamespace(projectStorageNs); err != nil {
+		return fmt.Errorf("failed to delete project storage namespace %s: %w", projectStorageNs, err)
 	}
 
 	return nil

@@ -31,19 +31,21 @@ func NewUserGroupService(repos *repository.Repos) *UserGroupService {
 
 func (s *UserGroupService) AllocateGroupResource(gid uint, userName string) error {
 	projects, err := s.Repos.Project.ListProjectsByGroup(gid)
-
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to list projects for group %d: %w", gid, err)
 	}
 
+	safeUsername := k8s.ToSafeK8sName(userName)
+
 	for _, project := range projects {
-		ns := k8s.FormatNamespaceName(project.PID, userName)
-		if err := k8s.CreateNamespace(ns); err != nil {
-			return err
+		ns := k8s.FormatNamespaceName(project.PID, safeUsername)
+
+		log.Printf("[Allocate] Ensuring namespace %s exists for user %s", ns, safeUsername)
+		if err := k8s.EnsureNamespaceExists(ns); err != nil {
+			log.Printf("[Error] Failed to create namespace %s: %v", ns, err)
+			continue
 		}
-		// if err := utils.CreatePVC(ns, config.DefaultStorageName, config.DefaultStorageClassName, config.DefaultStorageSize); err != nil {
-		// 	return err
-		// }
+
 	}
 
 	return nil
@@ -51,19 +53,26 @@ func (s *UserGroupService) AllocateGroupResource(gid uint, userName string) erro
 
 func (s *UserGroupService) RemoveGroupResource(gid uint, userName string) error {
 	projects, err := s.Repos.Project.ListProjectsByGroup(gid)
-
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to list projects for group %d: %w", gid, err)
 	}
 
+	safeUsername := k8s.ToSafeK8sName(userName)
+	var lastErr error
+
 	for _, project := range projects {
-		ns := k8s.FormatNamespaceName(project.PID, userName)
+		ns := k8s.FormatNamespaceName(project.PID, safeUsername)
+
+		log.Printf("[Cleanup] Removing resource namespace %s for user %s", ns, safeUsername)
+
 		if err := k8s.DeleteNamespace(ns); err != nil {
-			return err
+			log.Printf("[Warning] Failed to delete namespace %s: %v", ns, err)
+			lastErr = err
+			continue
 		}
 	}
 
-	return nil
+	return lastErr
 }
 
 func (s *UserGroupService) CreateUserGroup(c *gin.Context, userGroup *group.UserGroup) (*group.UserGroup, error) {

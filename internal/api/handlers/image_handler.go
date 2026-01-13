@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/linskybing/platform-go/internal/application"
@@ -52,7 +53,21 @@ func (h *ImageHandler) SubmitRequest(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, response.ErrorResponse{Error: err.Error()})
 		return
 	}
-	c.JSON(http.StatusCreated, response.SuccessResponse{Data: req})
+
+	// Normalize output keys for frontend compatibility
+	createdAt := req.CreatedAt
+	out := map[string]interface{}{
+		"ID":        req.ID,
+		"UserID":    req.UserID,
+		"Name":      req.InputImageName,
+		"Tag":       req.InputTag,
+		"ProjectID": req.ProjectID,
+		"Status":    req.Status,
+		"Note":      req.ReviewerNote,
+		"CreatedAt": createdAt.Format(time.RFC3339),
+	}
+
+	c.JSON(http.StatusCreated, response.SuccessResponse{Data: out})
 }
 
 // @Summary List image requests
@@ -81,7 +96,68 @@ func (h *ImageHandler) ListRequests(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, response.ErrorResponse{Error: err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, response.SuccessResponse{Data: reqs})
+
+	// Normalize backend domain fields to frontend-friendly keys
+	out := make([]map[string]interface{}, 0, len(reqs))
+	for _, r := range reqs {
+		created := r.CreatedAt
+		out = append(out, map[string]interface{}{
+			"ID":        r.ID,
+			"UserID":    r.UserID,
+			"Name":      r.InputImageName,
+			"Tag":       r.InputTag,
+			"ProjectID": r.ProjectID,
+			"Status":    r.Status,
+			"Note":      r.ReviewerNote,
+			"CreatedAt": created.Format(time.RFC3339),
+		})
+	}
+
+	c.JSON(http.StatusOK, response.SuccessResponse{Data: out})
+}
+
+// ListRequestsByProject lists image requests for a specific project (project members)
+func (h *ImageHandler) ListRequestsByProject(c *gin.Context) {
+	projectIDStr := c.Param("id")
+	if projectIDStr == "" {
+		c.JSON(http.StatusBadRequest, response.ErrorResponse{Error: "project id required"})
+		return
+	}
+
+	id, err := strconv.ParseUint(projectIDStr, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, response.ErrorResponse{Error: "invalid project id"})
+		return
+	}
+
+	// For project-scoped listing, default to pending requests only
+	status := c.Query("status")
+	if status == "" {
+		status = "pending"
+	}
+	pid := uint(id)
+	reqs, err := h.service.ListRequests(&pid, status)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, response.ErrorResponse{Error: err.Error()})
+		return
+	}
+
+	out := make([]map[string]interface{}, 0, len(reqs))
+	for _, r := range reqs {
+		created := r.CreatedAt
+		out = append(out, map[string]interface{}{
+			"ID":        r.ID,
+			"UserID":    r.UserID,
+			"Name":      r.InputImageName,
+			"Tag":       r.InputTag,
+			"ProjectID": r.ProjectID,
+			"Status":    r.Status,
+			"Note":      r.ReviewerNote,
+			"CreatedAt": created.Format(time.RFC3339),
+		})
+	}
+
+	c.JSON(http.StatusOK, response.SuccessResponse{Data: out})
 }
 
 // @Summary Approve image request
@@ -103,7 +179,8 @@ func (h *ImageHandler) ApproveRequest(c *gin.Context) {
 		return
 	}
 	var payload struct {
-		Note string `json:"note"`
+		Note     string `json:"note"`
+		IsGlobal bool   `json:"is_global"`
 	}
 	_ = c.ShouldBindJSON(&payload)
 
@@ -113,7 +190,7 @@ func (h *ImageHandler) ApproveRequest(c *gin.Context) {
 		return
 	}
 
-	if err := h.service.ApproveRequest(uint(id), payload.Note, approverID); err != nil {
+	if err := h.service.ApproveRequest(uint(id), payload.Note, payload.IsGlobal, approverID); err != nil {
 		c.JSON(http.StatusInternalServerError, response.ErrorResponse{Error: err.Error()})
 		return
 	}
@@ -154,7 +231,21 @@ func (h *ImageHandler) RejectRequest(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, response.ErrorResponse{Error: err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, response.SuccessResponse{Data: req})
+
+	// Normalize output for frontend
+	createdAt := req.CreatedAt
+	out := map[string]interface{}{
+		"ID":        req.ID,
+		"UserID":    req.UserID,
+		"Name":      req.InputImageName,
+		"Tag":       req.InputTag,
+		"ProjectID": req.ProjectID,
+		"Status":    req.Status,
+		"Note":      req.ReviewerNote,
+		"CreatedAt": createdAt.Format(time.RFC3339),
+	}
+
+	c.JSON(http.StatusOK, response.SuccessResponse{Data: out})
 }
 
 // @Summary List allowed images
@@ -240,19 +331,19 @@ func (h *ImageHandler) AddProjectImage(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Param id path int true "Project ID"
-// @Param rule_id path int true "Allow List Rule ID"
+// @Param image_id path int true "Allow List Rule ID"
 // @Success 200 {object} response.SuccessResponse
 // @Failure 400 {object} response.ErrorResponse
 // @Failure 500 {object} response.ErrorResponse
-// @Router /projects/{id}/images/{rule_id} [delete]
+// @Router /projects/{id}/images/{image_id} [delete]
 func (h *ImageHandler) RemoveProjectImage(c *gin.Context) {
-	ruleID, err := utils.ParseIDParam(c, "rule_id")
+	imageID, err := utils.ParseIDParam(c, "image_id")
 	if err != nil {
 		c.JSON(http.StatusBadRequest, response.ErrorResponse{Error: "invalid rule id"})
 		return
 	}
 
-	if err := h.service.DisableAllowListRule(uint(ruleID)); err != nil {
+	if err := h.service.DisableAllowListRule(uint(imageID)); err != nil {
 		c.JSON(http.StatusInternalServerError, response.ErrorResponse{Error: err.Error()})
 		return
 	}

@@ -167,10 +167,16 @@ func (s *ImageService) ListRequests(projectID *uint, status string) ([]image.Ima
 	return s.repo.ListRequests(projectID, status)
 }
 
-func (s *ImageService) ApproveRequest(id uint, note string, approverID uint) error {
+func (s *ImageService) ApproveRequest(id uint, note string, isGlobal bool, approverID uint) error {
 	req, err := s.repo.FindRequestByID(id)
 	if err != nil {
 		return err
+	}
+
+	// If approver marked this as global, clear ProjectID so the created
+	// allow-list rule will be global (ProjectID == nil)
+	if isGlobal {
+		req.ProjectID = nil
 	}
 
 	req.Status = "approved"
@@ -287,10 +293,19 @@ func (s *ImageService) ListAllowedImages(projectID *uint) ([]image.AllowedImageD
 			isPulled = status.IsPulled
 		}
 
+		displayImageName := rule.Repository.FullName
+		if displayImageName == "" {
+			if rule.Repository.Namespace != "" {
+				displayImageName = fmt.Sprintf("%s/%s", rule.Repository.Namespace, rule.Repository.Name)
+			} else {
+				displayImageName = rule.Repository.Name
+			}
+		}
+
 		dtos = append(dtos, image.AllowedImageDTO{
 			ID:        rule.ID,
 			Registry:  rule.Repository.Registry,
-			ImageName: rule.Repository.Name,
+			ImageName: displayImageName,
 			Tag:       rule.Tag.Name,
 			Digest:    rule.Tag.Digest,
 			ProjectID: rule.ProjectID,
@@ -332,8 +347,33 @@ func (s *ImageService) PullImageAsync(name, tag string) (string, error) {
 		log.Printf("[image-validate] warning on pull: %s", warn)
 	}
 
-	fullImage := fmt.Sprintf("%s:%s", name, tag)
+	// --- [修正] 映像檔名稱正規化邏輯 ---
+	// 解決 codercom/code-server 變成 code-server:latest 或找不到 Registry 的問題
+	normalizedName := name
+	parts := strings.Split(name, "/")
+
+	// 檢查第一部分是否包含 Domain 特徵 (. 或 :) 或為 localhost
+	hasDomain := strings.Contains(parts[0], ".") ||
+		strings.Contains(parts[0], ":") ||
+		parts[0] == "localhost"
+
+	if !hasDomain {
+		if len(parts) == 1 {
+			// Case: "nginx" -> "docker.io/library/nginx"
+			normalizedName = "docker.io/library/" + name
+		} else {
+			// Case: "codercom/code-server" -> "docker.io/codercom/code-server"
+			normalizedName = "docker.io/" + name
+		}
+	}
+
+	// 這是用於 K8s InitContainer 拉取以及 crane copy 來源的完整位址
+	fullImage := fmt.Sprintf("%s:%s", normalizedName, tag)
+
+	// 這是推送到內部 Harbor 的位址 (維持原始路徑結構)
 	harborImage := fmt.Sprintf("%s%s:%s", cfg.HarborPrivatePrefix, name, tag)
+	// --------------------------------
+
 	ttl := int32(300)
 
 	k8sJob := &batchv1.Job{
@@ -346,7 +386,6 @@ func (s *ImageService) PullImageAsync(name, tag string) (string, error) {
 			Template: corev1.PodTemplateSpec{
 				Spec: corev1.PodSpec{
 					RestartPolicy:      corev1.RestartPolicyOnFailure,
-					ImagePullSecrets:   []corev1.LocalObjectReference{{Name: "harbor-regcred"}},
 					ServiceAccountName: "default",
 					InitContainers: []corev1.Container{
 						{

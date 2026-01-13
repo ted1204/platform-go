@@ -7,7 +7,6 @@ import (
 	"github.com/linskybing/platform-go/internal/config"
 	"github.com/linskybing/platform-go/internal/config/db"
 	"github.com/linskybing/platform-go/internal/domain/group"
-	"github.com/linskybing/platform-go/internal/domain/view"
 	"github.com/linskybing/platform-go/internal/repository"
 	"github.com/linskybing/platform-go/pkg/types"
 	"gorm.io/gorm"
@@ -49,7 +48,7 @@ var GetUserNameFromContext = func(c *gin.Context) (string, error) {
 }
 
 func HasGroupRole(userID uint, gid uint, roles []string) (bool, error) {
-	var v view.UserGroupView
+	var v group.UserGroup
 	err := db.DB.
 		Where("u_id = ? AND g_id = ? AND role IN ?", userID, gid, roles).
 		First(&v).Error
