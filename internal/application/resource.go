@@ -69,7 +69,10 @@ func (s *ResourceService) UpdateResource(c *gin.Context, rid uint, input resourc
 	if err != nil {
 		return nil, err
 	}
-	go utils.LogAuditWithConsole(c, "update", "resource", fmt.Sprintf("r_id=%d", existing.RID), oldResource, *existing, "", s.Repos.Audit)
+	logFn := utils.LogAuditWithConsole
+	go func(fn func(*gin.Context, string, string, string, interface{}, interface{}, string, repository.AuditRepo)) {
+		fn(c, "update", "resource", fmt.Sprintf("r_id=%d", existing.RID), oldResource, *existing, "", s.Repos.Audit)
+	}(logFn)
 
 	return existing, nil
 }

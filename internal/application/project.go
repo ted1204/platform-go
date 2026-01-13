@@ -102,7 +102,10 @@ func (s *ProjectService) CreateProject(c *gin.Context, input project.CreateProje
 		return nil, errors.New("failed to get project ID from database")
 	}
 
-	go utils.LogAuditWithConsole(c, "create", "project", fmt.Sprintf("p_id=%d", p.PID), nil, p, "", s.Repos.Audit)
+	logFn := utils.LogAuditWithConsole
+	go func(fn func(*gin.Context, string, string, string, interface{}, interface{}, string, repository.AuditRepo)) {
+		fn(c, "create", "project", fmt.Sprintf("p_id=%d", p.PID), nil, p, "", s.Repos.Audit)
+	}(logFn)
 
 	return p, nil
 }

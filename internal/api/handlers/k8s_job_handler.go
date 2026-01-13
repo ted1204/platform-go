@@ -39,8 +39,12 @@ func PodLogHandler(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, response.ErrorResponse{Error: "websocket upgrade failed: " + err.Error()})
 		return
 	}
-	// Ensure the connection is closed when the function exits
-	defer conn.Close()
+	// Ensure the connection is closed when the function exits and log any error
+	defer func() {
+		if err := conn.Close(); err != nil {
+			fmt.Printf("websocket close error: %v\n", err)
+		}
+	}()
 
 	// Retrieve the K8s Clientset
 	cs, ok := k8s.Clientset.(*kubernetes.Clientset)
@@ -74,7 +78,12 @@ func PodLogHandler(c *gin.Context) {
 		_ = conn.WriteMessage(websocket.TextMessage, []byte(fmt.Sprintf("error opening stream: %v", err)))
 		return
 	}
-	defer stream.Close()
+	// Ensure the stream is closed when the function exits and log any error
+	defer func() {
+		if err := stream.Close(); err != nil {
+			fmt.Printf("stream close error: %v\n", err)
+		}
+	}()
 
 	// WebSocket Heartbeat Configuration
 	// CRITICAL: Prevents connection drops from Load Balancers during idle periods.

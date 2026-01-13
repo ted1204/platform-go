@@ -81,9 +81,10 @@ func (s *ConfigFileService) CreateConfigFile(c *gin.Context, cf configfile.Creat
 		return nil, fmt.Errorf("transaction commit failed: %w", res.Error)
 	}
 
-	go func() {
-		utils.LogAuditWithConsole(c, "create", "config_file", fmt.Sprintf("cf_id=%d", createdCF.CFID), nil, *createdCF, "", s.Repos.Audit)
-	}()
+	logFn := utils.LogAuditWithConsole
+	go func(fn func(*gin.Context, string, string, string, interface{}, interface{}, string, repository.AuditRepo)) {
+		fn(c, "create", "config_file", fmt.Sprintf("cf_id=%d", createdCF.CFID), nil, *createdCF, "", s.Repos.Audit)
+	}(logFn)
 
 	return createdCF, nil
 }
