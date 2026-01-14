@@ -42,6 +42,11 @@ func (s *ConfigFileService) parseAndValidateResources(rawYaml string) ([]*resour
 			return nil, fmt.Errorf("validation failed in document %d: %w", i+1, err)
 		}
 
+		// // Validate volume mounts and volumes for common pitfalls (subPath leading slash, empty PVC claimName)
+		// if err := validateVolumeMounts(obj); err != nil {
+		// 	return nil, fmt.Errorf("validation failed in document %d: %w", i+1, err)
+		// }
+
 		// Validate K8s Spec (Structure)
 		gvk, name, err := k8s.ValidateK8sJSON(jsonBytes)
 		if err != nil {
@@ -56,6 +61,63 @@ func (s *ConfigFileService) parseAndValidateResources(rawYaml string) ([]*resour
 	}
 	return resourcesToCreate, nil
 }
+
+// validateVolumeMounts checks PodSpecs for common volume/volumeMount mistakes.
+// - disallow `subPath` that starts with '/'
+// - ensure persistentVolumeClaim.claimName (if present) is non-empty and not absolute
+// func validateVolumeMounts(obj map[string]interface{}) error {
+// 	podSpecs := findPodSpecs(obj)
+// 	for _, spec := range podSpecs {
+// 		// collect volumes by name for lookup
+// 		volumesMap := map[string]map[string]interface{}{}
+// 		if vols, ok := spec["volumes"].([]interface{}); ok {
+// 			for _, v := range vols {
+// 				if vm, ok := v.(map[string]interface{}); ok {
+// 					if name, ok := vm["name"].(string); ok && name != "" {
+// 						volumesMap[name] = vm
+// 					}
+// 				}
+// 			}
+// 		}
+
+// 		// check each container's mounts
+// 		containers := getContainersFromPodSpec(spec)
+// 		for _, c := range containers {
+// 			if vms, ok := c["volumeMounts"].([]interface{}); ok {
+// 				for _, vm := range vms {
+// 					if vmMap, ok := vm.(map[string]interface{}); ok {
+// 						if subPathRaw, ok := vmMap["subPath"].(string); ok {
+// 							if strings.HasPrefix(subPathRaw, "/") {
+// 								return fmt.Errorf("%w: volumeMount.subPath must not start with '/': %s", ErrInvalidVolumeMounts, subPathRaw)
+// 							}
+// 						}
+// 						// if mount references a volume, check the backing volume for PVC claimName
+// 						if volName, ok := vmMap["name"].(string); ok && volName != "" {
+// 							if volDef, found := volumesMap[volName]; found {
+// 								if pvc, ok := volDef["persistentVolumeClaim"].(map[string]interface{}); ok {
+// 									if claimNameRaw, ok := pvc["claimName"].(string); ok {
+// 										if claimNameRaw == "" {
+// 											return fmt.Errorf("%w: persistentVolumeClaim.claimName for volume '%s' is empty", ErrInvalidVolumeMounts, volName)
+// 										}
+// 										if strings.HasPrefix(claimNameRaw, "/") {
+// 											return fmt.Errorf("%w: persistentVolumeClaim.claimName must not start with '/': %s", ErrInvalidVolumeMounts, claimNameRaw)
+// 										}
+// 										if strings.Contains(claimNameRaw, "{{") || strings.Contains(claimNameRaw, "}}") {
+// 											return fmt.Errorf("%w: persistentVolumeClaim.claimName appears templated or invalid: %s", ErrInvalidVolumeMounts, claimNameRaw)
+// 										}
+// 									} else {
+// 										return fmt.Errorf("persistentVolumeClaim.claimName for volume '%s' is not a string", volName)
+// 									}
+// 								}
+// 							}
+// 						}
+// 					}
+// 				}
+// 			}
+// 		}
+// 	}
+// 	return nil
+// }
 
 // syncConfigFileResources manages the diff (create/update/delete) for config file updates.
 func (s *ConfigFileService) syncConfigFileResources(c *gin.Context, cf *configfile.ConfigFile, rawYaml string, newResources []*resource.Resource) error {

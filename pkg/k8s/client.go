@@ -396,7 +396,28 @@ func WatchUserNamespaceResources(ctx context.Context, namespace string, writeCha
 }
 
 func watchUserAndSend(ctx context.Context, namespace string, gvr schema.GroupVersionResource, writeChan chan<- []byte) {
+	// lastSnapshot holds last sent status signature per resource name
+	lastSnapshot := make(map[string]string)
+
 	sendObject := func(eventType string, obj *unstructured.Unstructured) error {
+		name := obj.GetName()
+
+		// Always send deletes
+		if eventType != "DELETED" {
+			// Compute compact snapshot to decide whether to send
+			snap := statusSnapshotString(obj)
+			if prev, ok := lastSnapshot[name]; ok {
+				if prev == snap {
+					// No meaningful status change, skip sending
+					return nil
+				}
+			}
+			lastSnapshot[name] = snap
+		} else {
+			// remove snapshot on delete
+			delete(lastSnapshot, name)
+		}
+
 		data := buildDataMap(eventType, obj)
 		msg, err := json.Marshal(data)
 		if err != nil {
@@ -410,7 +431,7 @@ func watchUserAndSend(ctx context.Context, namespace string, gvr schema.GroupVer
 			return ctx.Err()
 		default:
 			// Prevent blocking if client is slow
-			return fmt.Errorf("client buffer full, dropping message for %s", obj.GetName())
+			return fmt.Errorf("client buffer full, dropping message for %s", name)
 		}
 	}
 
@@ -459,7 +480,24 @@ func watchAndSend(
 	ns string,
 	writeChan chan<- []byte,
 ) {
+	// lastSnapshot holds last sent status signature per resource name
+	lastSnapshot := make(map[string]string)
+
 	sendObject := func(eventType string, obj *unstructured.Unstructured) error {
+		name := obj.GetName()
+
+		if eventType != "DELETED" {
+			snap := statusSnapshotString(obj)
+			if prev, ok := lastSnapshot[name]; ok {
+				if prev == snap {
+					return nil
+				}
+			}
+			lastSnapshot[name] = snap
+		} else {
+			delete(lastSnapshot, name)
+		}
+
 		data := buildDataMap(eventType, obj)
 		msg, err := json.Marshal(data)
 		if err != nil {
@@ -689,6 +727,48 @@ func extractStatusFields(obj *unstructured.Unstructured) map[string]interface{} 
 		if phase, found, _ := unstructured.NestedString(obj.Object, "status", "phase"); found {
 			result["status"] = phase
 		}
+
+		// Detect CrashLoopBackOff by inspecting containerStatuses.state.waiting.reason
+		if containerStatuses, found, _ := unstructured.NestedSlice(obj.Object, "status", "containerStatuses"); found {
+			var crashContainers []string
+			for _, cs := range containerStatuses {
+				m, ok := cs.(map[string]interface{})
+				if !ok {
+					continue
+				}
+
+				// container name
+				name := ""
+				if n, ok := m["name"].(string); ok {
+					name = n
+				}
+
+				if state, ok := m["state"].(map[string]interface{}); ok {
+					if waiting, ok := state["waiting"].(map[string]interface{}); ok {
+						if reason, ok := waiting["reason"].(string); ok {
+							if strings.Contains(reason, "CrashLoopBackOff") {
+								crashContainers = append(crashContainers, name)
+								// prefer reporting CrashLoopBackOff as the pod status for UI clarity
+								result["status"] = "CrashLoopBackOff"
+								result["statusReason"] = reason
+								break
+							}
+						}
+						// also check message if reason not present
+						if msg, ok := waiting["message"].(string); ok && strings.Contains(msg, "CrashLoopBackOff") {
+							crashContainers = append(crashContainers, name)
+							result["status"] = "CrashLoopBackOff"
+							result["statusReason"] = msg
+							break
+						}
+					}
+				}
+			}
+
+			if len(crashContainers) > 0 {
+				result["crashLoopContainers"] = crashContainers
+			}
+		}
 	case "Service":
 		if clusterIP, found, _ := unstructured.NestedString(obj.Object, "spec", "clusterIP"); found {
 			result["clusterIP"] = clusterIP
@@ -725,6 +805,66 @@ func extractStatusFields(obj *unstructured.Unstructured) map[string]interface{} 
 	}
 
 	return result
+}
+
+// statusSnapshotString produces a compact, stable string representing the
+// resource's status-related fields used for change detection. Keep this small
+// to avoid expensive allocations; it's used to deduplicate frequent identical
+// events (e.g. unrelated metadata updates).
+func statusSnapshotString(obj *unstructured.Unstructured) string {
+	m := map[string]interface{}{}
+
+	// include kind/name for clarity (not strictly necessary for map key)
+	m["kind"] = obj.GetKind()
+	m["name"] = obj.GetName()
+
+	// metadata.deletionTimestamp if present
+	if dts, found, _ := unstructured.NestedString(obj.Object, "metadata", "deletionTimestamp"); found {
+		m["deletionTimestamp"] = dts
+	}
+
+	// include extractStatusFields output (only status-related keys)
+	for k, v := range extractStatusFields(obj) {
+		m[k] = v
+	}
+
+	// For Pods, also include container restart counts and waiting reasons
+	if obj.GetKind() == "Pod" {
+		if containerStatuses, found, _ := unstructured.NestedSlice(obj.Object, "status", "containerStatuses"); found {
+			var csSnap []map[string]interface{}
+			for _, cs := range containerStatuses {
+				if cm, ok := cs.(map[string]interface{}); ok {
+					entry := map[string]interface{}{}
+					if name, ok := cm["name"].(string); ok {
+						entry["name"] = name
+					}
+					if rc, ok := cm["restartCount"].(int64); ok {
+						entry["restartCount"] = rc
+					} else if rcf, ok := cm["restartCount"].(float64); ok {
+						entry["restartCount"] = int64(rcf)
+					}
+					if state, ok := cm["state"].(map[string]interface{}); ok {
+						if waiting, ok := state["waiting"].(map[string]interface{}); ok {
+							if reason, ok := waiting["reason"].(string); ok {
+								entry["waitingReason"] = reason
+							}
+							if msg, ok := waiting["message"].(string); ok {
+								entry["waitingMessage"] = msg
+							}
+						}
+					}
+					csSnap = append(csSnap, entry)
+				}
+			}
+			if len(csSnap) > 0 {
+				m["containerStatuses"] = csSnap
+			}
+		}
+	}
+
+	// Marshal into compact JSON string for easy equality checks
+	bs, _ := json.Marshal(m)
+	return string(bs)
 }
 
 func GetFilteredNamespaces(filter string) ([]corev1.Namespace, error) {

@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"errors"
 	"fmt"
 	"net/http"
 
@@ -89,11 +88,7 @@ func (h *ConfigFileHandler) CreateConfigFileHandler(c *gin.Context) {
 
 	configFile, err := h.svc.CreateConfigFile(c, input)
 	if err != nil {
-		if errors.Is(err, application.ErrInvalidResourceLimit) || errors.Is(err, application.ErrNoValidYAMLDocument) {
-			c.JSON(http.StatusBadRequest, response.ErrorResponse{Error: err.Error()})
-		} else {
-			c.JSON(http.StatusInternalServerError, response.ErrorResponse{Error: err.Error()})
-		}
+		c.JSON(http.StatusBadRequest, response.ErrorResponse{Error: err.Error()})
 		return
 	}
 
@@ -132,7 +127,7 @@ func (h *ConfigFileHandler) UpdateConfigFileHandler(c *gin.Context) {
 		if err == application.ErrConfigFileNotFound {
 			c.JSON(http.StatusNotFound, response.ErrorResponse{Error: "config file not found"})
 		} else {
-			c.JSON(http.StatusInternalServerError, response.ErrorResponse{Error: err.Error()})
+			c.JSON(http.StatusBadRequest, response.ErrorResponse{Error: err.Error()})
 		}
 		return
 	}

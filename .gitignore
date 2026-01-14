@@ -5,3 +5,9 @@ REFACTOR_PLAN.md
 JOB_SCHEDULER_DESIGN.md
 RESOURCE_PRIORITY_DESIGN.md
 IMPLEMENTATION_CHECKLIST.md
+
+# Ignore build outputs / binaries
+api
+*.exe
+*.out
+*.bin

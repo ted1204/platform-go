@@ -81,7 +81,8 @@ func DeleteByJson(jsonStr []byte, ns string) error {
 		ns = "default"
 	}
 	resourceClient := DynamicClient.Resource(mapping.Resource).Namespace(ns)
-	err = resourceClient.Delete(context.TODO(), obj.GetName(), metav1.DeleteOptions{})
+	policy := metav1.DeletePropagationBackground
+	err = resourceClient.Delete(context.TODO(), obj.GetName(), metav1.DeleteOptions{PropagationPolicy: &policy})
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			return nil

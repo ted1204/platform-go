@@ -18,6 +18,7 @@ var (
 	ErrNoValidYAMLDocument  = errors.New("no valid YAML documents found")
 	ErrUploadYAMLFailed     = errors.New("failed to upload YAML file")
 	ErrInvalidResourceLimit = errors.New("invalid resource limit specified in YAML")
+	ErrInvalidVolumeMounts  = errors.New("invalid volume/volumeMount definition in YAML")
 )
 
 type ConfigFileService struct {
