@@ -11,3 +11,5 @@ api
 *.exe
 *.out
 *.bin
+platform-api
+platform-scheduler
