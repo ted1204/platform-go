@@ -96,7 +96,7 @@ func (r *DBImageRepo) CheckImageAllowed(projectID *uint, repoFullName string, ta
 		Where("image_allow_lists.is_enabled = ?", true)
 
 	if projectID != nil {
-		query = query.Where("(image_allow_lists.project_id = ? OR image_allow_lists.project_id IS NULL)", projectID)
+		query = query.Where("(image_allow_lists.project_id = ? OR image_allow_lists.project_id IS NULL)", *projectID)
 	} else {
 		query = query.Where("image_allow_lists.project_id IS NULL")
 	}

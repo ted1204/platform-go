@@ -3,6 +3,7 @@ package application
 import (
 	"fmt"
 	"log"
+	"strconv"
 	"strings"
 
 	"github.com/linskybing/platform-go/internal/config"
@@ -165,17 +166,42 @@ func (s *ConfigFileService) patchGPU(podSpec map[string]interface{}, p project.P
 			continue
 		}
 
-		if _, exists := requests["nvidia.com/gpu"]; !exists {
+		// Check if GPU is requested
+		reqVal, exists := requests["nvidia.com/gpu"]
+		if !exists {
 			continue
 		}
 
-		// Ensure limits exists
+		// Parse requested GPU count (handle string or int/float input safely)
+		requestedGPU, err := strconv.Atoi(fmt.Sprintf("%v", reqVal))
+		if err != nil {
+			// Handle error or skip if value is invalid
+			continue
+		}
+
+		// Calculate the final GPU count: min(requested, quota)
+		// This logic ensures that if request=1 and quota=20, final is 1 (fixing the K8s error).
+		// If request=50 and quota=20, final is 20 (enforcing quota).
+		finalGPU := requestedGPU
+		quota := int(p.GPUQuota)
+
+		if quota < finalGPU {
+			finalGPU = quota
+		}
+
+		// Kubernetes requires nvidia.com/gpu requests and limits to be equal
+		gpuQtyStr := fmt.Sprintf("%d", finalGPU)
+
+		// Update requests
+		requests["nvidia.com/gpu"] = gpuQtyStr
+
+		// Update limits
 		limits, ok := resources["limits"].(map[string]interface{})
 		if !ok {
 			limits = make(map[string]interface{})
 			resources["limits"] = limits
 		}
-		limits["nvidia.com/gpu"] = fmt.Sprintf("%d", p.GPUQuota)
+		limits["nvidia.com/gpu"] = gpuQtyStr
 
 		// MPS Environment Variables
 		if p.MPSMemory > 0 {

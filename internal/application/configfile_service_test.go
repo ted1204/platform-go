@@ -343,8 +343,8 @@ func TestValidateAndInjectGPUConfig(t *testing.T) {
 		limits := resources["limits"].(map[string]interface{})
 		if val, ok := limits["nvidia.com/gpu"]; !ok {
 			t.Fatalf("expected nvidia.com/gpu limit to be injected")
-		} else if val != "10" {
-			t.Fatalf("expected nvidia.com/gpu limit 10, got %v", val)
+		} else if val != "1" {
+			t.Fatalf("expected nvidia.com/gpu limit 1, got %v", val)
 		}
 
 		// Check environment variables were set (MPS memory env only)
@@ -467,8 +467,8 @@ func TestValidateAndInjectGPUConfig(t *testing.T) {
 		container := containers[0].(map[string]interface{})
 		resources := container["resources"].(map[string]interface{})
 		limits := resources["limits"].(map[string]interface{})
-		if limits["nvidia.com/gpu"] != "5" {
-			t.Fatalf("expected GPU limit 5, got %v", limits["nvidia.com/gpu"])
+		if limits["nvidia.com/gpu"] != "1" {
+			t.Fatalf("expected GPU limit 1, got %v", limits["nvidia.com/gpu"])
 		}
 		// When MPSMemory is 0, only limits should be set; no MPS env var
 		// env may be absent when MPSMemory is 0 — handle missing gracefully

@@ -4,13 +4,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/linskybing/platform-go/internal/config"
 	"github.com/linskybing/platform-go/internal/domain/configfile"
 	"github.com/linskybing/platform-go/internal/domain/project"
-	"github.com/linskybing/platform-go/internal/domain/resource"
 	"github.com/linskybing/platform-go/pkg/k8s"
 	"github.com/linskybing/platform-go/pkg/types"
 	"github.com/linskybing/platform-go/pkg/utils"
@@ -220,25 +218,25 @@ func (s *ConfigFileService) buildTemplateValues(cf *configfile.ConfigFile, names
 	}
 }
 
-func (s *ConfigFileService) buildJobTemplateValues(cf *configfile.ConfigFile, namespace string, claims *types.Claims) map[string]string {
-	safeUsername := k8s.ToSafeK8sName(claims.Username)
-	return map[string]string{
-		"username":         safeUsername,
-		"originalUsername": claims.Username,
-		"safeUsername":     safeUsername,
-		"namespace":        namespace,
-		"projectId":        fmt.Sprintf("%d", cf.ProjectID),
-	}
-}
+// func (s *ConfigFileService) buildJobTemplateValues(cf *configfile.ConfigFile, namespace string, claims *types.Claims) map[string]string {
+// 	safeUsername := k8s.ToSafeK8sName(claims.Username)
+// 	return map[string]string{
+// 		"username":         safeUsername,
+// 		"originalUsername": claims.Username,
+// 		"safeUsername":     safeUsername,
+// 		"namespace":        namespace,
+// 		"projectId":        fmt.Sprintf("%d", cf.ProjectID),
+// 	}
+// }
 
-func (s *ConfigFileService) configFileIsAllJobs(data []resource.Resource) bool {
-	if len(data) == 0 {
-		return false
-	}
-	for _, r := range data {
-		if !strings.EqualFold(string(r.Type), string(resource.ResourceJob)) {
-			return false
-		}
-	}
-	return true
-}
+// func (s *ConfigFileService) configFileIsAllJobs(data []resource.Resource) bool {
+// 	if len(data) == 0 {
+// 		return false
+// 	}
+// 	for _, r := range data {
+// 		if !strings.EqualFold(string(r.Type), string(resource.ResourceJob)) {
+// 			return false
+// 		}
+// 	}
+// 	return true
+// }
