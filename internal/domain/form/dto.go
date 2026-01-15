@@ -4,7 +4,7 @@ type CreateFormDTO struct {
 	ProjectID   *uint  `json:"project_id"`
 	Title       string `json:"title" binding:"required"`
 	Description string `json:"description" binding:"required"`
-	Tag         string `json:"tag" binding:"required"` // TODO: validate against configured tags
+	Tag         string `json:"tag"` // TODO: validate against configured tags
 }
 
 type UpdateFormStatusDTO struct {
