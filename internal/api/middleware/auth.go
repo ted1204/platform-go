@@ -339,6 +339,9 @@ func CORSMiddleware() gin.HandlerFunc {
 			if strings.HasPrefix(origin, "http://localhost:") {
 				return true
 			}
+			if strings.HasPrefix(origin, "http://10.121.124.21:") {
+				return true
+			}
 			if strings.HasPrefix(origin, "http://10.121.124.22:") {
 				return true
 			}
