@@ -25,7 +25,7 @@ spec:
     spec:
       containers:
         - name: harbor-webhook
-          image: 192.168.110.1:30003/library/harbor-webhook:latest
+          image: 10.121.124.21:30003/library/harbor-webhook:latest
           imagePullPolicy: Always
           command: ["gunicorn", "-w", "4", "--threads", "2", "-b", "0.0.0.0:8080", "app:app"]          
           ports:

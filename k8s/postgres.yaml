@@ -25,10 +25,10 @@ spec:
         app: postgres
     spec:
       nodeSelector:
-        kubernetes.io/hostname: gpu1
+        kubernetes.io/hostname: k8s-master
       containers:
         - name: postgres
-          image: 192.168.110.1:30003/library/postgres-with-pg_cron:latest
+          image: 10.121.124.21:30003/library/postgres-with-pg_cron:latest
           imagePullPolicy: Always
           ports:
             - containerPort: 5432
@@ -51,7 +51,7 @@ spec:
       volumes:
         - name: pgdata
           hostPath:
-            path: /home/user/tmp
+            path: /home/master/tmp
             type: Directory
 ---
 apiVersion: v1

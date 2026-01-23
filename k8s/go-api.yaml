@@ -14,12 +14,12 @@ spec:
     spec:
       # Dev mode: stick to gpu1; adjust if needed
       nodeSelector:
-        kubernetes.io/hostname: gpu1
+        kubernetes.io/hostname: k8s-master
       serviceAccountName: admin-sa
       dnsPolicy: ClusterFirst
       containers:
         - name: go-api
-          image: 192.168.110.1:30003/library/platform-go-api:latest
+          image: 10.121.124.21:30003/library/platform-go-api:latest
           imagePullPolicy: Always
           # Dev mode: keep container running for live code mount
           command: ["sleep", "infinity"]
@@ -46,7 +46,7 @@ spec:
       volumes:
         - name: local-data
           hostPath:
-            path: /home/user/k8s-gpu-platform/backend
+            path: /home/master/platform-go
             type: Directory
 ---
 apiVersion: v1
