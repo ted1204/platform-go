@@ -157,12 +157,12 @@ k8s-deploy:
 	@kubectl apply -f k8s/postgres.yaml
 	@kubectl apply -f k8s/ca.yaml
 	@kubectl apply -f k8s/go-api.yaml
-	@kubectl apply -f k8s/go-scheduler.yaml
+# 	@kubectl apply -f k8s/go-scheduler.yaml
 	@echo "$(GREEN)Kubernetes deployment complete$(NC)"
 
 k8s-delete:
 	@echo "$(YELLOW)Deleting Kubernetes resources...$(NC)"
-	@kubectl delete -f k8s/go-scheduler.yaml || true
+# 	@kubectl delete -f k8s/go-scheduler.yaml || true
 	@kubectl delete -f k8s/go-api.yaml || true
 	@kubectl delete -f k8s/ca.yaml || true
 	@kubectl delete -f k8s/postgres.yaml || true
