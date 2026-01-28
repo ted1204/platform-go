@@ -170,6 +170,71 @@ func (h *UserHandler) Logout(c *gin.Context) {
 	})
 }
 
+// ForgotPassword godoc
+// @Summary Reset password by username (no verification required)
+// @Tags auth
+// @Accept x-www-form-urlencoded
+// @Produce json
+// @Param username formData string true "Username"
+// @Param new_password formData string true "New password (minimum 6 characters)"
+// @Success 200 {object} response.MessageResponse "Password reset successfully"
+// @Failure 400 {object} response.ErrorResponse "Invalid input"
+// @Failure 404 {object} response.ErrorResponse "User not found"
+// @Failure 500 {object} response.ErrorResponse "Failed to reset password"
+// @Router /forgot-password [post]
+func (h *UserHandler) ForgotPassword(c *gin.Context) {
+	var input user.ForgotPasswordInput
+
+	if err := c.ShouldBind(&input); err != nil {
+		var verr validator.ValidationErrors
+		if errors.As(err, &verr) {
+			msgs := make([]string, 0, len(verr))
+
+			labels := map[string]string{
+				"Username":    "username",
+				"NewPassword": "new password",
+			}
+
+			for _, fe := range verr {
+				field := fe.StructField()
+				lbl, ok := labels[field]
+				if !ok {
+					lbl = strings.ToLower(field)
+				}
+
+				var msg string
+				switch fe.Tag() {
+				case "required":
+					msg = fmt.Sprintf("%s is required", lbl)
+				case "min":
+					msg = fmt.Sprintf("%s must be at least %s characters", lbl, fe.Param())
+				default:
+					msg = fmt.Sprintf("%s is invalid", lbl)
+				}
+				msgs = append(msgs, msg)
+			}
+
+			c.JSON(http.StatusBadRequest, response.ErrorResponse{Error: strings.Join(msgs, "; ")})
+			return
+		}
+
+		c.JSON(http.StatusBadRequest, response.ErrorResponse{Error: "Invalid input"})
+		return
+	}
+
+	err := h.svc.ForgotPassword(input.Username, input.NewPassword)
+	if err != nil {
+		if errors.Is(err, application.ErrUserNotFound) {
+			c.JSON(http.StatusNotFound, response.ErrorResponse{Error: "User not found"})
+		} else {
+			c.JSON(http.StatusInternalServerError, response.ErrorResponse{Error: err.Error()})
+		}
+		return
+	}
+
+	c.JSON(http.StatusOK, response.MessageResponse{Message: "Password reset successfully"})
+}
+
 // GetUsers godoc
 // @Summary List all users
 // @Tags users

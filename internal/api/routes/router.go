@@ -29,6 +29,7 @@ func RegisterRoutes(r *gin.Engine, db *gorm.DB) {
 	r.POST("/register", handlers_instance.User.Register)
 	r.POST("/login", handlers_instance.User.Login)
 	r.POST("/logout", handlers_instance.User.Logout)
+	r.POST("/forgot-password", handlers_instance.User.ForgotPassword)
 	r.GET("/ws/exec", handlers.ExecWebSocketHandler)
 	auth := r.Group("/")
 	auth.Use(middleware.JWTAuthMiddleware())

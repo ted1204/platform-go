@@ -136,6 +136,21 @@ func (s *UserService) UpdateUser(id uint, input user.UpdateUserInput) (user.User
 	return usr, nil
 }
 
+func (s *UserService) ForgotPassword(username, newPassword string) error {
+	usr, err := s.Repos.User.GetUserByUsername(username)
+	if err != nil {
+		return ErrUserNotFound
+	}
+
+	hashed, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return ErrPasswordHashFailure
+	}
+
+	usr.Password = string(hashed)
+	return s.Repos.User.SaveUser(&usr)
+}
+
 func (s *UserService) RemoveUser(id uint) error {
 	usr, err := s.Repos.User.GetUserRawByID(id)
 	if err != nil {

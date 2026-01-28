@@ -27,7 +27,7 @@ spec:
             - mountPath: /go/web-go
               name: local-data
           ports:
-            - containerPort: 8081
+            - containerPort: 8080
           env:
             - name: DB_HOST
               value: postgres

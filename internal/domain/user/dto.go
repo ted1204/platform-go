@@ -18,6 +18,11 @@ type CreateUserInput struct {
 	Status   *string `form:"status" binding:"omitempty,oneof=online offline delete" example:"online"`
 }
 
+type ForgotPasswordInput struct {
+	Username string `form:"username" binding:"required" example:"johndoe"`
+	NewPassword string `form:"new_password" binding:"required,min=6" example:"newPass123"`
+}
+
 type UserDTO struct {
 	Uid       uint    `json:"u_id" example:"123"`
 	Username  string  `json:"username" example:"johndoe"`
