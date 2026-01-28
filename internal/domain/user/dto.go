@@ -19,7 +19,7 @@ type CreateUserInput struct {
 }
 
 type ForgotPasswordInput struct {
-	Username string `form:"username" binding:"required" example:"johndoe"`
+	Username    string `form:"username" binding:"required" example:"johndoe"`
 	NewPassword string `form:"new_password" binding:"required,min=6" example:"newPass123"`
 }
 

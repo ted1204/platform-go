@@ -256,5 +256,68 @@ func TestUpdateUser_FailSave(t *testing.T) {
 	assert.Error(t, err)
 }
 
+// --------------------- ForgotPassword ---------------------
+func TestForgotPassword_Success(t *testing.T) {
+	svc, mockUser := setupUserServiceMocks(t)
+
+	// Setup existing user
+	existingUser := user.User{UID: 1, Username: "alice", Password: "oldhashed"}
+	mockUser.EXPECT().GetUserByUsername("alice").Return(existingUser, nil)
+
+	// Expect SaveUser to be called and verify password was hashed
+	mockUser.EXPECT().SaveUser(gomock.Any()).DoAndReturn(func(u *user.User) error {
+		// Verify password was changed and hashed
+		assert.NotEqual(t, "oldhashed", u.Password)
+		// Verify bcrypt hash format (should start with $2a$)
+		assert.True(t, len(u.Password) > 20) // bcrypt hashes are long
+		return nil
+	})
+
+	err := svc.ForgotPassword("alice", "newpass123")
+	assert.NoError(t, err)
+}
+
+func TestForgotPassword_UserNotFound(t *testing.T) {
+	svc, mockUser := setupUserServiceMocks(t)
+
+	mockUser.EXPECT().GetUserByUsername("nonexistent").Return(user.User{}, errors.New("not found"))
+
+	err := svc.ForgotPassword("nonexistent", "newpass123")
+	assert.Equal(t, ErrUserNotFound, err)
+}
+
+func TestForgotPassword_SaveError(t *testing.T) {
+	svc, mockUser := setupUserServiceMocks(t)
+
+	existingUser := user.User{UID: 1, Username: "alice", Password: "oldhashed"}
+	mockUser.EXPECT().GetUserByUsername("alice").Return(existingUser, nil)
+	mockUser.EXPECT().SaveUser(gomock.Any()).Return(errors.New("database error"))
+
+	err := svc.ForgotPassword("alice", "newpass123")
+	assert.Error(t, err)
+	assert.Equal(t, "database error", err.Error())
+}
+
+func TestForgotPassword_VerifyNewPassword(t *testing.T) {
+	svc, mockUser := setupUserServiceMocks(t)
+
+	newPassword := "securenewpass"
+	existingUser := user.User{UID: 1, Username: "alice", Password: "oldhashed"}
+	mockUser.EXPECT().GetUserByUsername("alice").Return(existingUser, nil)
+
+	var savedUser *user.User
+	mockUser.EXPECT().SaveUser(gomock.Any()).DoAndReturn(func(u *user.User) error {
+		savedUser = u
+		return nil
+	})
+
+	err := svc.ForgotPassword("alice", newPassword)
+	assert.NoError(t, err)
+
+	// Verify the new password can be validated with bcrypt
+	err = bcrypt.CompareHashAndPassword([]byte(savedUser.Password), []byte(newPassword))
+	assert.NoError(t, err)
+}
+
 // --------------------- Helper ---------------------
 func ptrString(s string) *string { return &s }
